@@ -5,9 +5,17 @@ export type StructuralCategory =
   | 'data-schema'
   | 'container'
   | 'actor-agent'
+  | 'activity-state'
+  | 'sequence'
   | 'c4'
+  | 'archimate'
   | 'cloud'
+  | 'aws'
+  | 'domainstory'
+  | 'adaml'
   | 'embedded'
+  | 'wbs'
+  | 'mindmap'
   | 'annotation';
 
 export type PortPosition = 'top' | 'right' | 'bottom' | 'left';
@@ -91,19 +99,43 @@ export interface DiagramNode {
     ports?: Array<{ id: string; name: string; position: PortPosition; type?: 'in' | 'out' | 'inout' }>;
 
     // C4 Architecture
-    c4Type?: 'person' | 'person-ext' | 'system' | 'system-ext' | 'container' | 'container-ext' | 'component' | 'component-ext' | 'boundary';
+    c4Type?: 'person' | 'person-ext' | 'system' | 'system-ext' | 'system-db' | 'system-db-ext' | 'system-queue' | 'system-queue-ext' | 'container' | 'container-ext' | 'container-db' | 'container-db-ext' | 'container-queue' | 'container-queue-ext' | 'component' | 'component-ext' | 'component-db' | 'component-db-ext' | 'component-queue' | 'component-queue-ext' | 'deployment-node' | 'node' | 'boundary' | 'enterprise-boundary' | 'system-boundary' | 'container-boundary';
     technology?: string;
     role?: string;
     description?: string;
 
-    // Cloud Infrastructure
-    cloudProvider?: 'aws' | 'gcp' | 'azure' | 'k8s';
+    // ArchiMate Model (stdlib/archimate)
+    archimateLayer?: 'business' | 'application' | 'technology' | 'strategy' | 'physical' | 'motivation' | 'implementation' | 'other';
+    archimateElement?: string;
+
+    // DomainStory (stdlib/DomainStory)
+    domainStoryType?: 'person' | 'group' | 'system' | 'document' | 'folder' | 'call' | 'email' | 'conversation' | 'info' | 'boundary' | 'activity' | 'workobject';
+    domainStoryStep?: number;
+    domainStoryPredicate?: string;
+
+    // AdaML (stdlib/adaml)
+    adamlType?: 'package-spec' | 'subprogram' | 'package-body' | 'agent' | 'actor' | 'dependency';
+
+    // Cloud Infrastructure & AWS / Azure / GCP / K8s / Cloudogu (stdlib)
+    cloudProvider?: 'aws' | 'gcp' | 'azure' | 'k8s' | 'cloudogu';
     cloudService?: string;
+    awsCategory?: 'compute' | 'database' | 'storage' | 'analytics' | 'security' | 'networking' | 'integration' | 'management';
+    awsIcon?: string;
     region?: string;
 
     // Embedded Sub-Engines
     embeddedType?: 'salt' | 'ditaa' | 'math';
     embeddedContent?: string;
+    saltContent?: string;
+    mathFormula?: string;
+
+    // State Machine
+    isDeep?: boolean;
+
+    // WBS & MindMap
+    wbsLevel?: number;
+    wbsCode?: string;
+    wbsProgress?: number;
 
     // Containers & Boundaries
     isContainer?: boolean;
@@ -113,9 +145,10 @@ export interface DiagramNode {
     // Notes
     noteDirection?: 'top' | 'right' | 'bottom' | 'left' | 'floating';
     attachedToNodeId?: string;
+    noteText?: string;
 
     // Generic shape
-    shape?: 'rectangle' | 'rounded' | 'cylinder' | 'horiz-cylinder' | 'cloud' | 'actor' | 'agent' | 'circle' | 'diamond' | 'component' | 'package' | 'node3d' | 'queue' | 'stack' | 'artifact' | 'file' | 'folder' | 'frame' | 'card' | 'hexagon' | 'collections' | 'boundary' | 'control' | 'entity-circle' | 'lollipop';
+    shape?: 'rectangle' | 'rounded' | 'cylinder' | 'horiz-cylinder' | 'cloud' | 'actor' | 'agent' | 'circle' | 'diamond' | 'component' | 'package' | 'node3d' | 'queue' | 'stack' | 'artifact' | 'file' | 'folder' | 'frame' | 'card' | 'hexagon' | 'collections' | 'boundary' | 'control' | 'entity-circle' | 'lollipop' | 'start' | 'stop' | 'sync-bar' | 'state' | 'history' | 'flow-final' | 'usecase' | 'note';
   };
 }
 
@@ -134,22 +167,51 @@ export interface DiagramEdge {
   color?: string; // custom color e.g. "#c2652a", "#2563eb"
   directionHint?: 'up' | 'down' | 'left' | 'right';
   length?: 1 | 2 | 3 | 4; // short, normal, long, extra-long
+  labelOffset?: { x: number; y: number }; // custom offset to prevent overlapping or obscuring
 }
 
 export interface GlobalCanvasSettings {
   direction: 'TB' | 'LR';
   linetype: 'ortho' | 'polyline' | 'straight';
   monochrome: boolean;
-  handwritten: boolean;
-  shadowing: boolean;
+  monochromeReverse?: boolean; // PlantUML dark mode / invert
+  strictuml?: boolean; // Strict OMG UML 2.5 standards (skinparam style strictuml)
+  handwritten: boolean; // Organic / Sketchy (skinparam handwritten true)
+  shadowing: boolean; // 3D drop-shadows (skinparam shadowing false/true)
+  theme?: string; // PlantUML !theme (e.g. plain, materia, sketchy, blueprint, cyborg, etc.)
+  roundcorner?: number; // Rounded corners (skinparam roundCorner <px>)
+  diagonalCorner?: number; // Chamfered / beveled box corners (skinparam diagonalCorner <px>)
+  hideFootbox?: boolean; // Suppress sequence bottom participant boxes (hide footbox)
+  responseMessageBelowArrow?: boolean; // Label under sequence arrow (skinparam responseMessageBelowArrow true)
+  autonumberFormat?: 'standard' | 'bold-bracket' | 'parentheses' | 'increment5' | 'disabled';
+  wrapWidth?: number; // Automatic label text wrapping for nodes (skinparam wrapWidth <px>)
+  maxMessageSize?: number; // Automatic sequence arrow text wrapping (skinparam maxMessageSize <px>)
+  nodesep?: number; // Horizontal distance between adjacent nodes (skinparam nodesep <px>)
+  ranksep?: number; // Vertical distance between hierarchical layers (skinparam ranksep <px>)
+  padding?: number; // Inner element padding (skinparam padding <px>)
+  margin?: number; // Outer element margin (skinparam margin <px>)
+  minClassWidth?: number; // Uniform minimum box width (skinparam minClassWidth <px>)
+  participantPadding?: number; // Space between sequence lifelines (skinparam ParticipantPadding <px>)
+  boxPadding?: number; // Space between sequence box containers (skinparam BoxPadding <px>)
+  backgroundColor?: string;
+  arrowColor?: string;
+  arrowThickness?: number;
+  defaultFontName?: string;
+  defaultFontSize?: number;
+  dpi?: number;
+  scale?: number | string; // e.g. 1.5, 0.75, "1200 width", "800 height", "max 1920*1080"
 }
 
 export interface DiagramData {
   title: string;
+  type?: DiagramType;
   description?: string;
   settings?: GlobalCanvasSettings;
   nodes: DiagramNode[];
   edges: DiagramEdge[];
+  participants?: SequenceParticipant[];
+  messages?: SequenceMessage[];
+  blocks?: SequenceBlock[];
 }
 
 export interface AssetItem {
@@ -181,7 +243,12 @@ export interface SequenceParticipant {
   id: string;
   name: string;
   type?: string;
+  shape?: string;
   color?: string;
+  sublabel?: string;
+  stereotype?: string;
+  x?: number;
+  y?: number;
 }
 
 export interface SequenceMessage {
@@ -189,15 +256,32 @@ export interface SequenceMessage {
   from: string;
   to: string;
   label: string;
-  type?: string;
+  type?: 'sync' | 'reply' | 'async' | 'self' | string;
+  isReturn?: boolean;
   isDotted?: boolean;
-  order?: number;
+  order: number;
+  noteText?: string;
+  y?: number;
 }
 
 export interface SequenceBlock {
   id: string;
   type: string;
   label: string;
-  startMessageIndex: number;
-  endMessageIndex: number;
+  condition?: string;
+  startOrder: number;
+  endOrder: number;
+  startMessageIndex?: number;
+  endMessageIndex?: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+}
+
+export interface HistorySnapshot {
+  id: string;
+  diagram: DiagramData;
+  action: string;
+  timestamp: number;
 }

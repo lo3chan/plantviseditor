@@ -30,7 +30,11 @@ import {
   Code,
   Folder,
   FileText,
-  Users
+  Users,
+  Terminal,
+  Sigma,
+  LayoutTemplate,
+  AppWindow
 } from 'lucide-react';
 import { DiagramType, AssetItem, StructuralCategory } from '../types';
 import { UNIFIED_ASSETS, STRUCTURAL_CATEGORIES, getColorConfig } from '../utils/assetsData';
@@ -69,7 +73,11 @@ const ICON_MAP: Record<string, React.FC<{ className?: string; style?: React.CSSP
   Code,
   Folder,
   FileText,
-  Users
+  Users,
+  Terminal,
+  Sigma,
+  LayoutTemplate,
+  AppWindow
 };
 
 export const AssetPanel: React.FC<AssetPanelProps> = ({
@@ -120,7 +128,7 @@ export const AssetPanel: React.FC<AssetPanelProps> = ({
               Unified Structural Toolbox
             </span>
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[#c2652a]/10 text-[#c2652a] font-semibold">
-              11 Models
+              {STRUCTURAL_CATEGORIES.length} Models
             </span>
           </div>
           <p className="text-xs text-[#78706a]">Mix any element on the same canvas</p>

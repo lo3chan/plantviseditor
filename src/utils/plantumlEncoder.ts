@@ -47,16 +47,22 @@ export function preparePlantUMLText(pumlText: string): string {
   if (!trimmed) {
     return '@startuml\n@enduml';
   }
+
+  // Normalize unicode guillemets to standard PlantUML ASCII << >>
+  trimmed = trimmed.replace(/«/g, '<<').replace(/»/g, '>>');
+
   if (!trimmed.startsWith('@start')) {
     trimmed = `@startuml\n${trimmed}\n@enduml`;
   }
 
   // PlantUML requires 'allowmixing' when OO classifiers (classes, entities, interfaces)
   // are mixed with other structural shapes (databases, clouds, components, nodes, actors, etc.)
+  // NOTE: archimate diagrams must NEVER have allowmixing (causes PlantUML syntax error)
+  const hasArchimate = /\barchimate\b/i.test(trimmed);
   const hasClassifiers = /\b(class|entity|interface|enum|abstract\s+class|struct|protocol)\b/i.test(trimmed);
   const hasOtherElements = /\b(database|cloud|component|node|actor|agent|queue|storage|artifact|folder|frame|card|hexagon|collections|boundary|control)\b/i.test(trimmed);
 
-  if (hasClassifiers && hasOtherElements && !trimmed.toLowerCase().includes('allowmixing')) {
+  if (!hasArchimate && hasClassifiers && hasOtherElements && !trimmed.toLowerCase().includes('allowmixing')) {
     trimmed = trimmed.replace(/^(@startuml[^\n\r]*)/m, '$1\nallowmixing');
   }
 
@@ -97,3 +103,155 @@ export function getPlantUMLPngUrl(pumlText: string): string {
   if (!encoded) return '';
   return `https://www.plantuml.com/plantuml/png/${encoded}`;
 }
+
+/**
+ * Gets direct ASCII / Unicode plain text URL from official PlantUML server
+ */
+export function getPlantUMLTxtUrl(pumlText: string): string {
+  const encoded = encodePlantUML(pumlText);
+  if (!encoded) return '';
+  return `https://www.plantuml.com/plantuml/txt/${encoded}`;
+}
+
+/**
+ * Converts Unicode box-drawing characters to standard 7-bit ASCII
+ */
+export function convertToPureAscii(text: string): string {
+  return text
+    // corners and intersections
+    .replace(/[┌┐└┘├┤┬┴┼╔╗╚╝╠╣╦╩╬╒╕╘╛╞╡╤╧╪]/g, '+')
+    // horizontal lines
+    .replace(/[─━═—–]/g, '-')
+    // vertical lines
+    .replace(/[│┃║|]/g, '|')
+    // arrow heads
+    .replace(/[▶►▸]/g, '>')
+    .replace(/[◀◄◂]/g, '<')
+    .replace(/[▲▴]/g, '^')
+    .replace(/[▼▾]/g, 'v')
+    // diamonds and shapes
+    .replace(/[◆◇◈◊]/g, '*')
+    .replace(/[○●⚬]/g, 'o')
+    .replace(/[×✕]/g, 'x');
+}
+
+/**
+ * Fetches rendered ASCII/Unicode diagram text from the official PlantUML server
+ */
+export async function fetchPlantUMLAscii(pumlText: string): Promise<string> {
+  const url = getPlantUMLTxtUrl(pumlText);
+  if (!url) {
+    throw new Error('Unable to encode PlantUML text');
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Server returned HTTP ${response.status}`);
+    }
+
+    const text = await response.text();
+    // Verify it is not an HTML error page
+    if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+      throw new Error('Invalid syntax: PlantUML server returned an error');
+    }
+
+    if (!text.trim()) {
+      throw new Error('No ASCII diagram generated for this model');
+    }
+
+    return text;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
+ * Generates an instant local ASCII diagram representation without network dependency
+ */
+export function generateLocalAsciiFallback(diagram: {
+  title: string;
+  nodes: Array<{ id: string; label: string; type: string; attributes?: string[]; methods?: string[] }>;
+  edges: Array<{
+    id: string;
+    source: string;
+    target: string;
+    label?: string;
+    arrowType?: string;
+    cardinalitySource?: string;
+    cardinalityTarget?: string;
+  }>;
+}): string {
+  const lines: string[] = [];
+  const title = diagram.title || 'Untitled Diagram';
+  lines.push(`+-------------------------------------------------------------+`);
+  lines.push(`| PlantUML ASCII Art Diagram: ${title.padEnd(32).slice(0, 32)} |`);
+  lines.push(`+-------------------------------------------------------------+`);
+  lines.push(``);
+
+  lines.push(`-- [ NODES / ENTITIES ] --`);
+  diagram.nodes.forEach((node) => {
+    const typeLabel = node.type.toUpperCase();
+    const name = node.label || node.id;
+    lines.push(`  .------------------------------------------.`);
+    lines.push(`  | [${typeLabel}] ${name.padEnd(38 - typeLabel.length).slice(0, 38 - typeLabel.length)} |`);
+    
+    if (node.attributes && node.attributes.length > 0) {
+      lines.push(`  |------------------------------------------|`);
+      node.attributes.forEach((attr) => {
+        lines.push(`  |  + ${attr.padEnd(38).slice(0, 38)} |`);
+      });
+    }
+
+    if (node.methods && node.methods.length > 0) {
+      lines.push(`  |------------------------------------------|`);
+      node.methods.forEach((m) => {
+        lines.push(`  |  # ${m.padEnd(38).slice(0, 38)} |`);
+      });
+    }
+
+    lines.push(`  '------------------------------------------'`);
+    lines.push(``);
+  });
+
+  if (diagram.edges && diagram.edges.length > 0) {
+    lines.push(`-- [ RELATIONSHIPS ] --`);
+    diagram.edges.forEach((edge) => {
+      const srcNode = diagram.nodes.find((n) => n.id === edge.source)?.label || edge.source;
+      const tgtNode = diagram.nodes.find((n) => n.id === edge.target)?.label || edge.target;
+      const srcC = edge.cardinalitySource ? `[${edge.cardinalitySource}] ` : '';
+      const tgtC = edge.cardinalityTarget ? ` [${edge.cardinalityTarget}]` : '';
+
+      let arrow = '-->';
+      switch (edge.arrowType) {
+        case 'inheritance': arrow = '--|>'; break;
+        case 'composition': arrow = '*--'; break;
+        case 'aggregation': arrow = 'o--'; break;
+        case 'dependency': arrow = '..>'; break;
+        case 'realization': arrow = '..|>'; break;
+        case 'crows-foot-many': arrow = '--|{'; break;
+        case 'crows-foot-one': arrow = '--||'; break;
+        case 'crows-foot-zero-many': arrow = '--o{'; break;
+        case 'crows-foot-zero-one': arrow = '--o|'; break;
+        case 'socket-ball': arrow = '-0)'; break;
+        case 'lollipop': arrow = '()--'; break;
+        case 'bi-arrow': arrow = '<-->'; break;
+        case 'none': arrow = '---'; break;
+        default: arrow = '-->'; break;
+      }
+
+      const label = edge.label ? ` : "${edge.label}"` : '';
+      lines.push(`  ${srcNode} ${srcC}${arrow}${tgtC} ${tgtNode}${label}`);
+    });
+  }
+
+  return lines.join('\n');
+}
+
+
