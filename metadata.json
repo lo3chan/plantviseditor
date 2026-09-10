@@ -1,0 +1,6 @@
+{
+  "name": "PlantUML Visual Studio",
+  "description": "Professional 1-1 PlantUML studio with live split-view code editor, real-time bidirectional script synchronization, interactive 2D diagram canvas, and official Graphviz SVG rendering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="40" viewBox="0 0 48 40">
+  <defs>
+    <g id="brick">
+      <!-- Base rectangle / Lower-right shaded facet -->
+      <rect x="0" y="0" width="48" height="20" fill="#efe4d6"/>
+      
+      <!-- Upper-left illuminated triangle facet -->
+      <polygon points="0,0 48,0 0,20" fill="#fbf6ef"/>
+      
+      <!-- Diagonal crease from bottom-left to top-right -->
+      <line x1="0" y1="20" x2="48" y2="0" stroke="#f3e9de" stroke-width="0.75"/>
+      
+      <!-- Top highlight -->
+      <line x1="0" y1="0.5" x2="48" y2="0.5" stroke="#ffffff" stroke-width="1" stroke-opacity="0.95"/>
+      
+      <!-- Left highlight -->
+      <line x1="0.5" y1="0" x2="0.5" y2="20" stroke="#ffffff" stroke-width="1" stroke-opacity="0.9"/>
+      
+      <!-- Bottom shadow -->
+      <line x1="0" y1="19.5" x2="48" y2="19.5" stroke="#dfd2c2" stroke-width="1" stroke-opacity="0.85"/>
+      
+      <!-- Right shadow -->
+      <line x1="47.5" y1="0" x2="47.5" y2="20" stroke="#dfd2c2" stroke-width="1" stroke-opacity="0.85"/>
+    </g>
+  </defs>
+
+  <!-- Row 1 -->
+  <use href="#brick" x="0" y="0"/>
+
+  <!-- Row 2: Staggered by 24px (50%) -->
+  <use href="#brick" x="-24" y="20"/>
+  <use href="#brick" x="24" y="20"/>
+</svg>
