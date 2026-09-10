@@ -1,0 +1,21 @@
+---
+name: ibm
+display_name: IBM
+description:
+author: Xavier Rey-Robert
+version: 1.0.1
+release:
+license:
+source: https://github.com/XReyRobert/ibm-icons-for-plantuml
+origin:
+uid: 63005e66a3eb88062caf53f82f9e189972a9899c
+---
+
+# ibm-icons-for-plantuml
+
+Original Work here:
+https://github.com/awslabs/aws-icons-for-plantuml/
+
+This is a revamp to use IBM Icons
+
+work in progress# ibm-icons-for-plantuml
