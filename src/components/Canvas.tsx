@@ -1163,8 +1163,10 @@ export const Canvas: React.FC<CanvasProps> = ({
       const badgeW = Math.max(48, labelText.length * 7.5 + 24);
       const badgeH = 26;
 
+      // Default label position: right on the edge line
+      const isHorizontal = Math.abs(dx) >= Math.abs(dy);
       let labelX = midX + nx * autoNormalShift;
-      let labelY = midY + ny * autoNormalShift;
+      let labelY = midY + ny * autoNormalShift + (isHorizontal ? -12 : 0);
 
       if (isSelfLoop) {
         labelX = src.x + 36;
@@ -1173,20 +1175,23 @@ export const Canvas: React.FC<CanvasProps> = ({
         labelX = midX + edge.labelOffset.x;
         labelY = midY + edge.labelOffset.y;
       } else {
-        // Anti-collision testing against ALL nodes, placed labels, and placed cardinality badges
+        // Anti-collision testing against INTERMEDIATE nodes, placed labels, and placed cardinality badges
         const testOverlap = (cx: number, cy: number, pad = 6) => {
           const left = cx - badgeW / 2 - pad;
           const right = cx + badgeW / 2 + pad;
           const top = cy - badgeH / 2 - pad;
           const bottom = cy + badgeH / 2 + pad;
 
-          // 1. Check nodes
-          const hitNode = nodes.some(n => !(
-            right <= n.x ||
-            left >= n.x + n.width ||
-            bottom <= n.y ||
-            top >= n.y + n.height
-          ));
+          // 1. Check intermediate nodes only (exclude own source and target endpoints)
+          const hitNode = nodes.some(n => {
+            if (n.id === srcNode.id || n.id === tgtNode.id) return false;
+            return !(
+              right <= n.x ||
+              left >= n.x + n.width ||
+              bottom <= n.y ||
+              top >= n.y + n.height
+            );
+          });
           if (hitNode) return true;
 
           // 2. Check already placed edge labels
@@ -1210,9 +1215,10 @@ export const Canvas: React.FC<CanvasProps> = ({
           return hitBadge;
         };
 
-        if (testOverlap(labelX, labelY) || dist < badgeW + 36) {
-          const normalDeltas = [0, 28, -28, 52, -52, 76, -76, 100, -100];
-          const alongFractions = [0.5, 0.35, 0.65, 0.22, 0.78, 0.15, 0.85];
+        if (testOverlap(labelX, labelY)) {
+          // Tight normal offsets to keep label very close to its edge line
+          const normalDeltas = isHorizontal ? [0, -18, 18, -28, 28] : [0, 20, -20, 36, -36];
+          const alongFractions = [0.5, 0.4, 0.6, 0.3, 0.7];
           let bestCandidate: { x: number; y: number } | null = null;
           let bestPenalty = Infinity;
 
@@ -1221,7 +1227,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             const by = src.y + dy * frac;
             for (const norm of normalDeltas) {
               const cx = bx + nx * (norm + autoNormalShift);
-              const cy = by + ny * (norm + autoNormalShift);
+              const cy = by + ny * (norm + autoNormalShift) + (isHorizontal ? -12 : 0);
               if (!testOverlap(cx, cy)) {
                 const penalty = Math.hypot(cx - midX, cy - midY);
                 if (penalty < bestPenalty) {
@@ -1235,17 +1241,6 @@ export const Canvas: React.FC<CanvasProps> = ({
           if (bestCandidate) {
             labelX = bestCandidate.x;
             labelY = bestCandidate.y;
-          } else {
-            // Fallback: clear above top or below bottom of endpoints
-            const topClearY = Math.min(srcNode.y, tgtNode.y) - 22;
-            const bottomClearY = Math.max(srcNode.y + srcNode.height, tgtNode.y + tgtNode.height) + 22;
-            if (!testOverlap(midX, topClearY)) {
-              labelX = midX;
-              labelY = topClearY;
-            } else if (!testOverlap(midX, bottomClearY)) {
-              labelX = midX;
-              labelY = bottomClearY;
-            }
           }
         }
       }

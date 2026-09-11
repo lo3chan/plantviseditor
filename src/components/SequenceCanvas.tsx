@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, 
+  Minus,
+  Maximize,
+  Grid,
   Trash2, 
   ArrowRight, 
   ArrowLeft, 
@@ -78,6 +81,7 @@ interface SequenceCanvasProps {
   onUpdateMessages: (messages: SequenceMessage[]) => void;
   onUpdateBlocks?: (blocks: SequenceBlock[]) => void;
   viewport: { x: number; y: number; zoom: number };
+  onUpdateViewport?: (viewport: { x: number; y: number; zoom: number }) => void;
   snapToGrid?: boolean;
   onToggleSnap?: () => void;
   selectedElementId?: string | null;
@@ -92,6 +96,7 @@ export const SequenceCanvas: React.FC<SequenceCanvasProps> = ({
   onUpdateMessages,
   onUpdateBlocks,
   viewport,
+  onUpdateViewport,
   snapToGrid = true,
   onToggleSnap,
   selectedElementId,
@@ -240,7 +245,9 @@ export const SequenceCanvas: React.FC<SequenceCanvasProps> = ({
 
   // Deselect on empty canvas click
   const handleCanvasClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
+    const target = e.target as HTMLElement;
+    const isInteractive = target.closest('button, input, select, textarea, [data-interactive="true"], .cursor-grab, .cursor-grabbing, .cursor-ns-resize, .cursor-ew-resize');
+    if (!isInteractive) {
       clearSequenceSelection();
     }
   };
@@ -832,11 +839,74 @@ export const SequenceCanvas: React.FC<SequenceCanvasProps> = ({
   const selectedMessageIndex = selectedMessage ? messages.findIndex(m => m.id === selectedMessage.id) : -1;
   const selectedBlock = blocks.find(b => b.id === selectedBlockId);
 
+  // Canvas Background Panning State
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    if (dragState) return;
+
+    const target = e.target as HTMLElement;
+    const isInteractive = target.closest('button, input, select, textarea, [data-interactive="true"], .cursor-grab, .cursor-grabbing, .cursor-ns-resize, .cursor-ew-resize');
+    if (isInteractive && e.button !== 1 && !e.altKey && !e.shiftKey) {
+      return;
+    }
+
+    if (e.button === 0 || e.button === 1 || e.altKey || e.shiftKey) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
+    }
+  };
+
+  useEffect(() => {
+    if (!isPanning) return;
+    const handlePointerMove = (e: MouseEvent) => {
+      if (onUpdateViewport) {
+        onUpdateViewport({
+          ...viewport,
+          x: e.clientX - panStart.x,
+          y: e.clientY - panStart.y
+        });
+      }
+    };
+    const handlePointerUp = () => {
+      setIsPanning(false);
+    };
+    window.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('mouseup', handlePointerUp);
+    return () => {
+      window.removeEventListener('mousemove', handlePointerMove);
+      window.removeEventListener('mouseup', handlePointerUp);
+    };
+  }, [isPanning, panStart, viewport, onUpdateViewport]);
+
+  // Zoom with Wheel
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    if (!onUpdateViewport) return;
+    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+    const newZoom = Math.min(Math.max(viewport.zoom * zoomFactor, 0.3), 2.5);
+
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const newX = mouseX - (mouseX - viewport.x) * (newZoom / viewport.zoom);
+      const newY = mouseY - (mouseY - viewport.y) * (newZoom / viewport.zoom);
+
+      onUpdateViewport({ x: newX, y: newY, zoom: newZoom });
+    }
+  };
+
   return (
     <div 
       ref={containerRef}
-      className="relative w-full h-full overflow-auto select-none"
+      id="sequence-canvas-root"
+      className={`relative w-full h-full overflow-hidden select-none ${isPanning ? 'cursor-grabbing' : 'cursor-default'}`}
       onClick={handleCanvasClick}
+      onMouseDown={handleCanvasMouseDown}
+      onWheel={handleWheel}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
@@ -1835,6 +1905,65 @@ export const SequenceCanvas: React.FC<SequenceCanvasProps> = ({
             <span className="font-semibold text-[#f5ebe1]">{snapGuide.label}</span>
           </div>
         )}
+      </div>
+
+      {/* Floating Canvas Controls Dock (Bottom Right) */}
+      <aside className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-white/90 backdrop-blur-md border border-[#d8d0c8]/80 shadow-md rounded-xl p-1.5 z-40 text-xs select-none">
+        <button
+          id="btn-seq-zoom-out"
+          onClick={() => onUpdateViewport?.({ ...viewport, zoom: Math.max(viewport.zoom * 0.85, 0.3) })}
+          className="p-1.5 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] hover:text-[#c2652a] transition-colors cursor-pointer"
+          title="Zoom Out"
+        >
+          <Minus className="w-3.5 h-3.5" />
+        </button>
+
+        <span 
+          onClick={() => onUpdateViewport?.({ ...viewport, zoom: 1 })}
+          className="px-1.5 font-mono text-[11px] text-[#78706a] hover:text-[#c2652a] cursor-pointer"
+          title="Click to reset to 100%"
+        >
+          {Math.round(viewport.zoom * 100)}%
+        </span>
+
+        <button
+          id="btn-seq-zoom-in"
+          onClick={() => onUpdateViewport?.({ ...viewport, zoom: Math.min(viewport.zoom * 1.15, 2.5) })}
+          className="p-1.5 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] hover:text-[#c2652a] transition-colors cursor-pointer"
+          title="Zoom In"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+
+        <div className="w-[1px] h-4 bg-[#d8d0c8]/60 mx-0.5" />
+
+        <button
+          id="btn-seq-center-view"
+          onClick={() => onUpdateViewport?.({ x: 60, y: 40, zoom: 1 })}
+          className="p-1.5 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] hover:text-[#c2652a] transition-colors cursor-pointer"
+          title="Reset Canvas Position"
+        >
+          <Maximize className="w-3.5 h-3.5" />
+        </button>
+
+        {onToggleSnap && (
+          <button
+            id="btn-seq-snap-grid"
+            onClick={onToggleSnap}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              snapToGrid ? 'bg-[#c2652a]/15 text-[#c2652a]' : 'text-[#78706a] hover:bg-[#faf5ee]'
+            }`}
+            title={snapToGrid ? 'Grid Snap: ON' : 'Grid Snap: OFF'}
+          >
+            <Grid className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </aside>
+
+      {/* Mini Pan hint indicator */}
+      <div className="absolute bottom-4 left-4 pointer-events-none text-[11px] text-[#78706a]/70 flex items-center gap-1 bg-[#faf5ee]/80 px-2 py-1 rounded-md border border-[#d8d0c8]/40 backdrop-blur-xs z-30 select-none">
+        <Move className="w-3 h-3" />
+        <span>Drag canvas to pan • Wheel to zoom</span>
       </div>
     </div>
   );

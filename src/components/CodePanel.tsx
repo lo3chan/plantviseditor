@@ -327,6 +327,7 @@ export const CodePanel: React.FC<CodePanelProps> = ({
   // Sync external code changes when not actively typing
   useEffect(() => {
     setEditableCode(code);
+    setIsAutocompleteOpen(false);
   }, [code]);
 
   // Debounced auto-apply while typing
@@ -368,6 +369,8 @@ export const CodePanel: React.FC<CodePanelProps> = ({
   const updateCursorPosition = () => {
     if (!textareaRef.current) return;
     const textarea = textareaRef.current;
+    const isFocused = document.activeElement === textarea;
+
     const pos = textarea.selectionStart;
     const textBefore = editableCode.substring(0, pos);
     const lines = textBefore.split('\n');
@@ -377,6 +380,12 @@ export const CodePanel: React.FC<CodePanelProps> = ({
     setCursorLine(currentLine);
     setCursorCol(currentCol);
     onCursorLineChange?.(currentLine, currentLineText);
+
+    // If editor is not actively focused by user, NEVER open autocomplete
+    if (!isFocused) {
+      setIsAutocompleteOpen(false);
+      return;
+    }
 
     // Extract word/token prefix right before cursor
     const prefixMatch = currentLineText.match(/([@!a-zA-Z0-9_#.-]+)$/);
@@ -389,6 +398,12 @@ export const CodePanel: React.FC<CodePanelProps> = ({
         const lLower = item.label.toLowerCase();
         return lLower.startsWith(pLower) || (lLower.includes(pLower) && prefix.length >= 2);
       });
+
+      // If user has already fully typed the exact word and there's only 1 match identical to it, don't popup
+      if (matches.length === 1 && matches[0].label.toLowerCase() === pLower) {
+        setIsAutocompleteOpen(false);
+        return;
+      }
 
       if (matches.length > 0) {
         setFilteredSuggestions(matches);
@@ -1152,7 +1167,16 @@ export const CodePanel: React.FC<CodePanelProps> = ({
             }}
             onKeyUp={updateCursorPosition}
             onClick={updateCursorPosition}
-            onSelect={updateCursorPosition}
+            onSelect={() => {
+              if (document.activeElement === textareaRef.current) {
+                updateCursorPosition();
+              }
+            }}
+            onBlur={() => {
+              setTimeout(() => {
+                setIsAutocompleteOpen(false);
+              }, 150);
+            }}
             onScroll={handleScroll}
             onKeyDown={(e) => {
               // Autocomplete navigation and insertion

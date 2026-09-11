@@ -582,12 +582,11 @@ export function resolveEdgeLabelOverlaps(
 
       let collisions = 0;
 
-      // 1. Node collisions (strictly avoid any overlap with source, target, or intermediate nodes)
+      // 1. Node collisions (strictly avoid overlap with intermediate nodes)
       for (const node of nodes) {
-        const isEndpoint = node.id === srcNode.id || node.id === tgtNode.id;
-        const margin = isEndpoint ? 6 : 14;
-        if (doesBoxOverlapNode(box, node, margin)) {
-          collisions += isEndpoint ? 30 : 60;
+        if (node.id === srcNode.id || node.id === tgtNode.id) continue;
+        if (doesBoxOverlapNode(box, node, 12)) {
+          collisions += 60;
         }
       }
 

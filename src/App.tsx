@@ -770,6 +770,7 @@ export default function App() {
                     onUpdateMessages={(messages) => updateDiagram({ messages })}
                     onUpdateBlocks={(blocks) => updateDiagram({ blocks })}
                     viewport={viewport}
+                    onUpdateViewport={setViewport}
                     snapToGrid={snapToGrid}
                     onToggleSnap={() => setSnapToGrid(!snapToGrid)}
                     selectedElementId={selectedCanvasElement?.id || null}
@@ -827,6 +828,7 @@ export default function App() {
                     onUpdateMessages={(messages) => updateDiagram({ messages })}
                     onUpdateBlocks={(blocks) => updateDiagram({ blocks })}
                     viewport={viewport}
+                    onUpdateViewport={setViewport}
                     snapToGrid={snapToGrid}
                     onToggleSnap={() => setSnapToGrid(!snapToGrid)}
                     selectedElementId={selectedCanvasElement?.id || null}

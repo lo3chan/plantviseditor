@@ -169,13 +169,13 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Center: View Layout Modes (Split, Canvas, Code) & Engine Toggle */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2 shrink-0 flex-nowrap">
         {/* Workspace Layout Switcher */}
-        <div className="flex items-center bg-[#f2ece4] p-1 rounded-xl border border-[#d8d0c8]/60 shadow-inner">
+        <div className="flex items-center bg-[#f2ece4] p-0.5 rounded-xl border border-[#d8d0c8]/60 shadow-inner h-8 shrink-0">
           <button
             id="btn-view-split"
             onClick={() => onChangeViewMode('split')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+            className={`h-7 whitespace-nowrap shrink-0 flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               viewMode === 'split'
                 ? 'bg-white text-[#c2652a] shadow-xs font-semibold'
                 : 'text-[#605850] hover:text-[#3a302a] hover:bg-white/50'
@@ -189,7 +189,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="btn-view-canvas"
             onClick={() => onChangeViewMode('canvas')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+            className={`h-7 whitespace-nowrap shrink-0 flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               viewMode === 'canvas'
                 ? 'bg-white text-[#c2652a] shadow-xs font-semibold'
                 : 'text-[#605850] hover:text-[#3a302a] hover:bg-white/50'
@@ -203,7 +203,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="btn-view-code"
             onClick={() => onChangeViewMode('code')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+            className={`h-7 whitespace-nowrap shrink-0 flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
               viewMode === 'code'
                 ? 'bg-white text-[#c2652a] shadow-xs font-semibold'
                 : 'text-[#605850] hover:text-[#3a302a] hover:bg-white/50'
@@ -220,7 +220,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="btn-toggle-engine"
             onClick={onToggleRenderEngine}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+            className={`h-8 whitespace-nowrap shrink-0 flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
               renderEngine === 'official-svg'
                 ? 'bg-[#e2ebe0] text-[#2e4c27] border-[#6e8a67]'
                 : 'bg-white text-[#605850] border-[#d8d0c8]/70 hover:border-[#c2652a]'
@@ -237,7 +237,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="btn-auto-layout"
             onClick={onAutoLayout}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-[#faf5ee] border border-[#d8d0c8]/70 text-[#605850] hover:text-[#3a302a] transition-colors cursor-pointer"
+            className="h-8 whitespace-nowrap shrink-0 flex items-center gap-1 px-2.5 rounded-lg text-xs font-medium bg-white hover:bg-[#faf5ee] border border-[#d8d0c8]/70 text-[#605850] hover:text-[#3a302a] transition-colors cursor-pointer"
             title="Automatically rearrange nodes based on relationships"
           >
             <Sparkles className="w-3.5 h-3.5 text-[#c2652a]" />
@@ -250,7 +250,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="btn-resolve-overlap"
             onClick={onResolveOverlaps}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-[#faf5ee] border border-[#d8d0c8]/70 text-[#605850] hover:text-[#3a302a] transition-colors cursor-pointer"
+            className="h-8 whitespace-nowrap shrink-0 flex items-center gap-1 px-2.5 rounded-lg text-xs font-medium bg-white hover:bg-[#faf5ee] border border-[#d8d0c8]/70 text-[#605850] hover:text-[#3a302a] transition-colors cursor-pointer"
             title="Automatically space out and eliminate overlapping elements"
           >
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
@@ -263,15 +263,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="btn-toggle-diagram-mode"
             onClick={onToggleDiagramMode}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+            className={`h-8 whitespace-nowrap shrink-0 flex items-center gap-1.5 px-3 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
               isSequenceDiagram
                 ? 'bg-[#fef3c7] text-[#92400e] border-[#f59e0b] shadow-xs'
                 : 'bg-white text-[#605850] border-[#d8d0c8]/70 hover:border-[#c2652a] hover:text-[#3a302a]'
             }`}
             title={isSequenceDiagram ? 'Currently in Sequence Timeline view. Click to switch to 2D Architecture Canvas.' : 'Currently in 2D Architecture Canvas. Click to switch to Sequence Timeline view.'}
           >
-            <GitBranch className="w-3.5 h-3.5 text-[#c2652a]" />
-            <span className="font-semibold">{isSequenceDiagram ? 'Sequence Timeline' : 'Architecture Canvas'}</span>
+            <GitBranch className="w-3.5 h-3.5 text-[#c2652a] shrink-0" />
+            <span className="whitespace-nowrap font-semibold">{isSequenceDiagram ? 'Sequence Timeline' : 'Architecture Canvas'}</span>
           </button>
         )}
       </div>
