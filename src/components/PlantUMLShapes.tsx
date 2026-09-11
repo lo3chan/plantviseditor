@@ -511,25 +511,36 @@ export const CloudShape: React.FC<{
   strokeWidth = 1.5,
   isSelected = false
 }) => {
-  const w = width;
-  const h = height;
+  const p = strokeWidth + 1;
+  const x0 = p;
+  const x1 = Math.max(x0 + 20, width - p);
+  const y0 = p;
+  const y1 = Math.max(y0 + 20, height - p);
+  const W = x1 - x0;
+  const H = y1 - y0;
+
+  const cloudPath = `
+    M ${x0 + W * 0.22} ${y1 - H * 0.06}
+    C ${x0 + W * 0.08} ${y1 - H * 0.06}, ${x0} ${y1 - H * 0.24}, ${x0} ${y1 - H * 0.46}
+    C ${x0} ${y0 + H * 0.32}, ${x0 + W * 0.08} ${y0 + H * 0.12}, ${x0 + W * 0.25} ${y0 + H * 0.14}
+    C ${x0 + W * 0.32} ${y0}, ${x0 + W * 0.48} ${y0}, ${x0 + W * 0.55} ${y0 + H * 0.10}
+    C ${x0 + W * 0.65} ${y0}, ${x0 + W * 0.82} ${y0 + H * 0.04}, ${x0 + W * 0.88} ${y0 + H * 0.22}
+    C ${x1} ${y0 + H * 0.36}, ${x1} ${y1 - H * 0.36}, ${x0 + W * 0.88} ${y1 - H * 0.18}
+    C ${x0 + W * 0.88} ${y1}, ${x0 + W * 0.72} ${y1}, ${x0 + W * 0.58} ${y1 - H * 0.04}
+    C ${x0 + W * 0.46} ${y1}, ${x0 + W * 0.34} ${y1}, ${x0 + W * 0.22} ${y1 - H * 0.06}
+    Z
+  `;
 
   return (
     <svg
       width={width}
       height={height}
-      viewBox={`0 0 ${w} ${h}`}
+      viewBox={`0 0 ${width} ${height}`}
       className="absolute top-0 left-0 pointer-events-none overflow-visible"
       style={{ filter: isSelected ? 'drop-shadow(0 0 6px rgba(194, 101, 42, 0.4))' : 'drop-shadow(2px 2px 2px rgba(0,0,0,0.15))' }}
     >
-      {/* Clean multi-arc cloud path */}
       <path
-        d={`M ${w * 0.22} ${h * 0.75} 
-           C ${w * 0.05} ${h * 0.75}, ${w * 0.02} ${h * 0.45}, ${w * 0.18} ${h * 0.38}
-           C ${w * 0.16} ${h * 0.15}, ${w * 0.42} ${h * 0.08}, ${w * 0.52} ${h * 0.22}
-           C ${w * 0.62} ${h * 0.12}, ${w * 0.85} ${h * 0.18}, ${w * 0.84} ${h * 0.38}
-           C ${w * 0.98} ${h * 0.44}, ${w * 0.96} ${h * 0.75}, ${w * 0.78} ${h * 0.75}
-           Z`}
+        d={cloudPath}
         fill={fill}
         stroke={stroke}
         strokeWidth={strokeWidth}

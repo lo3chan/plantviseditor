@@ -1558,18 +1558,33 @@ export const Canvas: React.FC<CanvasProps> = ({
     });
   }, [diagram.edges, diagram.nodes, diagram.settings]);
 
+  const isDark = Boolean(
+    diagram.settings?.monochromeReverse ||
+    diagram.settings?.theme === 'cyborg' ||
+    diagram.settings?.theme === 'black-knight' ||
+    diagram.settings?.theme === 'dark' ||
+    (diagram.settings?.backgroundColor && ['#000000', '#121212', '#1a1a1a', '#0f172a', '#18181b', '#181412'].includes(diagram.settings.backgroundColor.toLowerCase()))
+  );
+
+  const defaultArrowColor = diagram.settings?.arrowColor || (isDark ? '#e2e8f0' : '#A80036');
+  const markerStroke = defaultArrowColor;
+  const markerFill = defaultArrowColor;
+  const markerHollowFill = isDark ? '#181412' : '#faf5ee';
+  const canvasBg = isDark ? '#181412' : '#faf5ee';
+  const brickColor = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(194, 101, 42, 0.04)';
+
   return (
     <div
       ref={containerRef}
       id="diagram-canvas-root"
       className="relative w-full h-full overflow-hidden canvas-bg cursor-default"
       style={{
-        backgroundColor: '#faf5ee',
+        backgroundColor: canvasBg,
         backgroundImage: `
-          linear-gradient(335deg, rgba(194, 101, 42, 0.04) ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px),
-          linear-gradient(155deg, rgba(194, 101, 42, 0.04) ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px),
-          linear-gradient(335deg, rgba(194, 101, 42, 0.04) ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px),
-          linear-gradient(155deg, rgba(194, 101, 42, 0.04) ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px)
+          linear-gradient(335deg, ${brickColor} ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px),
+          linear-gradient(155deg, ${brickColor} ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px),
+          linear-gradient(335deg, ${brickColor} ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px),
+          linear-gradient(155deg, ${brickColor} ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px)
         `,
         backgroundSize: `${58 * viewport.zoom}px ${58 * viewport.zoom}px`,
         backgroundPosition: `${0 * viewport.zoom + viewport.x}px ${2 * viewport.zoom + viewport.y}px, ${4 * viewport.zoom + viewport.x}px ${35 * viewport.zoom + viewport.y}px, ${29 * viewport.zoom + viewport.x}px ${31 * viewport.zoom + viewport.y}px, ${34 * viewport.zoom + viewport.x}px ${6 * viewport.zoom + viewport.y}px`
@@ -1604,7 +1619,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="7"
               orient="auto"
             >
-              <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#A80036" />
+              <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill={markerFill} />
             </marker>
 
             {/* Standard Arrow Marker (Start) */}
@@ -1617,7 +1632,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="7"
               orient="auto"
             >
-              <path d="M 9 1.5 L 0 5 L 9 8.5 z" fill="#A80036" />
+              <path d="M 9 1.5 L 0 5 L 9 8.5 z" fill={markerFill} />
             </marker>
 
             {/* Selected Arrow Marker (End) */}
@@ -1656,7 +1671,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="10"
               orient="auto"
             >
-              <polygon points="0,1 11,6 0,11" fill="#ffffff" stroke="#A80036" strokeWidth="1.5" />
+              <polygon points="0,1 11,6 0,11" fill={markerHollowFill} stroke={markerStroke} strokeWidth="1.5" />
             </marker>
 
             {/* Composition Filled Diamond */}
@@ -1669,7 +1684,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="10"
               orient="auto"
             >
-              <polygon points="1,6 8,1 15,6 8,11" fill="#A80036" stroke="#A80036" strokeWidth="1" />
+              <polygon points="1,6 8,1 15,6 8,11" fill={markerFill} stroke={markerStroke} strokeWidth="1" />
             </marker>
 
             {/* Aggregation Hollow Diamond */}
@@ -1682,7 +1697,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="10"
               orient="auto"
             >
-              <polygon points="1,6 8,1 15,6 8,11" fill="#ffffff" stroke="#A80036" strokeWidth="1.5" />
+              <polygon points="1,6 8,1 15,6 8,11" fill={markerHollowFill} stroke={markerStroke} strokeWidth="1.5" />
             </marker>
 
             {/* Dependency Open Arrow */}
@@ -1695,7 +1710,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="9"
               orient="auto"
             >
-              <polyline points="2,1 10,6 2,11" fill="none" stroke="#A80036" strokeWidth="1.8" />
+              <polyline points="2,1 10,6 2,11" fill="none" stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Crow's Foot: One or Many (|{) */}
@@ -1708,10 +1723,10 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="14"
               orient="auto"
             >
-              <line x1="4" y1="2" x2="4" y2="14" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="4" y1="8" x2="18" y2="1" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="4" y1="8" x2="18" y2="8" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="4" y1="8" x2="18" y2="15" stroke="#A80036" strokeWidth="1.8" />
+              <line x1="4" y1="2" x2="4" y2="14" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="4" y1="8" x2="18" y2="1" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="4" y1="8" x2="18" y2="8" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="4" y1="8" x2="18" y2="15" stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Crow's Foot: Zero or Many (o{) */}
@@ -1724,10 +1739,10 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="14"
               orient="auto"
             >
-              <circle cx="5" cy="8" r="3.5" fill="#faf5ee" stroke="#A80036" strokeWidth="1.6" />
-              <line x1="10" y1="8" x2="22" y2="1" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="10" y1="8" x2="22" y2="8" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="10" y1="8" x2="22" y2="15" stroke="#A80036" strokeWidth="1.8" />
+              <circle cx="5" cy="8" r="3.5" fill={markerHollowFill} stroke={markerStroke} strokeWidth="1.6" />
+              <line x1="10" y1="8" x2="22" y2="1" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="10" y1="8" x2="22" y2="8" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="10" y1="8" x2="22" y2="15" stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Crow's Foot: Exactly One (||) */}
@@ -1740,8 +1755,8 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="13"
               orient="auto"
             >
-              <line x1="6" y1="2" x2="6" y2="14" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="11" y1="2" x2="11" y2="14" stroke="#A80036" strokeWidth="1.8" />
+              <line x1="6" y1="2" x2="6" y2="14" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="11" y1="2" x2="11" y2="14" stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Crow's Foot: Zero or One (o|) */}
@@ -1754,8 +1769,8 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="14"
               orient="auto"
             >
-              <circle cx="5" cy="8" r="3.5" fill="#faf5ee" stroke="#A80036" strokeWidth="1.6" />
-              <line x1="13" y1="2" x2="13" y2="14" stroke="#A80036" strokeWidth="1.8" />
+              <circle cx="5" cy="8" r="3.5" fill={markerHollowFill} stroke={markerStroke} strokeWidth="1.6" />
+              <line x1="13" y1="2" x2="13" y2="14" stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Crow's Foot: Source crossbars (|| start) */}
@@ -1768,8 +1783,8 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="13"
               orient="auto"
             >
-              <line x1="6" y1="2" x2="6" y2="14" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="11" y1="2" x2="11" y2="14" stroke="#A80036" strokeWidth="1.8" />
+              <line x1="6" y1="2" x2="6" y2="14" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="11" y1="2" x2="11" y2="14" stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Crow's Foot: Source One or Many (}| start) */}
@@ -1782,10 +1797,10 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="14"
               orient="auto"
             >
-              <line x1="16" y1="2" x2="16" y2="14" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="16" y1="8" x2="2" y2="1" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="16" y1="8" x2="2" y2="8" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="16" y1="8" x2="2" y2="15" stroke="#A80036" strokeWidth="1.8" />
+              <line x1="16" y1="2" x2="16" y2="14" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="16" y1="8" x2="2" y2="1" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="16" y1="8" x2="2" y2="8" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="16" y1="8" x2="2" y2="15" stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Crow's Foot: Source Zero or Many (}o start) */}
@@ -1798,10 +1813,10 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="14"
               orient="auto"
             >
-              <circle cx="19" cy="8" r="3.5" fill="#faf5ee" stroke="#A80036" strokeWidth="1.6" />
-              <line x1="14" y1="8" x2="2" y2="1" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="14" y1="8" x2="2" y2="8" stroke="#A80036" strokeWidth="1.8" />
-              <line x1="14" y1="8" x2="2" y2="15" stroke="#A80036" strokeWidth="1.8" />
+              <circle cx="19" cy="8" r="3.5" fill={markerHollowFill} stroke={markerStroke} strokeWidth="1.6" />
+              <line x1="14" y1="8" x2="2" y2="1" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="14" y1="8" x2="2" y2="8" stroke={markerStroke} strokeWidth="1.8" />
+              <line x1="14" y1="8" x2="2" y2="15" stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Crow's Foot: Source Zero or One (|o start) */}
@@ -1814,8 +1829,8 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="14"
               orient="auto"
             >
-              <circle cx="15" cy="8" r="3.5" fill="#faf5ee" stroke="#A80036" strokeWidth="1.6" />
-              <line x1="7" y1="2" x2="7" y2="14" stroke="#A80036" strokeWidth="1.8" />
+              <circle cx="15" cy="8" r="3.5" fill={markerHollowFill} stroke={markerStroke} strokeWidth="1.6" />
+              <line x1="7" y1="2" x2="7" y2="14" stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Realization Triangle Dotted */}
@@ -1828,7 +1843,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="10"
               orient="auto"
             >
-              <polygon points="0,1 11,6 0,11" fill="#ffffff" stroke="#A80036" strokeWidth="1.5" />
+              <polygon points="0,1 11,6 0,11" fill={markerHollowFill} stroke={markerStroke} strokeWidth="1.5" />
             </marker>
 
             {/* Socket & Ball (-0) */}
@@ -1841,8 +1856,8 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="14"
               orient="auto"
             >
-              <path d="M 4 2 A 6 6 0 0 1 4 14" fill="none" stroke="#A80036" strokeWidth="1.8" />
-              <circle cx="9" cy="8" r="3" fill="#A80036" />
+              <path d="M 4 2 A 6 6 0 0 1 4 14" fill="none" stroke={markerStroke} strokeWidth="1.8" />
+              <circle cx="9" cy="8" r="3" fill={markerFill} />
             </marker>
 
             {/* Lollipop Interface ( ()-- ) */}
@@ -1855,7 +1870,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="12"
               orient="auto"
             >
-              <circle cx="7" cy="7" r="4.5" fill="#ffffff" stroke="#A80036" strokeWidth="1.8" />
+              <circle cx="7" cy="7" r="4.5" fill={markerHollowFill} stroke={markerStroke} strokeWidth="1.8" />
             </marker>
 
             {/* Nesting (+--) */}
@@ -1868,9 +1883,9 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerHeight="13"
               orient="auto"
             >
-              <circle cx="8" cy="8" r="5" fill="#ffffff" stroke="#A80036" strokeWidth="1.5" />
-              <line x1="8" y1="5" x2="8" y2="11" stroke="#A80036" strokeWidth="1.5" />
-              <line x1="5" y1="8" x2="11" y2="8" stroke="#A80036" strokeWidth="1.5" />
+              <circle cx="8" cy="8" r="5" fill={markerHollowFill} stroke={markerStroke} strokeWidth="1.5" />
+              <line x1="8" y1="5" x2="8" y2="11" stroke={markerStroke} strokeWidth="1.5" />
+              <line x1="5" y1="8" x2="11" y2="8" stroke={markerStroke} strokeWidth="1.5" />
             </marker>
 
             {/* Cancellation (x--) */}
@@ -2152,7 +2167,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 <path
                   d={pathData}
                   fill="none"
-                  stroke={isSelected ? '#c2652a' : (edge.color || '#A80036')}
+                  stroke={isSelected ? '#c2652a' : (edge.color || defaultArrowColor)}
                   strokeWidth={isSelected ? 2.5 : 1.8}
                   strokeDasharray={edge.style === 'dashed' ? '6,4' : edge.style === 'dotted' ? '2,4' : undefined}
                   markerStart={getMarkerStart(edge.arrowType, isSelected, edge)}
@@ -2166,7 +2181,7 @@ export const Canvas: React.FC<CanvasProps> = ({
           {computedEdges.map(({ edge, labelPos, lineAnchor, needsLeaderLine }) => {
             if (!needsLeaderLine) return null;
             const isSelected = selectedEdgeId === edge.id;
-            const strokeColor = isSelected ? '#c2652a' : (edge.color || '#A80036');
+            const strokeColor = isSelected ? '#c2652a' : (edge.color || defaultArrowColor);
 
             return (
               <g key={`leader-${edge.id}`} className="pointer-events-none opacity-60 transition-opacity">
@@ -2340,7 +2355,14 @@ export const Canvas: React.FC<CanvasProps> = ({
                     className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-20"
                     style={{ left: `${sourceCardPos.x}px`, top: `${sourceCardPos.y}px` }}
                   >
-                    <span className="text-[10px] font-mono font-bold text-[#A80036] bg-white/95 px-1 py-0.2 rounded border border-[#A80036]/30 shadow-2xs">
+                    <span 
+                      className="text-[10px] font-mono font-bold px-1 py-0.2 rounded shadow-2xs"
+                      style={{
+                        color: isDark ? '#f4f4f5' : (edge.color || defaultArrowColor),
+                        backgroundColor: isDark ? '#1e1e24' : '#ffffff',
+                        border: `1px solid ${isDark ? '#3f3f46' : 'rgba(168,0,54,0.3)'}`
+                      }}
+                    >
                       {edge.cardinalitySource}
                     </span>
                   </div>
@@ -2352,7 +2374,14 @@ export const Canvas: React.FC<CanvasProps> = ({
                     className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-20"
                     style={{ left: `${targetCardPos.x}px`, top: `${targetCardPos.y}px` }}
                   >
-                    <span className="text-[10px] font-mono font-bold text-[#A80036] bg-white/95 px-1 py-0.2 rounded border border-[#A80036]/30 shadow-2xs">
+                    <span 
+                      className="text-[10px] font-mono font-bold px-1 py-0.2 rounded shadow-2xs"
+                      style={{
+                        color: isDark ? '#f4f4f5' : (edge.color || defaultArrowColor),
+                        backgroundColor: isDark ? '#1e1e24' : '#ffffff',
+                        border: `1px solid ${isDark ? '#3f3f46' : 'rgba(168,0,54,0.3)'}`
+                      }}
+                    >
                       {edge.cardinalityTarget}
                     </span>
                   </div>
@@ -2384,7 +2413,9 @@ export const Canvas: React.FC<CanvasProps> = ({
                         if (e.key === 'Escape') setEditingEdgeId(null);
                       }}
                       placeholder={getFriendlyRelationLabel(edge.arrowType, edge.style)}
-                      className="text-[11px] font-semibold text-center bg-white border-2 border-[#c2652a] rounded-lg px-2.5 py-1 outline-none shadow-md text-[#1c1917] min-w-[110px]"
+                      className={`text-[11px] font-semibold text-center rounded-lg px-2.5 py-1 outline-none shadow-md min-w-[110px] border-2 border-[#c2652a] ${
+                        isDark ? 'bg-[#1e1e24] text-[#f4f4f5]' : 'bg-white text-[#1c1917]'
+                      }`}
                     />
                   ) : (
                     <div
@@ -2401,22 +2432,24 @@ export const Canvas: React.FC<CanvasProps> = ({
                       }}
                       className={`group/badge flex flex-col items-center justify-center max-w-[220px] px-2.5 py-1 rounded-lg border shadow-xs transition-all select-none cursor-grab active:cursor-grabbing backdrop-blur-xs ${
                         isSelected 
-                          ? 'bg-white text-[#c2652a] border-[#c2652a] font-bold shadow-md ring-2 ring-[#c2652a]/20 scale-105 z-30' 
-                          : 'bg-white/95 text-[#2c2420] border-[#d8d0c8] hover:border-[#c2652a] hover:shadow-sm hover:bg-white'
+                          ? (isDark ? 'bg-[#27272a] text-[#c2652a] border-[#c2652a] font-bold shadow-md ring-2 ring-[#c2652a]/30 scale-105 z-30' : 'bg-white text-[#c2652a] border-[#c2652a] font-bold shadow-md ring-2 ring-[#c2652a]/20 scale-105 z-30')
+                          : (isDark ? 'bg-[#18181b]/95 text-[#f4f4f5] border-[#3f3f46] hover:border-[#c2652a] hover:bg-[#27272a]' : 'bg-white/95 text-[#2c2420] border-[#d8d0c8] hover:border-[#c2652a] hover:shadow-sm hover:bg-white')
                       }`}
                       title="Drag to reposition • Double-click to edit label • Click to configure"
                     >
                       <div className="flex items-center gap-1.5 text-center">
                         <span 
                           className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: isSelected ? '#c2652a' : (edge.color || '#A80036') }}
+                          style={{ backgroundColor: isSelected ? '#c2652a' : (edge.color || defaultArrowColor) }}
                         />
-                        <span className="text-[11px] font-medium leading-snug text-center text-[#181818] break-words text-balance">
+                        <span className={`text-[11px] font-medium leading-snug text-center break-words text-balance ${isDark ? 'text-[#f4f4f5]' : 'text-[#181818]'}`}>
                           {mainDesc}
                         </span>
                       </div>
                       {techNote && (
-                        <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-[#f4ebe1] text-[#78350f] border border-[#d8d0c8]/70 mt-1 tracking-tight">
+                        <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded mt-1 tracking-tight border ${
+                          isDark ? 'bg-[#27272a] text-[#fbbf24] border-[#3f3f46]' : 'bg-[#f4ebe1] text-[#78350f] border-[#d8d0c8]/70'
+                        }`}>
                           {techNote}
                         </span>
                       )}

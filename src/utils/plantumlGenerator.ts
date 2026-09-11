@@ -1383,6 +1383,7 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     direction: 'TB',
     linetype: 'ortho',
     monochrome: false,
+    monochromeReverse: false,
     handwritten: false,
     shadowing: false
   };
@@ -1413,10 +1414,17 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     if (
       !rawLine || 
       rawLine.startsWith("'") || 
-      rawLine.startsWith('!') || 
       rawLine.startsWith('@') || 
       rawLine.toLowerCase() === 'allowmixing'
     ) continue;
+
+    // Check !theme directive
+    const themeMatch = rawLine.match(/^!theme\s+([a-zA-Z0-9_-]+)/i);
+    if (themeMatch) {
+      settings.theme = themeMatch[1];
+      continue;
+    }
+    if (rawLine.startsWith('!')) continue;
 
     // Check title directive
     const titleMatch = rawLine.match(/^title\s+(.+)$/i);
@@ -1438,9 +1446,32 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     // Check skinparam directives
     if (rawLine.includes('skinparam linetype ortho')) settings.linetype = 'ortho';
     if (rawLine.includes('skinparam linetype polyline')) settings.linetype = 'polyline';
-    if (rawLine.includes('skinparam monochrome true')) settings.monochrome = true;
+    if (/skinparam\s+monochrome\s+reverse/i.test(rawLine)) {
+      settings.monochromeReverse = true;
+      settings.monochrome = false;
+    } else if (/skinparam\s+monochrome\s+true/i.test(rawLine)) {
+      settings.monochrome = true;
+    }
     if (rawLine.includes('skinparam handwritten true')) settings.handwritten = true;
-    if (rawLine.includes('skinparam shadowing true')) settings.shadowing = true;
+    if (/skinparam\s+shadowing\s+true/i.test(rawLine)) settings.shadowing = true;
+    if (/skinparam\s+shadowing\s+false/i.test(rawLine)) settings.shadowing = false;
+
+    const arrowColorMatch = rawLine.match(/^skinparam\s+ArrowColor\s+([#a-zA-Z0-9]+)/i);
+    if (arrowColorMatch) {
+      settings.arrowColor = arrowColorMatch[1];
+    }
+    const arrowThickMatch = rawLine.match(/^skinparam\s+ArrowThickness\s+(\d+)/i);
+    if (arrowThickMatch) {
+      settings.arrowThickness = parseInt(arrowThickMatch[1], 10);
+    }
+    const bgMatch = rawLine.match(/^skinparam\s+backgroundColor\s+([#a-zA-Z0-9]+)/i);
+    if (bgMatch) {
+      settings.backgroundColor = bgMatch[1];
+    }
+    const roundMatch = rawLine.match(/^skinparam\s+roundcorner\s+(\d+)/i);
+    if (roundMatch) {
+      settings.roundcorner = parseInt(roundMatch[1], 10);
+    }
 
     const currentBlock = blockStack.length > 0 ? blockStack[blockStack.length - 1] : null;
 

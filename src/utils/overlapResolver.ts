@@ -362,6 +362,8 @@ export function validatePlantUML(code: string): {
   let hasStartUml = false;
   let hasEndUml = false;
   let inMultiLineComment = false;
+  let inNoteBlock = false;
+  let inLegendBlock = false;
   let openBraceCount = 0;
   const braceStack: number[] = [];
 
@@ -399,6 +401,35 @@ export function validatePlantUML(code: string): {
     if (trimmed.startsWith('@startuml')) hasStartUml = true;
     if (trimmed.startsWith('@enduml')) hasEndUml = true;
 
+    // Handle legend ... endlegend blocks (freeform markdown/markup inside)
+    if (/^legend\b/i.test(trimmed)) {
+      inLegendBlock = true;
+      continue;
+    }
+    if (inLegendBlock) {
+      if (/^end\s*legend\b|^endlegend\b/i.test(trimmed)) {
+        inLegendBlock = false;
+      }
+      continue;
+    }
+
+    // Handle note ... end note blocks (freeform documentation inside)
+    if (/^(?:note|rnote|hnote)\b/i.test(trimmed)) {
+      // If it's a single-line note like 'note right: text' or 'note "text" as N', don't enter block
+      const isSingleLine = /^(?:note|rnote|hnote)\s+.*:\s*.+$/i.test(trimmed) ||
+                           /^(?:note|rnote|hnote)\s+"[^"]+"\s+as\s+\w+$/i.test(trimmed);
+      if (!isSingleLine && !/end\s*(?:note|rnote|hnote)/i.test(trimmed)) {
+        inNoteBlock = true;
+        continue;
+      }
+    }
+    if (inNoteBlock) {
+      if (/^end\s*(?:note|rnote|hnote)\b|^endnote\b|^endrnote\b|^endhnote\b/i.test(trimmed)) {
+        inNoteBlock = false;
+      }
+      continue;
+    }
+
     // Check unclosed quotes (ignoring escaped quotes \")
     const sanitizedQuotes = trimmed.replace(/\\"/g, '');
     const quoteCount = (sanitizedQuotes.match(/"/g) || []).length;
@@ -409,17 +440,17 @@ export function validatePlantUML(code: string): {
     // Strip content inside quotes so quotes and characters inside strings don't interfere
     let cleanLine = trimmed.replace(/"([^"\\]|\\.)*"/g, '""');
 
-    // Strip relationship arrows that contain braces, e.g. ||--|{, ||--o{, }|--|{, }o--o{, --{, }--, etc.
-    cleanLine = cleanLine.replace(/(\|\||\|o|o\||}[|o]|[|o]{)--[-.<>0\(\)\^x#\+\*]*--?[|o]?[{\[]?/g, ' -- ');
-    cleanLine = cleanLine.replace(/--[|o]?[{\[]/g, '--');
-    cleanLine = cleanLine.replace(/[}\]][|o]?--/g, '--');
+    // Strip relationship arrows that contain braces, e.g. ||--|{, ||--o{, }|--|{, }o--o{, --{, }--, }|..|{, etc.
+    cleanLine = cleanLine.replace(/(\|\||\|o|o\||}[|o]|[|o]{)?[-.<>=0\(\)\^x#\+\*]*(?:--|\.\.|==)[-.<>=0\(\)\^x#\+\*]*([|o]?[{\[])?/g, ' -- ');
+    cleanLine = cleanLine.replace(/(?:--|\.\.|==)[|o]?[{\[]/g, '--');
+    cleanLine = cleanLine.replace(/[}\]][|o]?(?:--|\.\.|==)/g, '--');
     cleanLine = cleanLine.replace(/\|\{/g, ' ');
     cleanLine = cleanLine.replace(/o\{/g, ' ');
     cleanLine = cleanLine.replace(/\}\|/g, ' ');
     cleanLine = cleanLine.replace(/\}o/g, ' ');
 
-    // Strip inline PlantUML stereotyping or modifiers like {field}, {method}, {static}, {abstract}
-    cleanLine = cleanLine.replace(/\{(field|method|static|abstract|classifier)\}/gi, ' ');
+    // Strip inline PlantUML stereotyping, modifiers, or variables like {field}, {method}, {static}, {abstract}, {var}
+    cleanLine = cleanLine.replace(/\{[a-zA-Z0-9_-]+\}/g, ' ');
 
     // Track block braces
     for (let charIdx = 0; charIdx < cleanLine.length; charIdx++) {

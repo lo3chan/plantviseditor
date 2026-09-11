@@ -1840,9 +1840,21 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       )}
 
       {/* Main Classifier Card */}
-      <div className="w-full h-full flex-1 bg-[#FEFECE] border border-[#A80036] overflow-hidden flex flex-col">
+      <div 
+        className="w-full h-full flex-1 border overflow-hidden flex flex-col"
+        style={{ 
+          backgroundColor: colorConfig.bgHex || '#FEFECE', 
+          borderColor: colorConfig.borderHex || '#A80036' 
+        }}
+      >
         {/* Header with Spot Circle and Name */}
-        <div className="p-2 border-b border-[#A80036] flex flex-col items-center justify-center text-center relative bg-[#FEFECE]">
+        <div 
+          className="p-2 border-b flex flex-col items-center justify-center text-center relative"
+          style={{ 
+            backgroundColor: colorConfig.bgHex || '#FEFECE', 
+            borderColor: colorConfig.borderHex || '#A80036' 
+          }}
+        >
           {/* Stereotype (e.g. <<interface>>, <<abstract>>) */}
           {node.sublabel && (
             <div className="text-[10px] font-sans italic text-gray-700 leading-none mb-1">
@@ -2323,7 +2335,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         )}
 
         {/* Fill remaining card height when resized taller */}
-        <div className="flex-1 w-full bg-[#FEFECE]" />
+        <div className="flex-1 w-full min-h-0" style={{ backgroundColor: colorConfig.bgHex || '#FEFECE' }} />
       </div>
 
       {/* Ports */}
