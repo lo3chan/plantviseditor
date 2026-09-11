@@ -20,7 +20,8 @@ import {
   PortPosition, 
   Viewport, 
   AssetItem,
-  GlobalCanvasSettings
+  GlobalCanvasSettings,
+  NodeShape
 } from '../types';
 import { SelectedCanvasElement } from '../utils/codeHighlightSync';
 import { DiagramNodeView } from './DiagramNode';
@@ -148,7 +149,78 @@ export const Canvas: React.FC<CanvasProps> = ({
   onSelectElement
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const nodes = diagram.nodes || [];
+
+  // Derive robust node list, synthesizing sequence participants if not present in diagram.nodes
+  const nodes = useMemo(() => {
+    const rawNodes = diagram.nodes || [];
+    const existingIds = new Set(rawNodes.map(n => n.id));
+    
+    const missingParticipants: DiagramNode[] = [];
+    let nextX = rawNodes.length > 0 ? Math.max(...rawNodes.map(n => n.x + n.width)) + 80 : 80;
+
+    if (diagram.participants && diagram.participants.length > 0) {
+      diagram.participants.forEach(p => {
+        if (!existingIds.has(p.id)) {
+          existingIds.add(p.id);
+          let resolvedShape: NodeShape = 'rectangle';
+          if (p.type === 'actor') resolvedShape = 'actor';
+          else if (p.type === 'database') resolvedShape = 'cylinder';
+          else if (p.type === 'collections') resolvedShape = 'collections';
+
+          missingParticipants.push({
+            id: p.id,
+            type: p.type || 'participant',
+            category: 'sequence',
+            label: ('label' in p ? (p as any).label : p.name) || p.id,
+            sublabel: ('sublabel' in p ? (p as any).sublabel : p.stereotype),
+            x: nextX,
+            y: 60,
+            width: 140,
+            height: 70,
+            color: p.color || 'sand',
+            data: { shape: resolvedShape }
+          });
+          nextX += 220;
+        }
+      });
+    }
+
+    if (diagram.messages && diagram.messages.length > 0) {
+      diagram.messages.forEach(m => {
+        [m.from, m.to].forEach(id => {
+          if (id && !existingIds.has(id)) {
+            existingIds.add(id);
+            missingParticipants.push({
+              id,
+              type: 'participant',
+              category: 'sequence',
+              label: id,
+              x: nextX,
+              y: 60,
+              width: 140,
+              height: 70,
+              color: 'sand',
+              data: { shape: 'rectangle' }
+            });
+            nextX += 220;
+          }
+        });
+      });
+    }
+
+    if (missingParticipants.length > 0) {
+      return [...rawNodes, ...missingParticipants];
+    }
+    return rawNodes;
+  }, [diagram.nodes, diagram.participants, diagram.messages]);
+
+  // Auto-promote synthesized sequence participants into diagram.nodes
+  useEffect(() => {
+    if (nodes.length > (diagram.nodes?.length || 0)) {
+      onUpdateNodes(nodes, { skipHistory: true });
+    }
+  }, [nodes, diagram.nodes, onUpdateNodes]);
+
   const edges = diagram.edges || [];
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -2069,7 +2141,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         {/* HTML Nodes Layer */}
         <div className="absolute top-0 left-0 pointer-events-auto">
-          {diagram.nodes.map(node => (
+          {nodes.map(node => (
             <div
               key={node.id}
               onMouseDown={(e) => handleNodeMouseDown(node, e)}
@@ -2082,11 +2154,11 @@ export const Canvas: React.FC<CanvasProps> = ({
                   selectNode(node);
                 }}
                 onUpdate={(patch) => {
-                  onUpdateNodes(diagram.nodes.map(n => n.id === node.id ? { ...n, ...patch } : n));
+                  onUpdateNodes(nodes.map(n => n.id === node.id ? { ...n, ...patch } : n));
                 }}
                 onStartConnection={handleStartConnection}
                 onQuickAddChild={(id, port) => {
-                  const targetNode = diagram.nodes.find(n => n.id === id);
+                  const targetNode = nodes.find(n => n.id === id);
                   if (!targetNode) return;
                   setSelectedNodeId(id);
                   setSelectedEdgeId(null);
@@ -2131,7 +2203,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               x={selectedNode.x + selectedNode.width / 2}
               y={selectedNode.y - 8}
               node={selectedNode}
-              allNodes={diagram.nodes}
+              allNodes={nodes}
               onMorphNode={(asset) => handleMorphNode(selectedNode.id, asset)}
               onUpdateNode={(patch) => handleUpdateSelectedNode(patch)}
               onConnectToNode={handleConnectToNode}
@@ -2147,7 +2219,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
           {/* Floating Quick Branch Popup from connector circle double click */}
           {quickBranchPopup && (() => {
-            const src = diagram.nodes.find(n => n.id === quickBranchPopup.sourceNodeId);
+            const src = nodes.find(n => n.id === quickBranchPopup.sourceNodeId);
             if (!src) return null;
             return (
               <QuickBranchPopup
@@ -2163,8 +2235,8 @@ export const Canvas: React.FC<CanvasProps> = ({
 
           {/* Floating Relationship Toolbar for selected edge */}
           {selectedEdge && (() => {
-            const srcNode = diagram.nodes.find(n => n.id === selectedEdge.source);
-            const tgtNode = diagram.nodes.find(n => n.id === selectedEdge.target);
+            const srcNode = nodes.find(n => n.id === selectedEdge.source);
+            const tgtNode = nodes.find(n => n.id === selectedEdge.target);
             const { srcPort, tgtPort } = srcNode && tgtNode 
               ? getOptimalPorts(srcNode, tgtNode, selectedEdge.sourceHandle, selectedEdge.targetHandle)
               : { srcPort: selectedEdge.sourceHandle || 'right', tgtPort: selectedEdge.targetHandle || 'left' };
@@ -2176,7 +2248,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             return (
               <EdgeToolbar
                 edge={selectedEdge}
-                nodes={diagram.nodes}
+                nodes={nodes}
                 sourceNodeLabel={srcNode?.label}
                 targetNodeLabel={tgtNode?.label}
                 position={{ x: midX, y: midY }}

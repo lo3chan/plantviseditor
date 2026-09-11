@@ -632,8 +632,59 @@ export const ARCHIMATE_DIAGRAM: DiagramData = {
 
 export const SEQUENCE_AUTH_DIAGRAM: DiagramData = {
   title: 'User Authentication & Token Exchange Flow',
-  type: 'sequence',
-  nodes: [],
+  nodes: [
+    {
+      id: 'user',
+      type: 'actor',
+      category: 'sequence',
+      label: 'User Client',
+      x: 80,
+      y: 60,
+      width: 140,
+      height: 70,
+      color: 'sand',
+      data: { shape: 'actor' }
+    },
+    {
+      id: 'gateway',
+      type: 'participant',
+      category: 'sequence',
+      label: 'API Gateway',
+      sublabel: 'Nginx / Kong',
+      x: 300,
+      y: 60,
+      width: 150,
+      height: 70,
+      color: 'sand',
+      data: { shape: 'rectangle' }
+    },
+    {
+      id: 'auth_svc',
+      type: 'participant',
+      category: 'sequence',
+      label: 'Auth Microservice',
+      sublabel: 'Spring Security',
+      x: 520,
+      y: 60,
+      width: 160,
+      height: 70,
+      color: 'sand',
+      data: { shape: 'rectangle' }
+    },
+    {
+      id: 'user_db',
+      type: 'database',
+      category: 'sequence',
+      label: 'User Database',
+      sublabel: 'PostgreSQL',
+      x: 750,
+      y: 60,
+      width: 150,
+      height: 70,
+      color: 'sand',
+      data: { shape: 'cylinder' }
+    }
+  ],
   edges: [],
   participants: [
     { id: 'user', name: 'User Client', type: 'actor', color: 'sienna' },
