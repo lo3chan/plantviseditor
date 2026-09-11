@@ -13,7 +13,8 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 import { DiagramData } from '../types';
 import { generatePlantUML } from '../utils/plantumlGenerator';
@@ -25,6 +26,11 @@ import {
   convertToPureAscii, 
   generateLocalAsciiFallback 
 } from '../utils/plantumlEncoder';
+import { 
+  downloadDrawioFile, 
+  openInDrawioWeb, 
+  generateDrawioXml 
+} from '../utils/drawioExporter';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -43,6 +49,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [copiedSvgCode, setCopiedSvgCode] = useState(false);
   const [copiedPngImage, setCopiedPngImage] = useState(false);
   const [copiedEmbed, setCopiedEmbed] = useState(false);
+  const [copiedDrawioXml, setCopiedDrawioXml] = useState(false);
   const [isDownloadingSvg, setIsDownloadingSvg] = useState(false);
   const [isDownloadingPng, setIsDownloadingPng] = useState(false);
   const [isCopyingPng, setIsCopyingPng] = useState(false);
@@ -242,6 +249,21 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+  };
+
+  const handleDownloadDrawio = () => {
+    downloadDrawioFile(diagram);
+  };
+
+  const handleCopyDrawioXml = async () => {
+    const xml = generateDrawioXml(diagram);
+    await navigator.clipboard.writeText(xml);
+    setCopiedDrawioXml(true);
+    setTimeout(() => setCopiedDrawioXml(false), 2000);
+  };
+
+  const handleOpenDrawioWeb = () => {
+    openInDrawioWeb(diagram);
   };
 
   const handleRetryAscii = () => {
@@ -530,7 +552,56 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </div>
           </div>
 
-          {/* Option 4: PNG Image */}
+          {/* Option 4: Draw.io / diagrams.net (.drawio) */}
+          <div className="p-3 bg-white rounded-xl border border-[#d8d0c8]/70 hover:border-[#0052cc] flex items-center justify-between transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#ebf3fc] border border-[#a3c9f7] flex items-center justify-center text-[#0052cc]">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-[#3a302a] flex items-center gap-1.5">
+                  <span>Draw.io / diagrams.net (.drawio)</span>
+                  <span className="text-[10px] bg-sky-100 text-sky-800 font-semibold px-1.5 py-0.2 rounded">
+                    Editable Vector
+                  </span>
+                </div>
+                <div className="text-[11px] text-[#78706a]">
+                  Native mxGraph model with editable shapes, labels, and orthogonal arrows
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                id="btn-copy-drawio-xml"
+                onClick={handleCopyDrawioXml}
+                className="px-2.5 py-1.5 rounded-lg border border-[#d8d0c8] text-xs font-medium text-[#3a302a] hover:text-[#0052cc] hover:border-[#0052cc] flex items-center gap-1 transition-colors cursor-pointer"
+                title="Copy raw Draw.io mxGraphModel XML to clipboard"
+              >
+                {copiedDrawioXml ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedDrawioXml ? 'Copied XML' : 'Copy XML'}</span>
+              </button>
+              <button
+                id="btn-open-drawio-web"
+                onClick={handleOpenDrawioWeb}
+                className="px-2.5 py-1.5 rounded-lg border border-[#a3c9f7] bg-[#ebf3fc] text-[#0052cc] hover:bg-[#d8e8fa] text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                title="Open directly in app.diagrams.net in a new tab"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open in Web</span>
+              </button>
+              <button
+                id="btn-download-drawio"
+                onClick={handleDownloadDrawio}
+                className="px-2.5 py-1.5 rounded-lg bg-[#0052cc] text-white text-xs font-medium hover:bg-[#0041a3] flex items-center gap-1 transition-colors shadow-xs cursor-pointer"
+                title="Download .drawio file for Draw.io Desktop, diagrams.net, or VS Code"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download .drawio</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Option 5: PNG Image */}
           <div className="p-3 bg-white rounded-xl border border-[#d8d0c8]/70 hover:border-[#c2652a] flex items-center justify-between transition-colors">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-[#f0f6f1] border border-[#a6c6ab] flex items-center justify-center text-[#587a5f]">
