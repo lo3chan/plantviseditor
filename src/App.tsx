@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { 
   DiagramData, 
   DiagramNode, 
+  DiagramEdge,
   Viewport, 
   AssetItem,
   SequenceParticipant,
@@ -15,7 +16,6 @@ import { resolveOverlaps, resolveDiagramOverlaps, resolveEdgeLabelOverlaps, find
 import { Navbar, WorkspaceViewMode, RenderEngineMode } from './components/Navbar';
 import { AssetPanel } from './components/AssetPanel';
 import { Canvas } from './components/Canvas';
-import { SequenceCanvas } from './components/SequenceCanvas';
 import { CodePanel } from './components/CodePanel';
 import { OfficialRenderView } from './components/OfficialRenderView';
 import { ExportModal } from './components/ExportModal';
@@ -245,122 +245,7 @@ export default function App() {
 
   // Add node from asset toolbox (via click or drag drop)
   const handleAddNodeFromAsset = (asset: AssetItem, targetX?: number, targetY?: number) => {
-    // 1. DEDICATED SEQUENCE TIMELINE MODE
-    if (isSequenceMode) {
-      const currentParticipants = diagram.participants && diagram.participants.length > 0
-        ? [...diagram.participants]
-        : [
-            { id: 'user', name: 'User Client', type: 'actor', color: 'sienna' },
-            { id: 'app', name: 'AppService', type: 'participant', color: 'sand', stereotype: '«service»' }
-          ];
-      const currentMessages = diagram.messages || [];
-      const currentBlocks = diagram.blocks || [];
-
-      // 1A. Sequence Message asset
-      if (asset.id.startsWith('seq-msg-')) {
-        const msgType = (asset.id.replace('seq-msg-', '') as 'sync' | 'reply' | 'async' | 'self') || 'sync';
-        const fromP = currentParticipants[0]?.id || 'user';
-        const toP = msgType === 'self' ? fromP : (currentParticipants[1]?.id || fromP);
-        const nextOrder = currentMessages.length > 0 ? Math.max(...currentMessages.map(m => m.order)) + 1 : 1;
-        const newMsg: SequenceMessage = {
-          id: `msg_${Date.now()}`,
-          from: fromP,
-          to: toP,
-          label: asset.label.includes('(') ? asset.label : `${asset.label}()`,
-          type: msgType,
-          order: nextOrder
-        };
-        updateDiagram({
-          type: 'sequence',
-          participants: currentParticipants,
-          messages: [...currentMessages, newMsg]
-        });
-        return;
-      }
-
-      // 1B. Sequence Block asset
-      if (asset.id.startsWith('seq-block-')) {
-        const blockType = asset.id.replace('seq-block-', '');
-        const newBlock: SequenceBlock = {
-          id: `block_${Date.now()}`,
-          type: blockType,
-          label: asset.label,
-          condition: blockType === 'alt' ? 'status == 200' : blockType === 'loop' ? 'items.hasNext()' : undefined,
-          startOrder: Math.max(1, currentMessages.length > 0 ? 1 : 1),
-          endOrder: Math.max(1, currentMessages.length > 0 ? currentMessages.length : 1)
-        };
-        updateDiagram({
-          type: 'sequence',
-          participants: currentParticipants,
-          messages: currentMessages,
-          blocks: [...currentBlocks, newBlock]
-        });
-        return;
-      }
-
-      // 1C. Sequence Note asset
-      if (asset.id === 'seq-note') {
-        if (currentMessages.length > 0) {
-          const lastMsg = currentMessages[currentMessages.length - 1];
-          const updatedMessages = currentMessages.map(m => m.id === lastMsg.id ? { ...m, noteText: 'Note: Verified state' } : m);
-          updateDiagram({
-            type: 'sequence',
-            participants: currentParticipants,
-            messages: updatedMessages
-          });
-        }
-        return;
-      }
-
-      // 1D. Participant Lifeline
-      let pType = 'participant';
-      if (asset.id === 'seq-actor' || asset.nodeType === 'actor' || asset.category === 'actor-agent') {
-        pType = 'actor';
-      } else if (asset.id === 'seq-database' || asset.nodeType === 'database' || asset.shape === 'cylinder') {
-        pType = 'database';
-      } else if (asset.id === 'seq-queue' || asset.nodeType === 'queue') {
-        pType = 'queue';
-      } else if (asset.id === 'seq-boundary' || asset.nodeType === 'boundary') {
-        pType = 'boundary';
-      } else if (asset.id === 'seq-control' || asset.nodeType === 'control') {
-        pType = 'control';
-      } else if (asset.id === 'seq-entity' || asset.nodeType === 'entity') {
-        pType = 'entity';
-      } else if (asset.id === 'seq-collections' || asset.nodeType === 'collections') {
-        pType = 'collections';
-      }
-
-      const newParticipant: SequenceParticipant = {
-        id: `p_${Date.now()}`,
-        name: asset.label.replace(/[^a-zA-Z0-9_ ]/g, '').trim() || `Participant ${currentParticipants.length + 1}`,
-        type: pType,
-        shape: asset.shape || pType,
-        color: asset.defaultColor || 'sand',
-        stereotype: asset.sublabel ? `«${asset.sublabel.replace(/[«»]/g, '')}»` : undefined,
-        x: targetX,
-        y: targetY
-      };
-
-      const updatedParticipants = [...currentParticipants, newParticipant];
-      if (targetX !== undefined) {
-        updatedParticipants.sort((a, b) => (a.x ?? 0) - (b.x ?? 0));
-      }
-
-      updateDiagram({
-        type: 'sequence',
-        participants: updatedParticipants,
-        messages: currentMessages,
-        blocks: currentBlocks
-      });
-      return;
-    }
-
-    // =========================================================================
-    // 2. 2D ARCHITECTURE CANVAS MODE (!isSequenceMode)
-    // All assets (including Sequence blocks, participants, messages) appear directly on the 2D canvas!
-    // =========================================================================
-
-    // 2A. Fragment Frames (alt, opt, loop, par, critical, group)
+    // 1. Fragment Frames (alt, opt, loop, par, critical, group)
     if (asset.id.startsWith('seq-block-')) {
       const blockType = asset.id.replace('seq-block-', '');
       const defaultCondition = blockType === 'alt' ? 'status == 200' : blockType === 'loop' ? 'items.hasNext()' : blockType === 'opt' ? 'is_authenticated' : undefined;
@@ -552,20 +437,6 @@ export default function App() {
       setLoadedPlantUMLCode(newCode);
       const parsed = parsePlantUML(newCode);
 
-      if (parsed.type === 'sequence') {
-        updateDiagram({
-          title: parsed.title || diagram.title,
-          type: 'sequence',
-          participants: parsed.participants || [],
-          messages: parsed.messages || [],
-          blocks: parsed.blocks || [],
-          nodes: [],
-          edges: [],
-          settings: parsed.settings || diagram.settings
-        }, 'Applied Sequence Script');
-        return;
-      }
-
       if (parsed.nodes !== undefined || parsed.edges !== undefined) {
         // Preserve positions of existing nodes where IDs match so canvas doesn't jump randomly
         const existingNodeMap = new Map<string, DiagramNode>((diagram.nodes || []).map(n => [n.id, n]));
@@ -585,12 +456,12 @@ export default function App() {
         const cleanEdges = resolveEdgeLabelOverlaps(resolvedNodes, parsed.edges || []);
         updateDiagram({
           title: parsed.title || diagram.title,
-          type: parsed.type || 'class',
+          type: parsed.type || diagram.type || 'unified',
           nodes: resolvedNodes,
           edges: cleanEdges,
-          participants: [],
-          messages: [],
-          blocks: [],
+          participants: parsed.participants || [],
+          messages: parsed.messages || [],
+          blocks: parsed.blocks || [],
           settings: parsed.settings || diagram.settings
         }, 'Applied PlantUML Script');
       }
@@ -690,38 +561,6 @@ export default function App() {
     }
   }, [diagram]);
 
-  const isSequenceMode = diagram.type === 'sequence';
-
-  const handleToggleDiagramMode = useCallback(() => {
-    if (diagram.type === 'sequence') {
-      updateDiagram({
-        type: 'unified'
-      }, 'Switched to 2D Architecture Canvas');
-    } else {
-      // Derive sequence participants from existing architecture nodes if empty
-      let participants = diagram.participants || [];
-      if (participants.length === 0 && diagram.nodes && diagram.nodes.length > 0) {
-        participants = diagram.nodes
-          .filter(n => !n.data?.isContainer && n.type !== 'frame' && n.type !== 'package')
-          .map(n => ({
-            id: n.id,
-            name: n.label,
-            type: n.type === 'actor' ? 'actor' : n.type === 'database' ? 'database' : 'participant',
-            color: n.color || 'sand',
-            stereotype: n.sublabel
-          }));
-      }
-      updateDiagram({
-        type: 'sequence',
-        participants: participants.length > 0 ? participants : [
-          { id: 'user', name: 'User Client', type: 'actor', color: 'sienna' },
-          { id: 'api', name: 'API Gateway', type: 'boundary', color: 'sand', stereotype: '«gateway»' },
-          { id: 'auth', name: 'Auth Service', type: 'participant', color: 'sand', stereotype: '«service»' }
-        ]
-      }, 'Switched to Sequence Timeline');
-    }
-  }, [diagram, updateDiagram]);
-
   return (
     <div 
       className="flex flex-col w-screen h-screen overflow-hidden bg-[#faf5ee] relative"
@@ -743,8 +582,8 @@ export default function App() {
         onResetStarter={handleResetStarter}
         onSelectTemplate={handleSelectTemplate}
         onImportFile={handleImportFile}
-        isSequenceDiagram={isSequenceMode}
-        onToggleDiagramMode={handleToggleDiagramMode}
+        diagramType={diagram.type || 'unified'}
+        onUpdateDiagramType={(type) => updateDiagram({ type }, `Changed Diagram Type to ${type}`)}
         canUndo={historyIndex > 0}
         canRedo={historyIndex < history.length - 1}
         onUndo={handleUndo}
@@ -768,7 +607,7 @@ export default function App() {
         {/* MODE 1: SPLIT VIEW (Code on Left, Canvas/SVG on Right) */}
         {viewMode === 'split' && (
           <div className="w-full h-full flex overflow-hidden">
-            {/* Left 45%: Full PlantUML Code Editor */}
+            {/* Left 42%: Full PlantUML Code Editor */}
             <div className="w-[42%] min-w-[360px] max-w-[650px] h-full">
               <CodePanel
                 code={activePlantUMLCode}
@@ -779,48 +618,31 @@ export default function App() {
               />
             </div>
 
-            {/* Right 58%: Diagram Canvas or Official Server SVG */}
+            {/* Right 58%: Unified Diagram Canvas or Official Server SVG */}
             <div className="flex-1 h-full relative overflow-hidden">
               {renderEngine === 'interactive' ? (
-                isSequenceMode ? (
-                  <SequenceCanvas
-                    participants={diagram.participants || []}
-                    messages={diagram.messages || []}
-                    blocks={diagram.blocks || []}
-                    onUpdateParticipants={(participants) => updateDiagram({ participants })}
-                    onUpdateMessages={(messages) => updateDiagram({ messages })}
-                    onUpdateBlocks={(blocks) => updateDiagram({ blocks })}
-                    viewport={viewport}
-                    onUpdateViewport={setViewport}
-                    snapToGrid={snapToGrid}
-                    onToggleSnap={() => setSnapToGrid(!snapToGrid)}
-                    selectedElementId={selectedCanvasElement?.id || null}
-                    onSelectElement={setSelectedCanvasElement}
-                  />
-                ) : (
-                  <Canvas
-                    diagram={diagram}
-                    viewport={viewport}
-                    onUpdateViewport={setViewport}
-                    onUpdateNodes={(nodes, options) => updateDiagram({ nodes }, options?.actionName, { skipHistory: options?.skipHistory, coalesce: options?.coalesce })}
-                    onUpdateEdges={(edges) => updateDiagram({ edges })}
-                    onAddNode={(node, edge) => updateDiagram(prev => ({
-                      nodes: [...(prev.nodes || []), node],
-                      edges: edge ? [...(prev.edges || []), edge] : prev.edges
-                    }), edge ? `Added connected ${node.label}` : `Added ${node.label}`)}
-                    snapToGrid={snapToGrid}
-                    onToggleSnap={() => setSnapToGrid(!snapToGrid)}
-                    onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
-                    selectedElementId={selectedCanvasElement?.id || null}
-                    onSelectElement={setSelectedCanvasElement}
-                  />
-                )
+                <Canvas
+                  diagram={diagram}
+                  viewport={viewport}
+                  onUpdateViewport={setViewport}
+                  onUpdateNodes={(nodes, options) => updateDiagram({ nodes }, options?.actionName, { skipHistory: options?.skipHistory, coalesce: options?.coalesce })}
+                  onUpdateEdges={(edges) => updateDiagram({ edges })}
+                  onAddNode={(node, edge) => updateDiagram(prev => ({
+                    nodes: [...(prev.nodes || []), node],
+                    edges: edge ? [...(prev.edges || []), edge] : prev.edges
+                  }), edge ? `Added connected ${node.label}` : `Added ${node.label}`)}
+                  snapToGrid={snapToGrid}
+                  onToggleSnap={() => setSnapToGrid(!snapToGrid)}
+                  onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
+                  selectedElementId={selectedCanvasElement?.id || null}
+                  onSelectElement={setSelectedCanvasElement}
+                />
               ) : (
                 <OfficialRenderView 
                   code={activePlantUMLCode} 
                   settings={diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }}
                   onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
-                  isSequenceDiagram={isSequenceMode}
+                  isSequenceDiagram={diagram.type === 'sequence'}
                 />
               )}
             </div>
@@ -840,45 +662,28 @@ export default function App() {
             {/* Canvas or Official SVG */}
             <div className="flex-1 h-full relative overflow-hidden">
               {renderEngine === 'interactive' ? (
-                isSequenceMode ? (
-                  <SequenceCanvas
-                    participants={diagram.participants || []}
-                    messages={diagram.messages || []}
-                    blocks={diagram.blocks || []}
-                    onUpdateParticipants={(participants) => updateDiagram({ participants })}
-                    onUpdateMessages={(messages) => updateDiagram({ messages })}
-                    onUpdateBlocks={(blocks) => updateDiagram({ blocks })}
-                    viewport={viewport}
-                    onUpdateViewport={setViewport}
-                    snapToGrid={snapToGrid}
-                    onToggleSnap={() => setSnapToGrid(!snapToGrid)}
-                    selectedElementId={selectedCanvasElement?.id || null}
-                    onSelectElement={setSelectedCanvasElement}
-                  />
-                ) : (
-                  <Canvas
-                    diagram={diagram}
-                    viewport={viewport}
-                    onUpdateViewport={setViewport}
-                    onUpdateNodes={(nodes, options) => updateDiagram({ nodes }, options?.actionName, { skipHistory: options?.skipHistory, coalesce: options?.coalesce })}
-                    onUpdateEdges={(edges) => updateDiagram({ edges })}
-                    onAddNode={(node, edge) => updateDiagram(prev => ({
-                      nodes: [...(prev.nodes || []), node],
-                      edges: edge ? [...(prev.edges || []), edge] : prev.edges
-                    }), edge ? `Added connected ${node.label}` : `Added ${node.label}`)}
-                    snapToGrid={snapToGrid}
-                    onToggleSnap={() => setSnapToGrid(!snapToGrid)}
-                    onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
-                    selectedElementId={selectedCanvasElement?.id || null}
-                    onSelectElement={setSelectedCanvasElement}
-                  />
-                )
+                <Canvas
+                  diagram={diagram}
+                  viewport={viewport}
+                  onUpdateViewport={setViewport}
+                  onUpdateNodes={(nodes, options) => updateDiagram({ nodes }, options?.actionName, { skipHistory: options?.skipHistory, coalesce: options?.coalesce })}
+                  onUpdateEdges={(edges) => updateDiagram({ edges })}
+                  onAddNode={(node, edge) => updateDiagram(prev => ({
+                    nodes: [...(prev.nodes || []), node],
+                    edges: edge ? [...(prev.edges || []), edge] : prev.edges
+                  }), edge ? `Added connected ${node.label}` : `Added ${node.label}`)}
+                  snapToGrid={snapToGrid}
+                  onToggleSnap={() => setSnapToGrid(!snapToGrid)}
+                  onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
+                  selectedElementId={selectedCanvasElement?.id || null}
+                  onSelectElement={setSelectedCanvasElement}
+                />
               ) : (
                 <OfficialRenderView 
                   code={activePlantUMLCode} 
                   settings={diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }}
                   onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
-                  isSequenceDiagram={isSequenceMode}
+                  isSequenceDiagram={diagram.type === 'sequence'}
                 />
               )}
             </div>

@@ -66,6 +66,8 @@ export interface ClassifierSpot {
   colorHex: string;   // e.g., '#2e7d32', '#7b1fa2'
 }
 
+export type NodeShape = 'rectangle' | 'rounded' | 'cylinder' | 'horiz-cylinder' | 'cloud' | 'actor' | 'agent' | 'circle' | 'diamond' | 'component' | 'package' | 'node3d' | 'queue' | 'stack' | 'artifact' | 'file' | 'folder' | 'frame' | 'card' | 'hexagon' | 'collections' | 'boundary' | 'control' | 'entity-circle' | 'lollipop' | 'start' | 'stop' | 'sync-bar' | 'state' | 'history' | 'flow-final' | 'usecase' | 'note';
+
 export interface DiagramNode {
   id: string;
   type: string;
@@ -76,6 +78,7 @@ export interface DiagramNode {
   width: number;
   height: number;
   color?: string; // theme key or hex
+  shape?: NodeShape;
   category?: StructuralCategory;
   data?: {
     // Code & OO
@@ -139,8 +142,11 @@ export interface DiagramNode {
 
     // Containers & Boundaries
     isContainer?: boolean;
-    containerType?: 'package' | 'namespace' | 'node' | 'folder' | 'frame' | 'rectangle' | 'cloud' | 'together';
+    containerType?: 'package' | 'namespace' | 'node' | 'folder' | 'frame' | 'rectangle' | 'cloud' | 'together' | 'boundary';
     enclosedNodeIds?: string[];
+    parentId?: string;
+    frameKind?: string;
+    condition?: string;
 
     // Notes
     noteDirection?: 'top' | 'right' | 'bottom' | 'left' | 'floating';
@@ -148,7 +154,7 @@ export interface DiagramNode {
     noteText?: string;
 
     // Generic shape
-    shape?: 'rectangle' | 'rounded' | 'cylinder' | 'horiz-cylinder' | 'cloud' | 'actor' | 'agent' | 'circle' | 'diamond' | 'component' | 'package' | 'node3d' | 'queue' | 'stack' | 'artifact' | 'file' | 'folder' | 'frame' | 'card' | 'hexagon' | 'collections' | 'boundary' | 'control' | 'entity-circle' | 'lollipop' | 'start' | 'stop' | 'sync-bar' | 'state' | 'history' | 'flow-final' | 'usecase' | 'note';
+    shape?: NodeShape;
   };
 }
 
@@ -237,7 +243,19 @@ export interface Viewport {
   zoom: number;
 }
 
-export type DiagramType = 'class' | 'component' | 'sequence' | 'unified' | string;
+export type DiagramType = 
+  | 'unified'
+  | 'class' 
+  | 'component' 
+  | 'sequence' 
+  | 'erd'
+  | 'usecase'
+  | 'state'
+  | 'activity'
+  | 'deployment'
+  | 'archimate'
+  | 'c4'
+  | string;
 
 export interface SequenceParticipant {
   id: string;
@@ -257,6 +275,8 @@ export interface SequenceMessage {
   to: string;
   label: string;
   type?: 'sync' | 'reply' | 'async' | 'self' | string;
+  arrowType?: string;
+  number?: string | number;
   isReturn?: boolean;
   isDotted?: boolean;
   order: number;

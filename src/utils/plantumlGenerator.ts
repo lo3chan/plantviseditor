@@ -426,11 +426,10 @@ export function generatePlantUML(diagram: DiagramData): string {
   const containerChildrenMap = new Map<string, DiagramNode[]>();
   const parentContainerMap = new Map<string, string>();
 
-  // Determine container-child hierarchy
+  // Determine container-child hierarchy (including nested subdiagrams/subpackages)
   diagram.nodes.forEach(node => {
-    if (isContainer(node)) return;
-
-    if (node.data?.parentId && containerNodes.some(c => c.id === node.data!.parentId)) {
+    // Check explicit parentId first
+    if (node.data?.parentId && node.data.parentId !== node.id && containerNodes.some(c => c.id === node.data!.parentId)) {
       parentContainerMap.set(node.id, node.data.parentId);
       const list = containerChildrenMap.get(node.data.parentId) || [];
       list.push(node);
@@ -442,6 +441,10 @@ export function generatePlantUML(diagram: DiagramData): string {
     let bestArea = Infinity;
 
     containerNodes.forEach(c => {
+      if (c.id === node.id) return;
+      // If node is itself a container, prevent circular nesting
+      if (isContainer(node) && parentContainerMap.get(c.id) === node.id) return;
+
       const isEnclosed = 
         node.x >= c.x &&
         node.x + node.width <= c.x + c.width &&
@@ -1213,11 +1216,91 @@ function parseSequencePlantUML(lines: string[], defaultTitle: string): Partial<D
     currentBlock = null;
   }
 
+  const nodes: DiagramNode[] = [];
+  const edges: DiagramEdge[] = [];
+
+  participants.forEach((p, idx) => {
+    let resolvedShape: DiagramNode['data']['shape'] = 'rounded';
+    if (p.type === 'actor') resolvedShape = 'actor';
+    else if (p.type === 'database') resolvedShape = 'cylinder';
+    else if (p.type === 'queue') resolvedShape = 'queue';
+    else if (p.type === 'boundary') resolvedShape = 'boundary';
+    else if (p.type === 'control') resolvedShape = 'control';
+    else if (p.type === 'entity') resolvedShape = 'entity-circle';
+    else if (p.type === 'collections') resolvedShape = 'collections';
+
+    const node: DiagramNode = {
+      id: p.id,
+      type: p.type || 'participant',
+      category: 'sequence',
+      label: p.name,
+      sublabel: p.stereotype,
+      x: 100 + idx * 240,
+      y: 120,
+      width: 180,
+      height: 80,
+      color: p.color || 'sand',
+      data: {
+        shape: resolvedShape
+      }
+    };
+    nodes.push(node);
+  });
+
+  messages.forEach((msg, idx) => {
+    const isReply = msg.type === 'reply';
+    const isAsync = msg.type === 'async';
+    const edge: DiagramEdge = {
+      id: msg.id || `edge_seq_${idx + 1}`,
+      source: msg.from,
+      target: msg.to,
+      label: `${msg.order}: ${msg.label}`,
+      style: isReply ? 'dashed' : 'solid',
+      arrowType: 'arrow',
+      color: isAsync ? '#d97706' : isReply ? '#64748b' : '#A80036'
+    };
+    edges.push(edge);
+  });
+
+  blocks.forEach((block, idx) => {
+    const involvedMsg = messages.filter(m => m.order >= block.startOrder && m.order <= block.endOrder);
+    const involvedPIds = new Set<string>();
+    involvedMsg.forEach(m => { involvedPIds.add(m.from); involvedPIds.add(m.to); });
+    const involvedNodes = nodes.filter(n => involvedPIds.has(n.id));
+
+    let minX = 60;
+    let maxX = Math.max(400, 100 + (participants.length - 1) * 240 + 200);
+    if (involvedNodes.length > 0) {
+      minX = Math.min(...involvedNodes.map(n => n.x)) - 30;
+      maxX = Math.max(...involvedNodes.map(n => n.x + n.width)) + 30;
+    }
+
+    const frameNode: DiagramNode = {
+      id: block.id || `frame_${block.type}_${idx + 1}`,
+      type: 'frame',
+      category: 'container',
+      label: block.label || `${block.type.toUpperCase()} block`,
+      color: 'slate',
+      x: minX,
+      y: 60,
+      width: Math.max(340, maxX - minX),
+      height: 220,
+      data: {
+        isContainer: true,
+        containerType: 'frame',
+        frameKind: block.type,
+        condition: block.condition,
+        shape: 'frame'
+      }
+    };
+    nodes.unshift(frameNode);
+  });
+
   return {
     title: title || 'Sequence Diagram',
     type: 'sequence',
-    nodes: [],
-    edges: [],
+    nodes,
+    edges,
     participants,
     messages,
     blocks
@@ -1261,15 +1344,26 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     shadowing: false
   };
 
-  let currentBlock: {
+  interface ParserBlock {
     type: string;
     id: string;
     label: string;
     generics?: string;
     stereotype?: string;
     spot?: { character: string; colorHex: string };
+    parentId?: string;
+    isContainer: boolean;
     lines: string[];
-  } | null = null;
+  }
+
+  const CONTAINER_TYPES = new Set([
+    'package', 'namespace', 'frame', 'folder', 'rectangle', 'node', 'cloud', 'group',
+    'alt', 'opt', 'loop', 'par', 'critical',
+    'system_boundary', 'container_boundary', 'enterprise_boundary', 'boundary',
+    'c4-boundary', 'c4-deployment-node'
+  ]);
+
+  const blockStack: ParserBlock[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i].trim();
@@ -1305,14 +1399,23 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     if (rawLine.includes('skinparam handwritten true')) settings.handwritten = true;
     if (rawLine.includes('skinparam shadowing true')) settings.shadowing = true;
 
-    // Inside a multi-line block
-    if (currentBlock) {
+    const currentBlock = blockStack.length > 0 ? blockStack[blockStack.length - 1] : null;
+
+    // Inside a multi-line LEAF block (e.g. entity, class, map, object, state, json, yaml)
+    if (currentBlock && !currentBlock.isContainer) {
       if (rawLine === '}' || rawLine.endsWith('}')) {
+        blockStack.pop();
         finishBlock(currentBlock, nodes, nodeMap);
-        currentBlock = null;
       } else {
         currentBlock.lines.push(rawLine);
       }
+      continue;
+    }
+
+    // Inside a CONTAINER block, check if this line closes the container
+    if (currentBlock && currentBlock.isContainer && (rawLine === '}' || rawLine.endsWith('}'))) {
+      blockStack.pop();
+      finishBlock(currentBlock, nodes, nodeMap);
       continue;
     }
 
@@ -1327,16 +1430,20 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
       const spotChar = blockStartMatch[7];
       const spotColor = blockStartMatch[8];
       const stereotype = blockStartMatch[9]?.trim();
+      const isContainer = CONTAINER_TYPES.has(type);
 
-      currentBlock = {
+      const newBlock: ParserBlock = {
         type,
         id: sanitizeId(id),
         label,
         generics,
         stereotype,
         spot: spotChar && spotColor ? { character: spotChar, colorHex: spotColor } : undefined,
+        parentId: currentBlock ? currentBlock.id : undefined,
+        isContainer,
         lines: []
       };
+      blockStack.push(newBlock);
       continue;
     }
 
@@ -2294,9 +2401,9 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
   }
 
   // Finalize any unclosed multi-line block at end of input
-  if (currentBlock) {
-    finishBlock(currentBlock, nodes, nodeMap);
-    currentBlock = null;
+  while (blockStack.length > 0) {
+    const unclosed = blockStack.pop()!;
+    finishBlock(unclosed, nodes, nodeMap);
   }
 
   // Automatic Layout
@@ -2318,12 +2425,13 @@ function finishBlock(
     generics?: string; 
     stereotype?: string; 
     spot?: { character: string; colorHex: string }; 
+    parentId?: string;
     lines: string[] 
   },
   nodes: DiagramNode[],
   nodeMap: Map<string, DiagramNode>
 ) {
-  const { type, id, label, generics, stereotype, spot, lines } = block;
+  const { type, id, label, generics, stereotype, spot, parentId, lines } = block;
 
   if (['package', 'namespace', 'frame', 'folder', 'rectangle', 'node', 'group', 'alt', 'opt', 'loop', 'par', 'critical'].includes(type)) {
     const isFragment = ['alt', 'opt', 'loop', 'par', 'critical', 'group'].includes(type);
@@ -2346,7 +2454,8 @@ function finishBlock(
         isContainer: true,
         containerType: 'frame',
         frameKind: isFragment ? type : undefined,
-        shape: (isFrame ? 'frame' : isFolder ? 'folder' : (isRect ? 'rectangle' : 'package')) as any
+        shape: (isFrame ? 'frame' : isFolder ? 'folder' : (isRect ? 'rectangle' : 'package')) as any,
+        parentId
       }
     };
     nodes.push(node);
@@ -2451,7 +2560,8 @@ function finishBlock(
       color: 'ochre',
       data: {
         tableName: label,
-        columns
+        columns,
+        parentId
       }
     };
     nodes.push(node);
@@ -2481,7 +2591,10 @@ function finishBlock(
       width: 210,
       height: Math.max(80, 50 + mapEntries.length * 22),
       color: 'sand',
-      data: { mapEntries }
+      data: { 
+        mapEntries,
+        parentId 
+      }
     };
     nodes.push(node);
     nodeMap.set(id, node);
@@ -2510,7 +2623,10 @@ function finishBlock(
       width: 210,
       height: Math.max(80, 50 + slots.length * 22),
       color: 'terracotta',
-      data: { slots }
+      data: { 
+        slots,
+        parentId 
+      }
     };
     nodes.push(node);
     nodeMap.set(id, node);
@@ -2530,7 +2646,8 @@ function finishBlock(
       color: 'sand',
       data: {
         treeFormat: type as 'json' | 'yaml',
-        treeContent: lines.join('\n')
+        treeContent: lines.join('\n'),
+        parentId
       }
     };
     nodes.push(node);
@@ -2553,7 +2670,8 @@ function finishBlock(
       color: 'sand',
       data: {
         shape: 'state',
-        attributes: activities
+        attributes: activities,
+        parentId
       }
     };
     nodes.push(node);
@@ -2595,7 +2713,8 @@ function finishBlock(
       spot,
       generics,
       attributes,
-      methods
+      methods,
+      parentId
     }
   };
   nodes.push(node);
@@ -2887,6 +3006,33 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
       nodes[idx].y = cleanNode.y;
       nodes[idx].width = cleanNode.width;
       nodes[idx].height = cleanNode.height;
+    }
+  });
+
+  // Enclose children inside parent containers
+  const containers = nodes.filter(n => 
+    n.category === 'container' || 
+    Boolean(n.data?.isContainer) || 
+    n.type === 'package' || 
+    n.type === 'frame' || 
+    n.type === 'folder' ||
+    n.type === 'rectangle'
+  );
+
+  containers.forEach(cont => {
+    const children = nodes.filter(n => n.id !== cont.id && n.data?.parentId === cont.id);
+    if (children.length > 0) {
+      const minX = Math.min(...children.map(c => c.x));
+      const minY = Math.min(...children.map(c => c.y));
+      const maxX = Math.max(...children.map(c => c.x + c.width));
+      const maxY = Math.max(...children.map(c => c.y + c.height));
+      const PADDING_X = 35;
+      const PADDING_Y = 30;
+      const HEADER_H = 25;
+      cont.x = minX - PADDING_X;
+      cont.y = minY - PADDING_Y - HEADER_H;
+      cont.width = Math.max(cont.width, (maxX - minX) + PADDING_X * 2);
+      cont.height = Math.max(cont.height, (maxY - minY) + PADDING_Y * 2 + HEADER_H);
     }
   });
 }

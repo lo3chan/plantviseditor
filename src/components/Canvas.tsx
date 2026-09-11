@@ -347,13 +347,17 @@ export const Canvas: React.FC<CanvasProps> = ({
     // If dragging a container, locate enclosed child nodes to move together
     let childOffsets: Array<{ id: string; initialX: number; initialY: number }> | undefined = undefined;
     if (isContainer) {
-      const children = diagram.nodes.filter(n => 
-        n.id !== node.id && 
-        n.x >= node.x && 
-        n.x + n.width <= node.x + node.width && 
-        n.y >= node.y && 
-        n.y + n.height <= node.y + node.height
-      );
+      const isChild = (n: DiagramNode) => {
+        if (n.id === node.id) return false;
+        if (n.data?.parentId === node.id) return true;
+        return (
+          n.x >= node.x && 
+          n.x + n.width <= node.x + node.width && 
+          n.y >= node.y && 
+          n.y + n.height <= node.y + node.height
+        );
+      };
+      const children = diagram.nodes.filter(isChild);
       if (children.length > 0) {
         childOffsets = children.map(c => ({ id: c.id, initialX: c.x, initialY: c.y }));
       }
@@ -508,12 +512,43 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     if (draggingNode) {
       const target = diagram.nodes.find(n => n.id === draggingNode.id);
+      const isTargetContainer = target && (
+        target.type === 'package' || 
+        target.type === 'frame' || 
+        target.type === 'folder' || 
+        target.category === 'container' || 
+        Boolean(target.data?.isContainer)
+      );
+
       const hasMoved = target && (
         Math.abs(target.x - draggingNode.initialNodeX) > 2 ||
         Math.abs(target.y - draggingNode.initialNodeY) > 2
       );
       if (hasMoved) {
-        onUpdateNodes(diagram.nodes, { 
+        let updatedNodes = diagram.nodes;
+        if (target && !isTargetContainer) {
+          const centerX = target.x + target.width / 2;
+          const centerY = target.y + target.height / 2;
+          const enclosingContainers = diagram.nodes.filter(c => 
+            c.id !== target.id &&
+            (c.type === 'package' || c.type === 'frame' || c.type === 'folder' || c.category === 'container' || c.data?.isContainer) &&
+            centerX >= c.x && centerX <= c.x + c.width &&
+            centerY >= c.y && centerY <= c.y + c.height
+          );
+          let enclosing: DiagramNode | undefined;
+          if (enclosingContainers.length > 0) {
+            enclosingContainers.sort((a, b) => (a.width * a.height) - (b.width * b.height));
+            enclosing = enclosingContainers[0];
+          }
+          const newParentId = enclosing ? enclosing.id : undefined;
+          if (target.data?.parentId !== newParentId) {
+            updatedNodes = diagram.nodes.map(n => 
+              n.id === target.id ? { ...n, data: { ...(n.data || {}), parentId: newParentId } } : n
+            );
+          }
+        }
+
+        onUpdateNodes(updatedNodes, { 
           actionName: `Moved ${target?.label || 'Element'}` 
         });
       }

@@ -463,16 +463,13 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
                   Architecture & Relationship Type:
                 </label>
                 <div className="space-y-1 max-h-44 overflow-y-auto pr-1 scrollbar-thin">
-                  {EDGE_TYPE_OPTIONS.map(opt => (
+                  {RELATION_OPTIONS.map(opt => (
                     <button
                       key={opt.id}
                       onClick={() => {
                         onUpdateEdge({
-                          type: opt.type,
-                          arrowDirection: opt.arrowDirection,
-                          style: opt.style,
-                          technology: opt.technology || undefined,
-                          isAsync: opt.isAsync
+                          arrowType: opt.id,
+                          style: opt.defaultStyle || edge.style
                         });
                         setActiveMenu('none');
                       }}
@@ -482,12 +479,15 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
                           : 'bg-[#faf5ee]/70 border-[#d8d0c8]/60 hover:bg-[#ebd9c8]/50 text-[#3a302a]'
                       }`}
                     >
-                      <div>
-                        <div className="font-semibold text-[11.5px]">{opt.label}</div>
-                        <div className="text-[9.5px] text-[#78706a] leading-tight">{opt.description}</div>
+                      <div className="flex items-center gap-2">
+                        {opt.renderIcon(currentOption.id === opt.id ? '#c2652a' : '#78706a')}
+                        <div>
+                          <div className="font-semibold text-[11.5px]">{opt.label}</div>
+                          <div className="text-[9.5px] text-[#78706a] leading-tight">{opt.description}</div>
+                        </div>
                       </div>
                       <span className="text-[10px] font-mono text-[#78706a] bg-white px-1.5 py-0.5 rounded border border-[#d8d0c8]/40 shrink-0 ml-1">
-                        {opt.syntax}
+                        {opt.plantuml}
                       </span>
                     </button>
                   ))}

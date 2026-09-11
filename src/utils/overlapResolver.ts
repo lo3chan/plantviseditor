@@ -334,25 +334,69 @@ export function validatePlantUML(code: string): {
   const lines = code.split('\n');
   let hasStartUml = false;
   let hasEndUml = false;
+  let inMultiLineComment = false;
   let openBraceCount = 0;
   const braceStack: number[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const lineNum = i + 1;
-    const trimmed = lines[i].trim();
+    let line = lines[i];
+
+    // Handle multiline comments /' ... '/
+    if (inMultiLineComment) {
+      const endIdx = line.indexOf("'/");
+      if (endIdx !== -1) {
+        inMultiLineComment = false;
+        line = line.substring(endIdx + 2);
+      } else {
+        continue;
+      }
+    }
+
+    const startCommentIdx = line.indexOf("/'");
+    if (startCommentIdx !== -1) {
+      const endCommentIdx = line.indexOf("'/", startCommentIdx + 2);
+      if (endCommentIdx !== -1) {
+        line = line.substring(0, startCommentIdx) + ' ' + line.substring(endCommentIdx + 2);
+      } else {
+        inMultiLineComment = true;
+        line = line.substring(0, startCommentIdx);
+      }
+    }
+
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("'")) {
+      continue;
+    }
 
     if (trimmed.startsWith('@startuml')) hasStartUml = true;
     if (trimmed.startsWith('@enduml')) hasEndUml = true;
 
-    // Check unclosed quotes
-    const quoteCount = (trimmed.match(/"/g) || []).length;
-    if (quoteCount % 2 !== 0 && !trimmed.startsWith("'")) {
+    // Check unclosed quotes (ignoring escaped quotes \")
+    const sanitizedQuotes = trimmed.replace(/\\"/g, '');
+    const quoteCount = (sanitizedQuotes.match(/"/g) || []).length;
+    if (quoteCount % 2 !== 0) {
       errors.push({ line: lineNum, message: 'Unmatched quotation marks (")' });
     }
 
-    // Track braces
-    for (let charIdx = 0; charIdx < trimmed.length; charIdx++) {
-      const char = trimmed[charIdx];
+    // Strip content inside quotes so quotes and characters inside strings don't interfere
+    let cleanLine = trimmed.replace(/"([^"\\]|\\.)*"/g, '""');
+
+    // Strip relationship arrows that contain braces, e.g. ||--|{, ||--o{, }|--|{, }o--o{, --{, }--, etc.
+    cleanLine = cleanLine.replace(/(\|\||\|o|o\||}[|o]|[|o]{)--[-.<>0\(\)\^x#\+\*]*--?[|o]?[{\[]?/g, ' -- ');
+    cleanLine = cleanLine.replace(/--[|o]?[{\[]/g, '--');
+    cleanLine = cleanLine.replace(/[}\]][|o]?--/g, '--');
+    cleanLine = cleanLine.replace(/\|\{/g, ' ');
+    cleanLine = cleanLine.replace(/o\{/g, ' ');
+    cleanLine = cleanLine.replace(/\}\|/g, ' ');
+    cleanLine = cleanLine.replace(/\}o/g, ' ');
+
+    // Strip inline PlantUML stereotyping or modifiers like {field}, {method}, {static}, {abstract}
+    cleanLine = cleanLine.replace(/\{(field|method|static|abstract|classifier)\}/gi, ' ');
+
+    // Track block braces
+    for (let charIdx = 0; charIdx < cleanLine.length; charIdx++) {
+      const char = cleanLine[charIdx];
       if (char === '{') {
         openBraceCount++;
         braceStack.push(lineNum);
