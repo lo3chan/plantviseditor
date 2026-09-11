@@ -40,7 +40,7 @@ interface QuickActionBarProps {
   onAddConnectedNode: (direction: 'right' | 'down') => void;
   onAddNote?: () => void;
   onWrapInPackage?: () => void;
-  onWrapInFrame?: () => void;
+  onWrapInFrame?: (kind?: 'frame' | 'alt' | 'loop' | 'opt' | 'par' | 'group', condition?: string) => void;
   onDelete: () => void;
   onOpenInspector?: () => void;
 }
@@ -672,16 +672,38 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
               )}
 
               {onWrapInFrame && (
-                <button
-                  onClick={() => {
-                    onWrapInFrame();
-                    setActiveMenu('none');
-                  }}
-                  className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
-                >
-                  <Layers className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Wrap in Frame</span>
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      onWrapInFrame('frame');
+                      setActiveMenu('none');
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
+                  >
+                    <Layers className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Wrap in Frame</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onWrapInFrame('alt', 'status == 200');
+                      setActiveMenu('none');
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
+                  >
+                    <Layers className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Wrap in Alt Block</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onWrapInFrame('loop', 'for each item');
+                      setActiveMenu('none');
+                    }}
+                    className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
+                  >
+                    <Layers className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Wrap in Loop Block</span>
+                  </button>
+                </>
               )}
 
               <div className="my-1 border-t border-[#d8d0c8]/60" />

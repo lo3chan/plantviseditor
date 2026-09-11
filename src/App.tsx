@@ -233,18 +233,18 @@ export default function App() {
 
   // Add node from asset toolbox (via click or drag drop)
   const handleAddNodeFromAsset = (asset: AssetItem, targetX?: number, targetY?: number) => {
-    // Check if we are in sequence mode, or if the asset is a sequence asset
-    if (isSequenceMode || asset.category === 'sequence') {
+    // 1. DEDICATED SEQUENCE TIMELINE MODE
+    if (isSequenceMode) {
       const currentParticipants = diagram.participants && diagram.participants.length > 0
         ? [...diagram.participants]
         : [
-            { id: 'user', name: 'User', type: 'actor', color: 'sienna' },
+            { id: 'user', name: 'User Client', type: 'actor', color: 'sienna' },
             { id: 'app', name: 'AppService', type: 'participant', color: 'sand', stereotype: '«service»' }
           ];
       const currentMessages = diagram.messages || [];
       const currentBlocks = diagram.blocks || [];
 
-      // 1. Sequence Message asset
+      // 1A. Sequence Message asset
       if (asset.id.startsWith('seq-msg-')) {
         const msgType = (asset.id.replace('seq-msg-', '') as 'sync' | 'reply' | 'async' | 'self') || 'sync';
         const fromP = currentParticipants[0]?.id || 'user';
@@ -266,7 +266,7 @@ export default function App() {
         return;
       }
 
-      // 2. Sequence Block asset
+      // 1B. Sequence Block asset
       if (asset.id.startsWith('seq-block-')) {
         const blockType = asset.id.replace('seq-block-', '');
         const newBlock: SequenceBlock = {
@@ -286,7 +286,7 @@ export default function App() {
         return;
       }
 
-      // 3. Sequence Note asset
+      // 1C. Sequence Note asset
       if (asset.id === 'seq-note') {
         if (currentMessages.length > 0) {
           const lastMsg = currentMessages[currentMessages.length - 1];
@@ -300,7 +300,7 @@ export default function App() {
         return;
       }
 
-      // 4. Participant Lifeline (From sequence category or ANY structural category)
+      // 1D. Participant Lifeline
       let pType = 'participant';
       if (asset.id === 'seq-actor' || asset.nodeType === 'actor' || asset.category === 'actor-agent') {
         pType = 'actor';
@@ -343,6 +343,112 @@ export default function App() {
       return;
     }
 
+    // =========================================================================
+    // 2. 2D ARCHITECTURE CANVAS MODE (!isSequenceMode)
+    // All assets (including Sequence blocks, participants, messages) appear directly on the 2D canvas!
+    // =========================================================================
+
+    // 2A. Fragment Frames (alt, opt, loop, par, critical, group)
+    if (asset.id.startsWith('seq-block-')) {
+      const blockType = asset.id.replace('seq-block-', '');
+      const defaultCondition = blockType === 'alt' ? 'status == 200' : blockType === 'loop' ? 'items.hasNext()' : blockType === 'opt' ? 'is_authenticated' : undefined;
+      const cleanLabel = asset.label.replace(/\s*\([^)]*\)/, '');
+      const spawnW = 340;
+      const spawnH = 220;
+      const rawX = targetX !== undefined ? targetX : 200;
+      const rawY = targetY !== undefined ? targetY : 150;
+      const { x: sx, y: sy } = findVacantPosition(diagram.nodes || [], rawX, rawY, spawnW, spawnH, 36);
+
+      const frameNode: DiagramNode = {
+        id: `${blockType}_${Date.now()}`,
+        type: 'frame',
+        category: 'container',
+        label: cleanLabel,
+        color: asset.defaultColor || 'sand',
+        x: sx,
+        y: sy,
+        width: spawnW,
+        height: spawnH,
+        data: {
+          isContainer: true,
+          containerType: 'frame',
+          frameKind: blockType,
+          condition: defaultCondition,
+          shape: 'frame',
+          description: asset.description
+        }
+      };
+
+      updateDiagram(prev => ({
+        nodes: [...(prev.nodes || []), frameNode]
+      }), `Added ${blockType.toUpperCase()} Fragment Frame`);
+      return;
+    }
+
+    // 2B. Interaction Message on 2D Canvas
+    if (asset.id.startsWith('seq-msg-')) {
+      const msgType = (asset.id.replace('seq-msg-', '') as 'sync' | 'reply' | 'async' | 'self') || 'sync';
+      const isReply = msgType === 'reply';
+      const isAsync = msgType === 'async';
+      const isSelf = msgType === 'self';
+
+      const nodes = diagram.nodes || [];
+      if (nodes.length >= 1) {
+        const selId = selectedCanvasElement?.id;
+        const sourceNode = nodes.find(n => n.id === selId) || nodes[0];
+        const targetNode = isSelf ? sourceNode : (nodes.find(n => n.id !== sourceNode.id) || nodes[0]);
+        const existingEdges = diagram.edges || [];
+        const stepNum = existingEdges.length + 1;
+        const edgeLabel = `${stepNum}: ${asset.label.replace(/\s*\(.*\)/, '')}()`;
+
+        const newEdge: DiagramEdge = {
+          id: `edge_${Date.now()}`,
+          source: sourceNode.id,
+          target: targetNode.id,
+          label: edgeLabel,
+          style: isReply ? 'dashed' : 'solid',
+          arrowType: 'arrow',
+          color: isAsync ? '#d97706' : isReply ? '#64748b' : '#A80036'
+        };
+
+        updateDiagram(prev => ({
+          edges: [...(prev.edges || []), newEdge]
+        }), `Added interaction message: ${edgeLabel}`);
+        return;
+      }
+    }
+
+    // 2C. Sequence Note on 2D Canvas
+    if (asset.id === 'seq-note') {
+      const spawnW = 190;
+      const spawnH = 90;
+      const rawX = targetX !== undefined ? targetX : 240;
+      const rawY = targetY !== undefined ? targetY : 160;
+      const { x: sx, y: sy } = findVacantPosition(diagram.nodes || [], rawX, rawY, spawnW, spawnH, 36);
+
+      const noteNode: DiagramNode = {
+        id: `note_${Date.now()}`,
+        type: 'note',
+        category: 'annotation',
+        label: 'Note: Verified state',
+        color: 'gold',
+        x: sx,
+        y: sy,
+        width: spawnW,
+        height: spawnH,
+        data: {
+          shape: 'note',
+          description: 'UML Note'
+        }
+      };
+
+      updateDiagram(prev => ({
+        nodes: [...(prev.nodes || []), noteNode]
+      }), 'Added UML Note');
+      return;
+    }
+
+    // 2D. Participants, Actors, and standard structural nodes
     const nodeWidth = asset.width || 190;
     const nodeHeight = asset.height || 85;
     const rawSpawnX = targetX !== undefined ? targetX : 240;
@@ -350,7 +456,7 @@ export default function App() {
 
     // Guaranteed anti-collision spawning
     const { x: spawnX, y: spawnY } = findVacantPosition(
-      diagram.nodes,
+      diagram.nodes || [],
       rawSpawnX,
       rawSpawnY,
       nodeWidth,
@@ -358,12 +464,45 @@ export default function App() {
       36
     );
 
+    let resolvedCategory = asset.category;
+    let resolvedShape = asset.shape;
+    let resolvedType = asset.nodeType || asset.id;
+
+    if (asset.id.startsWith('seq-')) {
+      resolvedCategory = 'sequence';
+      if (asset.id === 'seq-actor') {
+        resolvedShape = 'actor';
+        resolvedType = 'actor';
+      } else if (asset.id === 'seq-database') {
+        resolvedShape = 'cylinder';
+        resolvedType = 'database';
+      } else if (asset.id === 'seq-queue') {
+        resolvedShape = 'queue';
+        resolvedType = 'queue';
+      } else if (asset.id === 'seq-boundary') {
+        resolvedShape = 'boundary';
+        resolvedType = 'boundary';
+      } else if (asset.id === 'seq-control') {
+        resolvedShape = 'control';
+        resolvedType = 'control';
+      } else if (asset.id === 'seq-entity') {
+        resolvedShape = 'entity-circle';
+        resolvedType = 'entity';
+      } else if (asset.id === 'seq-collections') {
+        resolvedShape = 'collections';
+        resolvedType = 'collections';
+      } else {
+        resolvedShape = 'rounded';
+        resolvedType = 'participant';
+      }
+    }
+
     const newNode: DiagramNode = {
-      id: `${asset.nodeType}_${Date.now()}`,
-      type: asset.nodeType,
-      category: asset.category,
-      label: asset.label,
-      sublabel: asset.sublabel,
+      id: `${resolvedType}_${Date.now()}`,
+      type: resolvedType,
+      category: resolvedCategory,
+      label: asset.label.replace(' Lifeline', ''),
+      sublabel: asset.sublabel || (resolvedType !== 'participant' && resolvedCategory === 'sequence' ? `«${resolvedType}»` : undefined),
       x: spawnX,
       y: spawnY,
       width: nodeWidth,
@@ -371,17 +510,13 @@ export default function App() {
       color: asset.defaultColor || 'sienna',
       data: {
         ...(asset.defaultData ? JSON.parse(JSON.stringify(asset.defaultData)) : {}),
-        ...(asset.shape ? { shape: asset.shape } : {}),
+        ...(resolvedShape ? { shape: resolvedShape } : {}),
         ...(asset.description ? { description: asset.description } : {})
       }
     };
 
     updateDiagram((prev) => ({
-      type: 'class',
-      nodes: [...(prev.nodes || []), newNode],
-      participants: [],
-      messages: [],
-      blocks: []
+      nodes: [...(prev.nodes || []), newNode]
     }), `Added ${asset.label}`);
   };
 
@@ -540,7 +675,37 @@ export default function App() {
     }
   }, [diagram]);
 
-  const isSequenceMode = diagram.type === 'sequence' && (!diagram.nodes || diagram.nodes.length === 0);
+  const isSequenceMode = diagram.type === 'sequence';
+
+  const handleToggleDiagramMode = useCallback(() => {
+    if (diagram.type === 'sequence') {
+      updateDiagram({
+        type: 'unified'
+      }, 'Switched to 2D Architecture Canvas');
+    } else {
+      // Derive sequence participants from existing architecture nodes if empty
+      let participants = diagram.participants || [];
+      if (participants.length === 0 && diagram.nodes && diagram.nodes.length > 0) {
+        participants = diagram.nodes
+          .filter(n => !n.data?.isContainer && n.type !== 'frame' && n.type !== 'package')
+          .map(n => ({
+            id: n.id,
+            name: n.label,
+            type: n.type === 'actor' ? 'actor' : n.type === 'database' ? 'database' : 'participant',
+            color: n.color || 'sand',
+            stereotype: n.sublabel
+          }));
+      }
+      updateDiagram({
+        type: 'sequence',
+        participants: participants.length > 0 ? participants : [
+          { id: 'user', name: 'User Client', type: 'actor', color: 'sienna' },
+          { id: 'api', name: 'API Gateway', type: 'boundary', color: 'sand', stereotype: '«gateway»' },
+          { id: 'auth', name: 'Auth Service', type: 'participant', color: 'sand', stereotype: '«service»' }
+        ]
+      }, 'Switched to Sequence Timeline');
+    }
+  }, [diagram, updateDiagram]);
 
   return (
     <div 
@@ -563,6 +728,8 @@ export default function App() {
         onResetStarter={handleResetStarter}
         onSelectTemplate={handleSelectTemplate}
         onImportFile={handleImportFile}
+        isSequenceDiagram={isSequenceMode}
+        onToggleDiagramMode={handleToggleDiagramMode}
         canUndo={historyIndex > 0}
         canRedo={historyIndex < history.length - 1}
         onUndo={handleUndo}

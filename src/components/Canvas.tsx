@@ -729,24 +729,31 @@ export const Canvas: React.FC<CanvasProps> = ({
     selectNode(pkgNode);
   };
 
-  // Wrap selected node in a Frame boundary
-  const handleWrapInFrame = () => {
+  // Wrap selected node in a Frame boundary (or alt/loop/opt fragment frame)
+  const handleWrapInFrame = (kind: 'frame' | 'alt' | 'loop' | 'opt' | 'par' | 'group' = 'frame', condition?: string) => {
     if (!selectedNode) return;
     const padX = 36;
     const padTop = 44;
     const padBottom = 32;
+    const label = kind === 'frame' ? 'Frame' : kind.toUpperCase();
     const frameNode: DiagramNode = {
-      id: `frame_${Date.now()}`,
+      id: `${kind}_${Date.now()}`,
       type: 'frame',
-      label: 'Frame',
+      label,
       category: 'container',
       shape: 'frame',
       x: snap(selectedNode.x - padX),
       y: snap(selectedNode.y - padTop),
       width: snap(selectedNode.width + padX * 2),
       height: snap(selectedNode.height + padTop + padBottom),
-      color: 'slate',
-      data: { isContainer: true, containerType: 'frame', shape: 'frame' }
+      color: kind === 'alt' ? 'ochre' : kind === 'loop' ? 'sage' : 'slate',
+      data: {
+        isContainer: true,
+        containerType: 'frame',
+        frameKind: kind === 'frame' ? undefined : kind,
+        condition: condition || (kind === 'alt' ? 'condition' : kind === 'loop' ? 'items' : undefined),
+        shape: 'frame'
+      }
     };
 
     // Place frame at the beginning of the array so it's behind the child node

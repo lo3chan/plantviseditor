@@ -20,7 +20,8 @@ import {
   History,
   ShieldCheck,
   FolderOpen,
-  Upload
+  Upload,
+  GitBranch
 } from 'lucide-react';
 import { HistorySnapshot } from '../types';
 
@@ -50,6 +51,8 @@ interface NavbarProps {
   onOpenExport: () => void;
   onQuickCopyPlantUML: () => void;
   copiedPlantUML: boolean;
+  isSequenceDiagram?: boolean;
+  onToggleDiagramMode?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -74,7 +77,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onJumpToHistory,
   onOpenExport,
   onQuickCopyPlantUML,
-  copiedPlantUML
+  copiedPlantUML,
+  isSequenceDiagram = false,
+  onToggleDiagramMode
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
@@ -250,6 +255,23 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>De-Overlap</span>
+          </button>
+        )}
+
+        {/* Diagram Architecture / Sequence Mode Toggle */}
+        {onToggleDiagramMode && (
+          <button
+            id="btn-toggle-diagram-mode"
+            onClick={onToggleDiagramMode}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+              isSequenceDiagram
+                ? 'bg-[#fef3c7] text-[#92400e] border-[#f59e0b] shadow-xs'
+                : 'bg-white text-[#605850] border-[#d8d0c8]/70 hover:border-[#c2652a] hover:text-[#3a302a]'
+            }`}
+            title={isSequenceDiagram ? 'Currently in Sequence Timeline view. Click to switch to 2D Architecture Canvas.' : 'Currently in 2D Architecture Canvas. Click to switch to Sequence Timeline view.'}
+          >
+            <GitBranch className="w-3.5 h-3.5 text-[#c2652a]" />
+            <span className="font-semibold">{isSequenceDiagram ? 'Sequence Timeline' : 'Architecture Canvas'}</span>
           </button>
         )}
       </div>

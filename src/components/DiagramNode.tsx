@@ -217,6 +217,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const isActor = node.type === 'actor' || node.data?.shape === 'actor';
   const isUseCase = node.type === 'usecase' || node.data?.shape === 'usecase';
   const isCollections = node.type === 'collections' || node.data?.shape === 'collections';
+  const isParticipant = node.type === 'participant' || node.type === 'seq-participant' || (node.category === 'sequence' && !isFrame);
   const isBoundary = node.type === 'boundary' || node.data?.shape === 'boundary';
   const isControl = node.type === 'control' || node.data?.shape === 'control';
   const isEntityCircle = node.type === 'entity-circle' || node.data?.shape === 'entity-circle';
@@ -1537,7 +1538,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   // =========================================================================
   // 4. PLANTUML SHAPES (Package, Database, Queue, 3D Node, Folder, Frame, Note, UseCase, Collections, State, etc.)
   // =========================================================================
-  if (isPackage || isCylinder || isQueue || isNode3d || isFolder || isFrame || isComponentTab || isFileDoc || isHexagon || isCloud || isActor || isNote || isUseCase || isCollections || isState) {
+  if (isPackage || isCylinder || isQueue || isNode3d || isFolder || isFrame || isComponentTab || isFileDoc || isHexagon || isCloud || isActor || isNote || isUseCase || isCollections || isState || isParticipant) {
     const strokeColor = colorConfig.borderHex || '#A80036';
     const fillColor = colorConfig.bgHex || (isNote ? '#FEFFDD' : '#FEFECE');
 
@@ -1601,8 +1602,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
 
         {/* 4A2. Specific PlantUML Frame Header Cut-out Tab Labeling */}
         {isFrame && (
-          <div className="absolute top-0 left-2.5 h-[24px] max-w-[220px] flex items-center pr-3 z-20 overflow-hidden select-none">
-            <span className="text-[9px] font-mono text-[#A80036] font-bold uppercase tracking-wider mr-1.5 shrink-0">frame</span>
+          <div className="absolute top-0 left-2.5 h-[24px] max-w-[280px] flex items-center pr-3 z-20 overflow-hidden select-none">
+            <span className="text-[9px] font-mono text-[#A80036] font-bold uppercase tracking-wider mr-1.5 shrink-0">
+              {node.data?.frameKind || 'frame'}
+            </span>
+            {node.data?.condition && (
+              <span className="text-[9px] font-mono text-emerald-800 font-semibold mr-1.5 shrink-0 bg-emerald-50 px-1 rounded truncate max-w-[120px]" title={node.data.condition}>
+                [{node.data.condition}]
+              </span>
+            )}
             {node.sublabel && (
               <span className="text-[9px] font-mono text-gray-600 mr-1 italic shrink-0">
                 {node.sublabel.startsWith('<<') ? node.sublabel : `<<${node.sublabel}>>`}

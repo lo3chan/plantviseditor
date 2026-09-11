@@ -840,7 +840,13 @@ export function generatePlantUML(diagram: DiagramData): string {
         kw = 'node';
       }
 
-      lines.push(`${kw} "${label}" as ${id}${stereotype} {`);
+      let frameTitle = label;
+      if (node.data?.frameKind) {
+        const condStr = node.data.condition ? `[${node.data.condition}]` : '';
+        frameTitle = `${node.data.frameKind} ${condStr} ${label}`.replace(/\s+/g, ' ').trim();
+      }
+
+      lines.push(`${kw} "${frameTitle}" as ${id}${stereotype} {`);
       const children = containerChildrenMap.get(node.id) || [];
       children.forEach(child => emitNode(child, '  '));
       lines.push('}');
@@ -910,6 +916,9 @@ export function generatePlantUML(diagram: DiagramData): string {
         break;
       case 'interface-lollipop':
         lines.push(`() "${label}" as ${id}`);
+        break;
+      case 'participant':
+        lines.push(`participant "${label}" as ${id}${stereotype}`);
         break;
       case 'actor':
         lines.push(`actor "${label}" as ${id}${stereotype}`);
@@ -1309,7 +1318,7 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
 
     // Check for block start:
     // class "Name<T>" as id <<stereotype>> { OR struct Name { OR frame "Name" as id { OR frame "Name" {
-    const blockStartMatch = rawLine.match(/^(class|abstract\s+class|interface|enum|annotation|struct|protocol|exception|metaclass|entity|object|map|package|namespace|frame|folder|node|component|database|json|yaml|state|rectangle|cloud)\s+(?:"([^"]+)"(?:\s+as\s+([a-zA-Z0-9_]+))?|([a-zA-Z0-9_]+)(?:<([^>]+)>)?(?:\s+as\s+([a-zA-Z0-9_]+))?)(?:\s*<<\s*(?:\(([A-Z]),\s*(#[a-fA-F0-9]{3,6})\)\s*)?([^>]*)>>)?\s*\{/i);
+    const blockStartMatch = rawLine.match(/^(class|abstract\s+class|interface|enum|annotation|struct|protocol|exception|metaclass|entity|object|map|package|namespace|frame|folder|node|component|database|json|yaml|state|rectangle|cloud|group|alt|opt|loop|par|critical)\s+(?:"([^"]+)"(?:\s+as\s+([a-zA-Z0-9_]+))?|([a-zA-Z0-9_]+)(?:<([^>]+)>)?(?:\s+as\s+([a-zA-Z0-9_]+))?)(?:\s*<<\s*(?:\(([A-Z]),\s*(#[a-fA-F0-9]{3,6})\)\s*)?([^>]*)>>)?\s*\{/i);
     if (blockStartMatch) {
       const type = blockStartMatch[1].toLowerCase().replace(/\s+/, '-');
       const label = blockStartMatch[2] || blockStartMatch[4];
@@ -1900,7 +1909,7 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
 
     // Single-line declaration:
     // keyword "label" / :label: / (label) / [label] as id <<stereotype>> #color
-    const declMatch = rawLine.match(/^(actor|agent|component|database|storage|cloud|node|queue|stack|artifact|file|folder|frame|card|hexagon|collections|boundary|control|interface|class|abstract\s+class|enum|entity|object|state|usecase|rectangle|diamond|circle)\s+(?:"([^"]+)"|:([^:]+):|\(([^)]+)\)|\[([^\]]+)\]|([a-zA-Z0-9_]+))(?:\s+as\s+([a-zA-Z0-9_]+))?(?:\s*<<([^>]+)>>)?(?:\s*(#[a-fA-F0-9]{3,6}|#[a-zA-Z]+))?(?:\s*<<([^>]+)>>)?/i);
+    const declMatch = rawLine.match(/^(participant|actor|agent|component|database|storage|cloud|node|queue|stack|artifact|file|folder|frame|card|hexagon|collections|boundary|control|interface|class|abstract\s+class|enum|entity|object|state|usecase|rectangle|diamond|circle)\s+(?:"([^"]+)"|:([^:]+):|\(([^)]+)\)|\[([^\]]+)\]|([a-zA-Z0-9_]+))(?:\s+as\s+([a-zA-Z0-9_]+))?(?:\s*<<([^>]+)>>)?(?:\s*(#[a-fA-F0-9]{3,6}|#[a-zA-Z]+))?(?:\s*<<([^>]+)>>)?/i);
     if (declMatch) {
       const type = declMatch[1].toLowerCase().replace(/\s+class$/, '');
       const label = declMatch[2] || declMatch[3] || declMatch[4] || declMatch[5] || declMatch[6];
@@ -1915,7 +1924,13 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
         let width = 190;
         let height = 85;
 
-        if (type === 'frame') {
+        if (type === 'participant') {
+          resolvedType = 'participant';
+          resolvedCategory = 'sequence';
+          shape = 'rounded';
+          width = 160;
+          height = 70;
+        } else if (type === 'frame') {
           resolvedType = 'frame';
           resolvedCategory = 'container';
           shape = 'frame';
@@ -2310,13 +2325,14 @@ function finishBlock(
 ) {
   const { type, id, label, generics, stereotype, spot, lines } = block;
 
-  if (['package', 'namespace', 'frame', 'folder', 'rectangle', 'node'].includes(type)) {
-    const isFrame = type === 'frame';
+  if (['package', 'namespace', 'frame', 'folder', 'rectangle', 'node', 'group', 'alt', 'opt', 'loop', 'par', 'critical'].includes(type)) {
+    const isFragment = ['alt', 'opt', 'loop', 'par', 'critical', 'group'].includes(type);
+    const isFrame = type === 'frame' || isFragment;
     const isFolder = type === 'folder';
     const isRect = type === 'rectangle';
     const node: DiagramNode = {
       id,
-      type: type as any,
+      type: isFragment ? 'frame' : type as any,
       category: 'container',
       label,
       sublabel: stereotype ? `<<${stereotype}>>` : undefined,
@@ -2328,7 +2344,8 @@ function finishBlock(
       shape: (isFrame ? 'frame' : isFolder ? 'folder' : (isRect ? 'rectangle' : 'package')) as any,
       data: {
         isContainer: true,
-        containerType: type as any,
+        containerType: 'frame',
+        frameKind: isFragment ? type : undefined,
         shape: (isFrame ? 'frame' : isFolder ? 'folder' : (isRect ? 'rectangle' : 'package')) as any
       }
     };
@@ -2341,8 +2358,8 @@ function finishBlock(
         const cleanSub = subLine.trim();
         if (!cleanSub || cleanSub.startsWith("'") || cleanSub.startsWith('!')) return;
 
-        // Try single-line decl match
-        const subDecl = cleanSub.match(/^(actor|agent|component|database|storage|cloud|node|queue|stack|artifact|file|folder|frame|card|hexagon|collections|boundary|control|interface|class|abstract\s+class|enum|entity|object|state|usecase|rectangle)\s+(?:"([^"]+)"|:([^:]+):|\(([^)]+)\)|\[([^\]]+)\]|([a-zA-Z0-9_]+))(?:\s+as\s+([a-zA-Z0-9_]+))?(?:\s*<<([^>]+)>>)?(?:\s*(#[a-fA-F0-9]{3,6}|#[a-zA-Z]+))?(?:\s*<<([^>]+)>>)?/i);
+        // Try single-line decl match (supports participants, actors, components, classes, etc.)
+        const subDecl = cleanSub.match(/^(participant|actor|agent|component|database|storage|cloud|node|queue|stack|artifact|file|folder|frame|card|hexagon|collections|boundary|control|interface|class|abstract\s+class|enum|entity|object|state|usecase|rectangle)\s+(?:"([^"]+)"|:([^:]+):|\(([^)]+)\)|\[([^\]]+)\]|([a-zA-Z0-9_]+))(?:\s+as\s+([a-zA-Z0-9_]+))?(?:\s*<<([^>]+)>>)?(?:\s*(#[a-fA-F0-9]{3,6}|#[a-zA-Z]+))?(?:\s*<<([^>]+)>>)?/i);
         if (subDecl) {
           const subType = subDecl[1].toLowerCase().replace(/\s+class$/, '');
           const subLabel = subDecl[2] || subDecl[3] || subDecl[4] || subDecl[5] || subDecl[6];
