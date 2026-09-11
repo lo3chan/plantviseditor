@@ -19,6 +19,8 @@ import { SequenceCanvas } from './components/SequenceCanvas';
 import { CodePanel } from './components/CodePanel';
 import { OfficialRenderView } from './components/OfficialRenderView';
 import { ExportModal } from './components/ExportModal';
+import { BugReportModal } from './components/BugReportModal';
+import { debugLogger } from './utils/debugLogger';
 import { Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 import { 
   findPlantUMLLinesForElement, 
@@ -41,7 +43,13 @@ export default function App() {
   // Asset Panel collapse state in canvas mode
   const [isAssetPanelCollapsed, setIsAssetPanelCollapsed] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [isBugModalOpen, setIsBugModalOpen] = useState<boolean>(false);
   const [copiedPlantUML, setCopiedPlantUML] = useState<boolean>(false);
+
+  // Initialize in-memory runtime debug logger on mount
+  useEffect(() => {
+    debugLogger.init();
+  }, []);
 
   // File drag & drop and toast notification states
   const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
@@ -738,6 +746,7 @@ export default function App() {
         historyIndex={historyIndex}
         onJumpToHistory={handleJumpToHistory}
         onOpenExport={() => setIsExportModalOpen(true)}
+        onOpenBugReport={() => setIsBugModalOpen(true)}
         onQuickCopyPlantUML={handleQuickCopyPlantUML}
         copiedPlantUML={copiedPlantUML}
       />
@@ -883,6 +892,15 @@ export default function App() {
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         diagram={diagram}
+      />
+
+      {/* Bug Report & Diagnostics Dialog */}
+      <BugReportModal
+        isOpen={isBugModalOpen}
+        onClose={() => setIsBugModalOpen(false)}
+        pumlCode={currentPlantUMLCode}
+        diagramState={diagram}
+        diagramTitle={diagram.title}
       />
 
       {/* Toast Notification */}

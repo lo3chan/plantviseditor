@@ -3,7 +3,7 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 # Copy package manifests
-COPY package.json ./
+COPY package.json package-lock.json* ./
 
 # Install dependencies
 RUN npm install
@@ -14,18 +14,27 @@ COPY . .
 # Build production bundle
 RUN npm run build
 
-# Stage 2: Serve with Nginx Alpine
-FROM nginx:alpine
-WORKDIR /usr/share/nginx/html
+# Stage 2: Serve with Node 22 Production Server
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+ENV PORT=80
+ENV STORAGE_DIR=/data/bugs
 
-# Remove default nginx assets
-RUN rm -rf ./*
+# Copy package manifests
+COPY package.json package-lock.json* ./
 
-# Copy built assets
-COPY --from=builder /app/dist .
+# Install production dependencies
+RUN npm install --omit=dev
 
-# Copy custom Nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy server code
+COPY server/ ./server/
+
+# Copy built frontend assets
+COPY --from=builder /app/dist ./dist
+
+# Create persistent storage directory
+RUN mkdir -p /data/bugs
 
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["node", "server/index.js"]
