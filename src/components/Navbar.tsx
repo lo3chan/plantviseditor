@@ -541,10 +541,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             id="btn-bug-report"
             onClick={onOpenBugReport}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#c2652a] hover:text-[#8a4518] bg-[#faf5ee] hover:bg-white border border-[#c2652a]/40 shadow-2xs hover:shadow-xs transition-all cursor-pointer"
-            title="Submit Bug Report, Diagnostics, and Attachments to Persistent Storage"
+            title="Report a Bug or Issue"
           >
             <Bug className="w-3.5 h-3.5 text-[#c2652a]" />
-            <span>Bug Submitter</span>
+            <span>Report Bug</span>
           </button>
         )}
 
