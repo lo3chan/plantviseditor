@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  app:
+    image: ghcr.io/lo3chan/plantviseditor:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: plantviseditor-app
+    restart: unless-stopped
+    ports:
+      - "8095:80"
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: plantviseditor-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=eyJhIjoiMjAwNDYyZTFiZTExOTAyNjJjMjYwNzQyNGQzYTFjMDIiLCJ0IjoiMTFlNjJlMDAtYzAxOS00OTE2LWFiMWYtNmQyNWViNTE1MGVkIiwicyI6InQweFNOYXpQK25Ra2JKaDF2anZ6Y2tBcElnSy93SUNIVEdwV3Ezenlhcm89In0=
+    depends_on:
+      - app
