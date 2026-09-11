@@ -904,6 +904,7 @@ export default function App() {
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
         diagram={diagram}
+        pumlCode={activePlantUMLCode}
       />
 
       {/* Bug Report & Diagnostics Dialog */}

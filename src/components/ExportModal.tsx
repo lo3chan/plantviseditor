@@ -36,12 +36,14 @@ interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   diagram: DiagramData;
+  pumlCode?: string;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
   isOpen,
   onClose,
-  diagram
+  diagram,
+  pumlCode: passedPumlCode
 }) => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedAscii, setCopiedAscii] = useState(false);
@@ -62,7 +64,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const [asciiFormat, setAsciiFormat] = useState<'unicode' | 'pure'>('unicode');
   const [wrapAscii, setWrapAscii] = useState(false);
 
-  const pumlCode = generatePlantUML(diagram);
+  const pumlCode = passedPumlCode || generatePlantUML(diagram);
   const svgUrl = getPlantUMLSvgUrl(pumlCode);
   const pngUrl = getPlantUMLPngUrl(pumlCode);
 
@@ -252,18 +254,18 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   };
 
   const handleDownloadDrawio = () => {
-    downloadDrawioFile(diagram);
+    downloadDrawioFile(diagram, pumlCode);
   };
 
   const handleCopyDrawioXml = async () => {
-    const xml = generateDrawioXml(diagram);
+    const xml = generateDrawioXml(diagram, pumlCode);
     await navigator.clipboard.writeText(xml);
     setCopiedDrawioXml(true);
     setTimeout(() => setCopiedDrawioXml(false), 2000);
   };
 
   const handleOpenDrawioWeb = () => {
-    openInDrawioWeb(diagram);
+    openInDrawioWeb(diagram, pumlCode);
   };
 
   const handleRetryAscii = () => {
