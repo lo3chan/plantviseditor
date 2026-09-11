@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   getPlantUMLSvgUrl, 
   getPlantUMLPngUrl 
@@ -14,7 +14,8 @@ import {
   Copy,
   AlertCircle,
   Loader2,
-  Palette
+  Palette,
+  Move
 } from 'lucide-react';
 import { GlobalCanvasSettings } from '../types';
 import { PlantUMLStylePanel } from './PlantUMLStylePanel';
@@ -38,7 +39,14 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<boolean>(false);
   const [errorDetails, setErrorDetails] = useState<string>('');
+  
+  // Interactive Pan & Zoom state
   const [zoom, setZoom] = useState<number>(1);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState<boolean>(false);
+  const panStartRef = useRef<{ x: number; y: number; panX: number; panY: number }>({ x: 0, y: 0, panX: 0, panY: 0 });
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
   const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
   const [copiedSvg, setCopiedSvg] = useState<boolean>(false);
   const [copiedPng, setCopiedPng] = useState<boolean>(false);
@@ -93,6 +101,81 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
       }
     };
   }, [code, refreshKey]);
+
+  // Mouse wheel zoom centered on cursor
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left - rect.width / 2;
+    const mouseY = e.clientY - rect.top - rect.height / 2;
+
+    const zoomFactor = e.deltaY < 0 ? 1.12 : 0.88;
+    setZoom(prevZoom => {
+      const newZoom = Math.min(Math.max(prevZoom * zoomFactor, 0.15), 5.0);
+      setPan(prevPan => {
+        const newX = mouseX - (mouseX - prevPan.x) * (newZoom / prevZoom);
+        const newY = mouseY - (mouseY - prevPan.y) * (newZoom / prevZoom);
+        return { x: newX, y: newY };
+      });
+      return newZoom;
+    });
+  }, []);
+
+  // Click and drag to pan
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('select')) {
+      return;
+    }
+    setIsPanning(true);
+    panStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      panX: pan.x,
+      panY: pan.y
+    };
+  }, [pan.x, pan.y]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return;
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    setPan({
+      x: panStartRef.current.panX + dx,
+      y: panStartRef.current.panY + dy
+    });
+  }, [isPanning]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  // Double click to zoom in or reset
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a')) return;
+    
+    if (zoom !== 1 || pan.x !== 0 || pan.y !== 0) {
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+    } else {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left - rect.width / 2;
+      const mouseY = e.clientY - rect.top - rect.height / 2;
+      const newZoom = 1.6;
+      setPan({
+        x: mouseX - (mouseX - pan.x) * (newZoom / zoom),
+        y: mouseY - (mouseY - pan.y) * (newZoom / zoom)
+      });
+      setZoom(newZoom);
+    }
+  }, [zoom, pan.x, pan.y]);
 
   const handleCopyUrl = () => {
     if (svgUrl) {
@@ -205,26 +288,40 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
 
           {/* Zoom Controls */}
           <button
-            onClick={() => setZoom(z => Math.max(0.4, +(z - 0.2).toFixed(1)))}
+            onClick={() => {
+              setZoom(z => Math.max(0.15, +(z * 0.85).toFixed(2)));
+            }}
             className="p-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Zoom Out"
+            title="Zoom Out (or mouse wheel down)"
           >
             <ZoomOut className="w-4 h-4" />
           </button>
-          <span className="text-[11px] font-mono text-[#78706a] min-w-[40px] text-center">
+          <span 
+            onClick={() => {
+              setZoom(1);
+              setPan({ x: 0, y: 0 });
+            }}
+            className="text-[11px] font-mono text-[#78706a] min-w-[44px] text-center hover:text-[#c2652a] cursor-pointer"
+            title="Click to reset zoom to 100%"
+          >
             {Math.round(zoom * 100)}%
           </span>
           <button
-            onClick={() => setZoom(z => Math.min(3, +(z + 0.2).toFixed(1)))}
+            onClick={() => {
+              setZoom(z => Math.min(5.0, +(z * 1.15).toFixed(2)));
+            }}
             className="p-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Zoom In"
+            title="Zoom In (or mouse wheel up)"
           >
             <ZoomIn className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setZoom(1)}
+            onClick={() => {
+              setZoom(1);
+              setPan({ x: 0, y: 0 });
+            }}
             className="p-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Reset Zoom"
+            title="Reset Zoom & Pan"
           >
             <Maximize2 className="w-3.5 h-3.5" />
           </button>
@@ -306,9 +403,27 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
           )}
         </div>
 
-        {/* SVG Canvas Area with Locked 1-1 Brick Texture */}
+        {/* SVG Canvas Area with Interactive Pan and Zoom */}
         <div 
-          className="flex-1 overflow-auto flex items-center justify-center p-8 relative canvas-brick-bg"
+          ref={containerRef}
+          className={`flex-1 overflow-hidden relative select-none ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+          style={{
+            backgroundColor: '#faf5ee',
+            backgroundImage: `
+              linear-gradient(335deg, rgba(194, 101, 42, 0.04) ${23 * zoom}px, transparent ${23 * zoom}px),
+              linear-gradient(155deg, rgba(194, 101, 42, 0.04) ${23 * zoom}px, transparent ${23 * zoom}px),
+              linear-gradient(335deg, rgba(194, 101, 42, 0.04) ${23 * zoom}px, transparent ${23 * zoom}px),
+              linear-gradient(155deg, rgba(194, 101, 42, 0.04) ${23 * zoom}px, transparent ${23 * zoom}px)
+            `,
+            backgroundSize: `${58 * zoom}px ${58 * zoom}px`,
+            backgroundPosition: `${0 * zoom + pan.x}px ${2 * zoom + pan.y}px, ${4 * zoom + pan.x}px ${35 * zoom + pan.y}px, ${29 * zoom + pan.x}px ${31 * zoom + pan.y}px, ${34 * zoom + pan.x}px ${6 * zoom + pan.y}px`
+          }}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onDoubleClick={handleDoubleClick}
         >
           {loading && (
             <div className="absolute top-6 left-6 z-10 flex items-center gap-2 px-3 py-1.5 bg-white/90 backdrop-blur-xs rounded-lg border border-[#d8d0c8] shadow-xs text-xs text-[#78706a]">
@@ -318,59 +433,72 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
           )}
 
           {error ? (
-            <div className="flex flex-col items-center max-w-2xl gap-3 p-6 bg-white/95 rounded-2xl border border-rose-300 text-rose-800 shadow-xl">
-              <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm">
-                <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
-                <span>PlantUML Syntax Notice</span>
-              </div>
-              {errorDetails && (
-                <p className="text-xs font-mono bg-rose-50 border border-rose-200 p-2.5 rounded-lg text-rose-900 w-full overflow-x-auto">
-                  {errorDetails}
-                </p>
-              )}
-              {svgContent && svgContent.includes('<svg') && (
-                <div 
-                  className="w-full max-h-72 overflow-auto bg-neutral-900 text-white p-3 rounded-lg border border-neutral-700 [&>svg]:mx-auto"
-                  dangerouslySetInnerHTML={{ __html: svgContent }}
-                />
-              )}
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  onClick={() => setRefreshKey(k => k + 1)}
-                  className="px-3.5 py-1.5 bg-[#c2652a] text-white text-xs font-medium rounded-lg hover:bg-[#a95420] transition-colors cursor-pointer"
-                >
-                  Retry Render
-                </button>
+            <div className="absolute inset-0 flex items-center justify-center p-8 pointer-events-auto">
+              <div className="flex flex-col items-center max-w-2xl gap-3 p-6 bg-white/95 rounded-2xl border border-rose-300 text-rose-800 shadow-xl">
+                <div className="flex items-center gap-2 text-rose-700 font-semibold text-sm">
+                  <AlertCircle className="w-5 h-5 text-rose-500 shrink-0" />
+                  <span>PlantUML Syntax Notice</span>
+                </div>
+                {errorDetails && (
+                  <p className="text-xs font-mono bg-rose-50 border border-rose-200 p-2.5 rounded-lg text-rose-900 w-full overflow-x-auto">
+                    {errorDetails}
+                  </p>
+                )}
+                {svgContent && svgContent.includes('<svg') && (
+                  <div 
+                    className="w-full max-h-72 overflow-auto bg-neutral-900 text-white p-3 rounded-lg border border-neutral-700 [&>svg]:mx-auto"
+                    dangerouslySetInnerHTML={{ __html: svgContent }}
+                  />
+                )}
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={() => setRefreshKey(k => k + 1)}
+                    className="px-3.5 py-1.5 bg-[#c2652a] text-white text-xs font-medium rounded-lg hover:bg-[#a95420] transition-colors cursor-pointer"
+                  >
+                    Retry Render
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
             <div 
-              className="transition-transform duration-100 origin-center bg-white p-6 rounded-2xl shadow-xl border border-[#d8d0c8]/80 max-w-[95%] max-h-[90%] overflow-auto relative"
-              style={{ transform: `scale(${zoom})` }}
+              className="absolute top-1/2 left-1/2 will-change-transform"
+              style={{ 
+                transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px)) scale(${zoom})`,
+                transformOrigin: 'center center'
+              }}
             >
-              {svgContent && svgContent.includes('<svg') ? (
-                <div 
-                  className="w-full h-full flex items-center justify-center [&>svg]:max-w-none [&>svg]:transition-opacity"
-                  dangerouslySetInnerHTML={{ __html: svgContent }}
-                />
-              ) : (
-                svgUrl && (
-                  <img
-                    key={svgUrl}
-                    src={svgUrl}
-                    alt="PlantUML Diagram Render"
-                    className="max-w-none transition-opacity"
-                    referrerPolicy="no-referrer"
-                    onLoad={() => setLoading(false)}
-                    onError={() => {
-                      setError(true);
-                      setLoading(false);
-                    }}
+              <div className="bg-white p-6 rounded-2xl shadow-xl border border-[#d8d0c8]/80 max-w-none inline-block">
+                {svgContent && svgContent.includes('<svg') ? (
+                  <div 
+                    className="w-full h-full flex items-center justify-center [&>svg]:max-w-none [&>svg]:h-auto [&>svg]:w-auto [&>svg]:transition-opacity select-none pointer-events-none"
+                    dangerouslySetInnerHTML={{ __html: svgContent }}
                   />
-                )
-              )}
+                ) : (
+                  svgUrl && (
+                    <img
+                      key={svgUrl}
+                      src={svgUrl}
+                      alt="PlantUML Diagram Render"
+                      className="max-w-none transition-opacity select-none pointer-events-none"
+                      referrerPolicy="no-referrer"
+                      onLoad={() => setLoading(false)}
+                      onError={() => {
+                        setError(true);
+                        setLoading(false);
+                      }}
+                    />
+                  )
+                )}
+              </div>
             </div>
           )}
+
+          {/* Mini Pan hint indicator */}
+          <div className="absolute bottom-4 left-4 pointer-events-none text-[11px] text-[#78706a]/80 flex items-center gap-1.5 bg-white/90 px-2.5 py-1 rounded-md border border-[#d8d0c8]/60 backdrop-blur-xs shadow-2xs z-10 select-none">
+            <Move className="w-3.5 h-3.5 text-[#c2652a]" />
+            <span>Drag to pan • Wheel to zoom • Double-click to reset</span>
+          </div>
         </div>
       </div>
 
