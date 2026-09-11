@@ -114,11 +114,21 @@ export function resolveOverlaps(
 
   relaxNodeGroup(topLevelNodes, minMargin);
 
-  // 3. Keep all nodes comfortably within viewport bounds
+  // 3. Keep all nodes comfortably within canvas bounds, ensuring at least 140px left margin for flanking edge badges
+  let minX = Infinity;
+  let minY = Infinity;
   cloned.forEach(n => {
-    if (n.x < 40) n.x = 40;
-    if (n.y < 40) n.y = 40;
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
   });
+  const shiftX = minX < 140 ? 140 - minX : 0;
+  const shiftY = minY < 40 ? 40 - minY : 0;
+  if (shiftX > 0 || shiftY > 0) {
+    cloned.forEach(n => {
+      n.x += shiftX;
+      n.y += shiftY;
+    });
+  }
 
   return cloned;
 }
@@ -428,6 +438,21 @@ function doBoxesCollide(
  * 2. Never obscured by other edge labels (parallel links, crossing links)
  * 3. Positioned along unobstructed clear corridors
  */
+/**
+ * Determines whether a string represents actual numeric multiplicity/cardinality
+ * (e.g. "1", "*", "0..1", "1..*", "0..*") rather than descriptive technology or protocols.
+ */
+export function isMultiplicity(val?: string): boolean {
+  if (!val) return false;
+  const clean = val.trim();
+  if (clean.length > 10) return false;
+  return /^[\d.*+?~-]+(\.\.[\d.*+?~-]+)?$/.test(clean) || /^(0\.\.1|0\.\.\*|1\.\.\*|\*|1|n|m|\?|\+)$/i.test(clean);
+}
+
+/**
+ * Resolves overlapping edge labels and sets optimal `labelOffset` properties
+ * using candidate position generation along edge midpoints and perpendicular normals.
+ */
 export function resolveEdgeLabelOverlaps(
   nodes: DiagramNode[],
   edges: DiagramEdge[]
@@ -439,13 +464,13 @@ export function resolveEdgeLabelOverlaps(
   const placedLabelBoxes: Array<{ id: string; x: number; y: number; width: number; height: number }> = [];
   const placedCardBoxes: Array<{ id: string; x: number; y: number; width: number; height: number }> = [];
 
-  // Pre-register and anti-collide cardinality/tech badges for all edges
+  // Pre-register and anti-collide cardinality badges for all edges (strictly actual multiplicity)
   clonedEdges.forEach(edge => {
     const tgtNode = nodes.find(n => n.id === edge.target);
-    if (!tgtNode || !edge.cardinalityTarget) return;
+    if (!tgtNode || !edge.cardinalityTarget || !isMultiplicity(edge.cardinalityTarget)) return;
     const tgtPt = getNodePortCoord(tgtNode, edge.targetHandle);
-    const cardW = Math.max(28, edge.cardinalityTarget.length * 7.5 + 16);
-    const cardH = 20;
+    const cardW = Math.max(24, edge.cardinalityTarget.length * 7.5 + 14);
+    const cardH = 18;
     let cx = tgtPt.x;
     let cy = tgtPt.y - 14 - cardH / 2;
 
@@ -480,10 +505,19 @@ export function resolveEdgeLabelOverlaps(
     const tgtNode = nodes.find(n => n.id === edge.target);
     if (!srcNode || !tgtNode) return;
 
-    // Determine label text for estimating badge bounding box
-    const labelText = edge.label || 'relationship';
-    const estimatedWidth = Math.max(90, labelText.length * 7.5 + 32);
-    const estimatedHeight = 28;
+    // Determine label text for estimating badge bounding box (bounded width with wrapping)
+    let mainDesc = edge.label || 'relationship';
+    let techNote: string | undefined = undefined;
+    const bracketMatch = mainDesc.match(/^(.*?)\[(.*?)\]$/);
+    if (bracketMatch) {
+      mainDesc = bracketMatch[1].trim();
+      techNote = bracketMatch[2].trim();
+    } else if (edge.cardinalityTarget && !isMultiplicity(edge.cardinalityTarget)) {
+      techNote = edge.cardinalityTarget.trim();
+    }
+
+    const estimatedWidth = Math.min(220, Math.max(64, mainDesc.length * 6.5 + 24));
+    const estimatedHeight = techNote ? 42 : 26;
 
     // Get connection port positions
     const srcPt = getNodePortCoord(srcNode, edge.sourceHandle);

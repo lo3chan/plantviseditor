@@ -73,7 +73,7 @@ interface DiagramNodeProps {
   onSelect: (e: React.MouseEvent) => void;
   onUpdate: (updatedNode: Partial<DiagramNode>) => void;
   onStartConnection: (nodeId: string, port: PortPosition, e: React.MouseEvent) => void;
-  onQuickAddChild?: (nodeId: string) => void;
+  onQuickAddChild?: (nodeId: string, port: PortPosition) => void;
   onStartResize?: (nodeId: string, direction: 'se' | 'e' | 's', e: React.MouseEvent) => void;
 }
 
@@ -2306,21 +2306,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       </div>
 
       {/* Ports */}
-      {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
-
-      {/* Quick Add Connected Node button on Right */}
-      {onQuickAddChild && isHovered && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onQuickAddChild(node.id);
-          }}
-          className="absolute -right-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#A80036] text-white flex items-center justify-center shadow-xs hover:scale-115 transition-transform z-40 cursor-pointer"
-          title="Quick add connected element (Click to open Connect menu)"
-        >
-          <Plus className="w-3 h-3" />
-        </button>
-      )}
+      {renderPorts(node.id, isHovered, isSelected, onStartConnection, onQuickAddChild)}
 
       {/* Corner Resize Handle */}
       {isSelected && onStartResize && (
@@ -2336,47 +2322,65 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
 
 // =========================================================================
 // Helper: 4 Magnetic Anchor Ports (Top, Right, Bottom, Left)
+// Double-click on any port opens the connect menu and pre-selects that direction
 // =========================================================================
 function renderPorts(
   nodeId: string,
   isHovered: boolean,
   isSelected: boolean,
-  onStartConnection: (nodeId: string, port: PortPosition, e: React.MouseEvent) => void
+  onStartConnection: (nodeId: string, port: PortPosition, e: React.MouseEvent) => void,
+  onQuickAddChild?: (nodeId: string, port: PortPosition) => void
 ) {
   if (!isHovered && !isSelected) return null;
 
   return (
     <>
       <div
-        className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center"
-        title="Connect from Top"
+        className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center group/port"
+        title="Connect from Top (Double-click to branch upwards)"
         onMouseDown={(e) => onStartConnection(nodeId, 'top', e)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onQuickAddChild?.(nodeId, 'top');
+        }}
       >
-        <div className="w-1 h-1 rounded-full bg-[#A80036]" />
+        <div className="w-1.5 h-1.5 rounded-full bg-[#A80036] group-hover/port:bg-[#c2652a]" />
       </div>
 
       <div
-        className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center"
-        title="Connect from Right"
+        className="absolute top-1/2 -right-2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center group/port"
+        title="Connect from Right (Double-click to branch right)"
         onMouseDown={(e) => onStartConnection(nodeId, 'right', e)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onQuickAddChild?.(nodeId, 'right');
+        }}
       >
-        <div className="w-1 h-1 rounded-full bg-[#A80036]" />
+        <div className="w-1.5 h-1.5 rounded-full bg-[#A80036] group-hover/port:bg-[#c2652a]" />
       </div>
 
       <div
-        className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center"
-        title="Connect from Bottom"
+        className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center group/port"
+        title="Connect from Bottom (Double-click to branch downwards)"
         onMouseDown={(e) => onStartConnection(nodeId, 'bottom', e)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onQuickAddChild?.(nodeId, 'bottom');
+        }}
       >
-        <div className="w-1 h-1 rounded-full bg-[#A80036]" />
+        <div className="w-1.5 h-1.5 rounded-full bg-[#A80036] group-hover/port:bg-[#c2652a]" />
       </div>
 
       <div
-        className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center"
-        title="Connect from Left"
+        className="absolute top-1/2 -left-2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center group/port"
+        title="Connect from Left (Double-click to branch left)"
         onMouseDown={(e) => onStartConnection(nodeId, 'left', e)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onQuickAddChild?.(nodeId, 'left');
+        }}
       >
-        <div className="w-1 h-1 rounded-full bg-[#A80036]" />
+        <div className="w-1.5 h-1.5 rounded-full bg-[#A80036] group-hover/port:bg-[#c2652a]" />
       </div>
     </>
   );

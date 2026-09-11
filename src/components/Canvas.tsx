@@ -28,6 +28,7 @@ import { QuickActionBar } from './QuickActionBar';
 import { EdgeToolbar } from './EdgeToolbar';
 import { QuickBranchPopup } from './QuickBranchPopup';
 import { ElementInspector } from './ElementInspector';
+import { isMultiplicity } from '../utils/overlapResolver';
 
 interface CanvasProps {
   diagram: DiagramData;
@@ -239,11 +240,21 @@ export const Canvas: React.FC<CanvasProps> = ({
     currentY: number;
   } | null>(null);
 
-  // Quick Branch Popover State from '+' button
+  // Quick Branch Popover State from connector circle double click
   const [quickBranchPopup, setQuickBranchPopup] = useState<{
     sourceNodeId: string;
     x: number;
     y: number;
+    direction: 'right' | 'down' | 'left' | 'up';
+  } | null>(null);
+
+  // Edge Label Dragging State
+  const [draggingEdgeLabel, setDraggingEdgeLabel] = useState<{
+    edgeId: string;
+    startX: number;
+    startY: number;
+    initialOffsetX: number;
+    initialOffsetY: number;
   } | null>(null);
 
   // Inspector Drawer State
@@ -436,6 +447,18 @@ export const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
+    if (draggingEdgeLabel) {
+      const deltaX = (e.clientX - draggingEdgeLabel.startX) / viewport.zoom;
+      const deltaY = (e.clientY - draggingEdgeLabel.startY) / viewport.zoom;
+      const newOffsetX = snap(draggingEdgeLabel.initialOffsetX + deltaX);
+      const newOffsetY = snap(draggingEdgeLabel.initialOffsetY + deltaY);
+
+      onUpdateEdges(diagram.edges.map(ed => 
+        ed.id === draggingEdgeLabel.edgeId ? { ...ed, labelOffset: { x: newOffsetX, y: newOffsetY } } : ed
+      ));
+      return;
+    }
+
     if (connecting) {
       const pos = screenToCanvas(e.clientX, e.clientY);
       setConnecting({
@@ -446,10 +469,27 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
+  const handleStartDragLabel = (edge: DiagramEdge, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedEdgeId(edge.id);
+    setSelectedNodeId(null);
+    setDraggingEdgeLabel({
+      edgeId: edge.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialOffsetX: edge.labelOffset?.x || 0,
+      initialOffsetY: edge.labelOffset?.y || 0
+    });
+  };
+
   // Mouse Up on Canvas
   const handleMouseUp = (e: React.MouseEvent) => {
     if (isPanning) {
       setIsPanning(false);
+    }
+
+    if (draggingEdgeLabel) {
+      setDraggingEdgeLabel(null);
     }
 
     if (resizingNode) {
@@ -611,7 +651,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Fast connect / branch out new node
   const handleAddConnectedNode = (
-    direction: 'right' | 'down' = 'right',
+    direction: 'right' | 'down' | 'left' | 'up' = 'right',
     sourceNodeId?: string,
     options?: {
       type?: string;
@@ -627,11 +667,43 @@ export const Canvas: React.FC<CanvasProps> = ({
       : selectedNode;
     if (!source) return;
 
-    const offsetX = direction === 'right' ? source.width + 80 : 0;
-    const offsetY = direction === 'down' ? source.height + 60 : 0;
-
     const targetType = options?.type || source.type;
     const targetCategory = options?.category || source.category;
+    const targetW = targetType === 'note' ? 180 : source.width;
+    const targetH = targetType === 'note' ? 80 : source.height;
+
+    let offsetX = 0;
+    let offsetY = 0;
+    let sourceHandle: PortPosition = 'right';
+    let targetHandle: PortPosition = 'left';
+
+    switch (direction) {
+      case 'right':
+        offsetX = source.width + 80;
+        offsetY = 0;
+        sourceHandle = 'right';
+        targetHandle = 'left';
+        break;
+      case 'left':
+        offsetX = -(targetW + 80);
+        offsetY = 0;
+        sourceHandle = 'left';
+        targetHandle = 'right';
+        break;
+      case 'down':
+        offsetX = 0;
+        offsetY = source.height + 60;
+        sourceHandle = 'bottom';
+        targetHandle = 'top';
+        break;
+      case 'up':
+        offsetX = 0;
+        offsetY = -(targetH + 60);
+        sourceHandle = 'top';
+        targetHandle = 'bottom';
+        break;
+    }
+
     const defaultLabel = options?.label || (
       targetType === 'class' ? 'NewClass' :
       targetType === 'interface' ? 'NewInterface' :
@@ -649,8 +721,8 @@ export const Canvas: React.FC<CanvasProps> = ({
       label: defaultLabel,
       x: snap(source.x + offsetX),
       y: snap(source.y + offsetY),
-      width: targetType === 'note' ? 180 : source.width,
-      height: targetType === 'note' ? 80 : source.height,
+      width: targetW,
+      height: targetH,
       color: options?.color || source.color || 'sienna',
       data: targetType === source.type && source.data 
         ? JSON.parse(JSON.stringify(source.data)) 
@@ -663,8 +735,8 @@ export const Canvas: React.FC<CanvasProps> = ({
       id: `edge_${source.id}_${newNode.id}_${Date.now()}`,
       source: source.id,
       target: newNode.id,
-      sourceHandle: direction === 'right' ? 'right' : 'bottom',
-      targetHandle: direction === 'right' ? 'left' : 'top',
+      sourceHandle,
+      targetHandle,
       label: options?.relationshipVerb || undefined,
       style: options?.arrowType === 'dependency' ? 'dashed' : 'solid',
       arrowType: options?.arrowType || 'arrow'
@@ -1091,11 +1163,11 @@ export const Canvas: React.FC<CanvasProps> = ({
         sourceCardPos = { x: baseX, y: baseY };
       }
 
-      // 6. Target Cardinality / Technology Placement (Anti-collision with other blurbs)
+      // 6. Target Cardinality Placement (Strictly for actual multiplicity e.g. "1", "*", "0..*")
       let targetCardPos: { x: number; y: number } | null = null;
-      if (edge.cardinalityTarget) {
-        const cardW = Math.max(28, edge.cardinalityTarget.length * 7.5 + 16);
-        const cardH = 20;
+      if (edge.cardinalityTarget && isMultiplicity(edge.cardinalityTarget)) {
+        const cardW = Math.max(24, edge.cardinalityTarget.length * 7.5 + 14);
+        const cardH = 18;
         let baseX = tgt.x;
         let baseY = tgt.y;
 
@@ -1139,15 +1211,18 @@ export const Canvas: React.FC<CanvasProps> = ({
         targetCardPos = { x: baseX, y: baseY };
       }
 
-      // Sibling edges parallel offset
+      // Sibling edges parallel offset & staggered along-fractions
       const siblingEdges = diagram.edges.filter(
         e => (e.source === edge.source && e.target === edge.target) || (e.source === edge.target && e.target === edge.source)
       );
       const siblingIndex = siblingEdges.findIndex(e => e.id === edge.id);
-      let autoNormalShift = 0;
-      if (siblingEdges.length > 1 && !edge.labelOffset) {
-        if (siblingIndex % 2 === 1) autoNormalShift = Math.ceil(siblingIndex / 2) * 32;
-        else if (siblingIndex > 0) autoNormalShift = -Math.ceil(siblingIndex / 2) * 32;
+      const siblingCount = siblingEdges.length;
+
+      let baseFrac = 0.5;
+      if (siblingCount === 2) {
+        baseFrac = siblingIndex === 0 ? 0.35 : 0.65;
+      } else if (siblingCount > 2) {
+        baseFrac = 0.2 + (siblingIndex / (siblingCount - 1)) * 0.6;
       }
 
       const dx = tgt.x - src.x;
@@ -1158,15 +1233,50 @@ export const Canvas: React.FC<CanvasProps> = ({
       const midX = (src.x + tgt.x) / 2;
       const midY = (src.y + tgt.y) / 2;
 
-      // Label dimensions
-      const labelText = edge.label || getFriendlyRelationLabel(edge.arrowType, edge.style);
-      const badgeW = Math.max(48, labelText.length * 7.5 + 24);
-      const badgeH = 26;
+      // Extract main description and technology badge
+      const rawLabel = edge.label || getFriendlyRelationLabel(edge.arrowType, edge.style);
+      let mainDesc = rawLabel;
+      let techNote: string | undefined = undefined;
 
-      // Default label position: right on the edge line
+      const bracketMatch = rawLabel.match(/^(.*?)\[(.*?)\]$/);
+      if (bracketMatch) {
+        mainDesc = bracketMatch[1].trim();
+        techNote = bracketMatch[2].trim();
+      } else if (edge.cardinalityTarget && !isMultiplicity(edge.cardinalityTarget)) {
+        techNote = edge.cardinalityTarget.trim();
+      }
+
+      // Estimate realistic badge height and width based on text wrapping
+      const lineEstimate = Math.max(1, Math.ceil(mainDesc.length / 26));
+      const badgeW = mainDesc.length > 26 ? 220 : Math.max(68, mainDesc.length * 7.5 + 28);
+      const badgeH = (lineEstimate * 16) + (techNote ? 28 : 16);
       const isHorizontal = Math.abs(dx) >= Math.abs(dy);
-      let labelX = midX + nx * autoNormalShift;
-      let labelY = midY + ny * autoNormalShift + (isHorizontal ? -12 : 0);
+
+      let autoNormalShift = 0;
+      if (siblingCount > 1 && !edge.labelOffset) {
+        if (isHorizontal) {
+          // Horizontal edge: nx = 0, ny = 1 (downward). Badges are ~badgeH tall.
+          // Sibling 0 moves UP (-ny), Sibling 1 moves DOWN (+ny)
+          if (siblingCount === 2) {
+            autoNormalShift = siblingIndex === 0 ? -(badgeH / 2 + 16) : (badgeH / 2 + 16);
+          } else {
+            autoNormalShift = (siblingIndex % 2 === 1 ? 1 : -1) * Math.ceil(siblingIndex / 2) * 36;
+          }
+        } else {
+          // Vertical edge: nx = -1 (leftward), ny = 0. Badges are ~badgeW wide.
+          // Sibling 0 moves LEFT (+nx), Sibling 1 moves RIGHT (-nx)
+          const sideShift = Math.max(126, badgeW / 2 + 24);
+          if (siblingCount === 2) {
+            autoNormalShift = siblingIndex === 0 ? sideShift : -sideShift;
+          } else {
+            autoNormalShift = (siblingIndex % 2 === 0 ? 1 : -1) * (sideShift + Math.floor(siblingIndex / 2) * 40);
+          }
+        }
+      }
+
+      // Default label position: shifted along perpendicular normal to flank edge
+      let labelX = Math.max(badgeW / 2 + 12, midX + nx * autoNormalShift);
+      let labelY = Math.max(badgeH / 2 + 12, midY + ny * autoNormalShift + (isHorizontal ? -12 : 0));
 
       if (isSelfLoop) {
         labelX = src.x + 36;
@@ -1175,16 +1285,15 @@ export const Canvas: React.FC<CanvasProps> = ({
         labelX = midX + edge.labelOffset.x;
         labelY = midY + edge.labelOffset.y;
       } else {
-        // Anti-collision testing against INTERMEDIATE nodes, placed labels, and placed cardinality badges
+        // Anti-collision testing against ALL nodes, placed labels, and placed cardinality badges
         const testOverlap = (cx: number, cy: number, pad = 6) => {
           const left = cx - badgeW / 2 - pad;
           const right = cx + badgeW / 2 + pad;
           const top = cy - badgeH / 2 - pad;
           const bottom = cy + badgeH / 2 + pad;
 
-          // 1. Check intermediate nodes only (exclude own source and target endpoints)
+          // 1. Check all nodes for bounding box collision (never overlap any node body)
           const hitNode = nodes.some(n => {
-            if (n.id === srcNode.id || n.id === tgtNode.id) return false;
             return !(
               right <= n.x ||
               left >= n.x + n.width ||
@@ -1216,9 +1325,11 @@ export const Canvas: React.FC<CanvasProps> = ({
         };
 
         if (testOverlap(labelX, labelY)) {
-          // Tight normal offsets to keep label very close to its edge line
-          const normalDeltas = isHorizontal ? [0, -18, 18, -28, 28] : [0, 20, -20, 36, -36];
-          const alongFractions = [0.5, 0.4, 0.6, 0.3, 0.7];
+          const step = isHorizontal ? badgeH + 20 : badgeW + 28;
+          const normalDeltas = isHorizontal 
+            ? [0, -step, step, -step * 1.5, step * 1.5] 
+            : [0, step, -step, step * 1.5, -step * 1.5];
+          const alongFractions = [0.5, 0.35, 0.65, 0.2, 0.8];
           let bestCandidate: { x: number; y: number } | null = null;
           let bestPenalty = Infinity;
 
@@ -1226,8 +1337,8 @@ export const Canvas: React.FC<CanvasProps> = ({
             const bx = src.x + dx * frac;
             const by = src.y + dy * frac;
             for (const norm of normalDeltas) {
-              const cx = bx + nx * (norm + autoNormalShift);
-              const cy = by + ny * (norm + autoNormalShift) + (isHorizontal ? -12 : 0);
+              const cx = Math.max(badgeW / 2 + 12, bx + nx * (norm + autoNormalShift));
+              const cy = Math.max(badgeH / 2 + 12, by + ny * (norm + autoNormalShift) + (isHorizontal ? -12 : 0));
               if (!testOverlap(cx, cy)) {
                 const penalty = Math.hypot(cx - midX, cy - midY);
                 if (penalty < bestPenalty) {
@@ -1247,6 +1358,10 @@ export const Canvas: React.FC<CanvasProps> = ({
 
       placedLabelBoxes.push({ x: labelX, y: labelY, width: badgeW, height: badgeH });
 
+      const lineAnchor = { x: midX, y: midY };
+      const distFromAnchor = Math.hypot(labelX - midX, labelY - midY);
+      const needsLeaderLine = !isSelfLoop && distFromAnchor > 16;
+
       return {
         edge,
         srcNode,
@@ -1259,9 +1374,12 @@ export const Canvas: React.FC<CanvasProps> = ({
         sourceCardPos,
         targetCardPos,
         labelPos: { x: labelX, y: labelY },
+        lineAnchor,
+        needsLeaderLine,
         badgeW,
         badgeH,
-        labelText
+        mainDesc,
+        techNote
       };
     });
   }, [diagram.edges, diagram.nodes, diagram.settings]);
@@ -1587,6 +1705,30 @@ export const Canvas: React.FC<CanvasProps> = ({
             );
           })}
 
+          {/* Leader Tether Lines for offset edge labels */}
+          {computedEdges.map(({ edge, labelPos, lineAnchor, needsLeaderLine }) => {
+            if (!needsLeaderLine) return null;
+            const isSelected = selectedEdgeId === edge.id;
+            const strokeColor = isSelected ? '#c2652a' : (edge.color || '#A80036');
+
+            return (
+              <g key={`leader-${edge.id}`} className="pointer-events-none opacity-60 transition-opacity">
+                {/* Anchor dot on the edge line */}
+                <circle cx={lineAnchor.x} cy={lineAnchor.y} r="2.5" fill={strokeColor} />
+                {/* Dashed tether line linking edge midpoint to label */}
+                <line
+                  x1={lineAnchor.x}
+                  y1={lineAnchor.y}
+                  x2={labelPos.x}
+                  y2={labelPos.y}
+                  stroke={strokeColor}
+                  strokeWidth="1.2"
+                  strokeDasharray="3 3"
+                />
+              </g>
+            );
+          })}
+
           {/* Active Connection Line being dragged */}
           {connecting && (
             <path
@@ -1618,15 +1760,39 @@ export const Canvas: React.FC<CanvasProps> = ({
                   onUpdateNodes(diagram.nodes.map(n => n.id === node.id ? { ...n, ...patch } : n));
                 }}
                 onStartConnection={handleStartConnection}
-                onQuickAddChild={(id) => {
+                onQuickAddChild={(id, port) => {
                   const targetNode = diagram.nodes.find(n => n.id === id);
                   if (!targetNode) return;
                   setSelectedNodeId(id);
                   setSelectedEdgeId(null);
+
+                  let branchDir: 'right' | 'down' | 'left' | 'up' = 'right';
+                  let popupX = targetNode.x + targetNode.width + 16;
+                  let popupY = targetNode.y;
+
+                  if (port === 'top') {
+                    branchDir = 'up';
+                    popupX = targetNode.x + targetNode.width / 2 - 144;
+                    popupY = targetNode.y - 240;
+                  } else if (port === 'bottom') {
+                    branchDir = 'down';
+                    popupX = targetNode.x + targetNode.width / 2 - 144;
+                    popupY = targetNode.y + targetNode.height + 16;
+                  } else if (port === 'left') {
+                    branchDir = 'left';
+                    popupX = targetNode.x - 304;
+                    popupY = targetNode.y;
+                  } else {
+                    branchDir = 'right';
+                    popupX = targetNode.x + targetNode.width + 16;
+                    popupY = targetNode.y;
+                  }
+
                   setQuickBranchPopup({
                     sourceNodeId: id,
-                    x: targetNode.x + targetNode.width + 16,
-                    y: targetNode.y
+                    x: Math.max(10, popupX),
+                    y: Math.max(10, popupY),
+                    direction: branchDir
                   });
                 }}
                 onStartResize={handleStartResize}
@@ -1654,7 +1820,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             />
           )}
 
-          {/* Floating Quick Branch Popup from '+' button */}
+          {/* Floating Quick Branch Popup from connector circle double click */}
           {quickBranchPopup && (() => {
             const src = diagram.nodes.find(n => n.id === quickBranchPopup.sourceNodeId);
             if (!src) return null;
@@ -1663,6 +1829,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                 sourceNode={src}
                 x={quickBranchPopup.x}
                 y={quickBranchPopup.y}
+                initialDirection={quickBranchPopup.direction}
                 onBranch={(dir, opts) => handleAddConnectedNode(dir, src.id, opts)}
                 onClose={() => setQuickBranchPopup(null)}
               />
@@ -1704,14 +1871,14 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         {/* HTML Overlay for Edge Multiplicity & Labels (Z-20: Always floats cleanly above nodes) */}
         <div className="absolute top-0 left-0 w-[5000px] h-[5000px] pointer-events-none z-20">
-          {computedEdges.map(({ edge, sourceCardPos, targetCardPos, labelPos }) => {
+          {computedEdges.map(({ edge, sourceCardPos, targetCardPos, labelPos, mainDesc, techNote }) => {
             const isSelected = selectedEdgeId === edge.id;
             const isEditing = editingEdgeId === edge.id;
 
             return (
               <React.Fragment key={`edge-overlay-${edge.id}`}>
                 {/* Source Cardinality (e.g. "1", "0..*") */}
-                {edge.cardinalitySource && sourceCardPos && (
+                {edge.cardinalitySource && sourceCardPos && isMultiplicity(edge.cardinalitySource) && (
                   <div
                     className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-20"
                     style={{ left: `${sourceCardPos.x}px`, top: `${sourceCardPos.y}px` }}
@@ -1722,8 +1889,8 @@ export const Canvas: React.FC<CanvasProps> = ({
                   </div>
                 )}
 
-                {/* Target Cardinality (e.g. "*", "1..*") */}
-                {edge.cardinalityTarget && targetCardPos && (
+                {/* Target Cardinality (Strictly actual multiplicity e.g. "*", "1..*", "0..*") */}
+                {edge.cardinalityTarget && targetCardPos && isMultiplicity(edge.cardinalityTarget) && (
                   <div
                     className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-20"
                     style={{ left: `${targetCardPos.x}px`, top: `${targetCardPos.y}px` }}
@@ -1734,7 +1901,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                   </div>
                 )}
 
-                {/* Edge Label Badge - Compact, Crisp, Guaranteed Unobscured */}
+                {/* Edge Label Card - Linked, Draggable, Structured, Zero Collision */}
                 <div
                   className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto select-none z-20"
                   style={{ left: `${labelPos.x}px`, top: `${labelPos.y}px` }}
@@ -1760,10 +1927,11 @@ export const Canvas: React.FC<CanvasProps> = ({
                         if (e.key === 'Escape') setEditingEdgeId(null);
                       }}
                       placeholder={getFriendlyRelationLabel(edge.arrowType, edge.style)}
-                      className="text-[11px] font-semibold text-center bg-white border-2 border-[#c2652a] rounded-full px-3 py-0.5 outline-none shadow-md text-[#1c1917] min-w-[90px]"
+                      className="text-[11px] font-semibold text-center bg-white border-2 border-[#c2652a] rounded-lg px-2.5 py-1 outline-none shadow-md text-[#1c1917] min-w-[110px]"
                     />
                   ) : (
                     <div
+                      onMouseDown={(e) => handleStartDragLabel(edge, e)}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedEdgeId(edge.id);
@@ -1774,20 +1942,25 @@ export const Canvas: React.FC<CanvasProps> = ({
                         setEdgeLabelText(edge.label || '');
                         setEditingEdgeId(edge.id);
                       }}
-                      className={`group/badge inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border shadow-2xs whitespace-nowrap transition-all select-none cursor-pointer ${
+                      className={`group/badge flex flex-col items-center justify-center max-w-[220px] px-2.5 py-1 rounded-lg border shadow-xs transition-all select-none cursor-grab active:cursor-grabbing backdrop-blur-xs ${
                         isSelected 
                           ? 'bg-white text-[#c2652a] border-[#c2652a] font-bold shadow-md ring-2 ring-[#c2652a]/20 scale-105 z-30' 
-                          : 'bg-white/95 text-[#2c2420] border-[#d8d0c8] hover:border-[#c2652a] hover:shadow-xs hover:bg-white'
+                          : 'bg-white/95 text-[#2c2420] border-[#d8d0c8] hover:border-[#c2652a] hover:shadow-sm hover:bg-white'
                       }`}
-                      title={`Double-click to edit label • Click to configure ${getFriendlyRelationLabel(edge.arrowType, edge.style)}`}
+                      title="Drag to reposition • Double-click to edit label • Click to configure"
                     >
-                      {edge.label ? (
-                        <span className="text-[11px] font-semibold text-[#181818]">
-                          {edge.label}
+                      <div className="flex items-center gap-1.5 text-center">
+                        <span 
+                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: isSelected ? '#c2652a' : (edge.color || '#A80036') }}
+                        />
+                        <span className="text-[11px] font-medium leading-snug text-center text-[#181818] break-words text-balance">
+                          {mainDesc}
                         </span>
-                      ) : (
-                        <span className="text-[10px] font-medium text-[#5a5048] group-hover/badge:text-[#c2652a]">
-                          {getFriendlyRelationLabel(edge.arrowType, edge.style)}
+                      </div>
+                      {techNote && (
+                        <span className="text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded bg-[#f4ebe1] text-[#78350f] border border-[#d8d0c8]/70 mt-1 tracking-tight">
+                          {techNote}
                         </span>
                       )}
                     </div>

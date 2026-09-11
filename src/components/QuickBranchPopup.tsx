@@ -3,6 +3,8 @@ import {
   X, 
   ArrowRight, 
   ArrowDown, 
+  ArrowUp,
+  ArrowLeft,
   Sparkles, 
   Check, 
   Layers, 
@@ -20,8 +22,9 @@ interface QuickBranchPopupProps {
   sourceNode: DiagramNode;
   x: number;
   y: number;
+  initialDirection?: 'right' | 'down' | 'left' | 'up';
   onBranch: (
-    direction: 'right' | 'down',
+    direction: 'right' | 'down' | 'left' | 'up',
     options?: {
       type?: string;
       label?: string;
@@ -56,15 +59,20 @@ export const QuickBranchPopup: React.FC<QuickBranchPopupProps> = ({
   sourceNode,
   x,
   y,
+  initialDirection = 'right',
   onBranch,
   onClose
 }) => {
-  const [direction, setDirection] = useState<'right' | 'down'>('right');
+  const [direction, setDirection] = useState<'right' | 'down' | 'left' | 'up'>(initialDirection);
   const [selectedType, setSelectedType] = useState<string>('same');
   const [selectedArrow, setSelectedArrow] = useState<EdgeArrowType>('arrow');
   const [nodeLabel, setNodeLabel] = useState<string>('');
   const [verbLabel, setVerbLabel] = useState<string>('');
   const popupRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setDirection(initialDirection);
+  }, [initialDirection]);
 
   // Close when clicking outside
   useEffect(() => {
@@ -87,7 +95,7 @@ export const QuickBranchPopup: React.FC<QuickBranchPopupProps> = ({
     };
   }, [direction, selectedType, selectedArrow, nodeLabel, verbLabel]);
 
-  const handleExecute = (overrideType?: string, overrideDir?: 'right' | 'down') => {
+  const handleExecute = (overrideType?: string, overrideDir?: 'right' | 'down' | 'left' | 'up') => {
     const finalDir = overrideDir || direction;
     const finalType = overrideType || selectedType;
     
@@ -170,30 +178,58 @@ export const QuickBranchPopup: React.FC<QuickBranchPopupProps> = ({
         <label className="text-[10px] font-bold text-[#78706a] uppercase tracking-wider block mb-1">
           Branch Direction:
         </label>
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-4 gap-1">
+          <button
+            type="button"
+            onClick={() => setDirection('up')}
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl border text-[10px] font-semibold transition-all cursor-pointer ${
+              direction === 'up'
+                ? 'bg-[#c2652a] text-white border-[#c2652a] shadow-xs'
+                : 'bg-[#faf5ee] text-[#3a302a] border-[#d8d0c8] hover:bg-[#ebd9c8]'
+            }`}
+            title="Branch Upwards"
+          >
+            <ArrowUp className="w-3.5 h-3.5 mb-0.5" />
+            <span>Up</span>
+          </button>
           <button
             type="button"
             onClick={() => setDirection('right')}
-            className={`flex items-center justify-center gap-1.5 py-1 px-2 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl border text-[10px] font-semibold transition-all cursor-pointer ${
               direction === 'right'
                 ? 'bg-[#c2652a] text-white border-[#c2652a] shadow-xs'
                 : 'bg-[#faf5ee] text-[#3a302a] border-[#d8d0c8] hover:bg-[#ebd9c8]'
             }`}
+            title="Branch to Right"
           >
-            <ArrowRight className="w-3.5 h-3.5" />
-            <span>Right (➔)</span>
+            <ArrowRight className="w-3.5 h-3.5 mb-0.5" />
+            <span>Right</span>
           </button>
           <button
             type="button"
             onClick={() => setDirection('down')}
-            className={`flex items-center justify-center gap-1.5 py-1 px-2 rounded-xl border text-[11px] font-semibold transition-all cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl border text-[10px] font-semibold transition-all cursor-pointer ${
               direction === 'down'
                 ? 'bg-[#c2652a] text-white border-[#c2652a] shadow-xs'
                 : 'bg-[#faf5ee] text-[#3a302a] border-[#d8d0c8] hover:bg-[#ebd9c8]'
             }`}
+            title="Branch Downwards"
           >
-            <ArrowDown className="w-3.5 h-3.5" />
-            <span>Down (⬇)</span>
+            <ArrowDown className="w-3.5 h-3.5 mb-0.5" />
+            <span>Down</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDirection('left')}
+            className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl border text-[10px] font-semibold transition-all cursor-pointer ${
+              direction === 'left'
+                ? 'bg-[#c2652a] text-white border-[#c2652a] shadow-xs'
+                : 'bg-[#faf5ee] text-[#3a302a] border-[#d8d0c8] hover:bg-[#ebd9c8]'
+            }`}
+            title="Branch to Left"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 mb-0.5" />
+            <span>Left</span>
           </button>
         </div>
       </div>
@@ -276,10 +312,10 @@ export const QuickBranchPopup: React.FC<QuickBranchPopupProps> = ({
       <div className="pt-2 border-t border-[#d8d0c8]/60 flex items-center justify-between gap-1.5">
         <button
           type="button"
-          onClick={() => handleExecute('same', 'right')}
+          onClick={() => handleExecute('same', direction)}
           className="text-[10px] text-[#78706a] hover:text-[#c2652a] underline cursor-pointer"
         >
-          Fast Branch Right ➔
+          Fast Branch {direction.charAt(0).toUpperCase() + direction.slice(1)} ➔
         </button>
 
         <button
