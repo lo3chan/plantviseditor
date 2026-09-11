@@ -437,6 +437,33 @@ export function resolveEdgeLabelOverlaps(
 
   const clonedEdges: DiagramEdge[] = edges.map(e => ({ ...e }));
   const placedLabelBoxes: Array<{ id: string; x: number; y: number; width: number; height: number }> = [];
+  const placedCardBoxes: Array<{ id: string; x: number; y: number; width: number; height: number }> = [];
+
+  // Pre-register and anti-collide cardinality/tech badges for all edges
+  clonedEdges.forEach(edge => {
+    const tgtNode = nodes.find(n => n.id === edge.target);
+    if (!tgtNode || !edge.cardinalityTarget) return;
+    const tgtPt = getNodePortCoord(tgtNode, edge.targetHandle);
+    const cardW = Math.max(28, edge.cardinalityTarget.length * 7.5 + 16);
+    const cardH = 20;
+    let cx = tgtPt.x;
+    let cy = tgtPt.y - 14 - cardH / 2;
+
+    // Check collision against previously placed card boxes
+    let attempts = 0;
+    while (placedCardBoxes.some(b => doBoxesCollide({ x: cx - cardW / 2, y: cy - cardH / 2, width: cardW, height: cardH }, b, 6)) && attempts < 4) {
+      cy -= 22;
+      attempts++;
+    }
+
+    placedCardBoxes.push({
+      id: `${edge.id}_tgt_card`,
+      x: cx - cardW / 2,
+      y: cy - cardH / 2,
+      width: cardW,
+      height: cardH
+    });
+  });
 
   // Group edges connecting the same two nodes (regardless of direction) to distribute parallel links
   const pairGroups = new Map<string, DiagramEdge[]>();
@@ -455,7 +482,7 @@ export function resolveEdgeLabelOverlaps(
 
     // Determine label text for estimating badge bounding box
     const labelText = edge.label || 'relationship';
-    const estimatedWidth = Math.max(90, Math.min(220, labelText.length * 8 + 36));
+    const estimatedWidth = Math.max(90, labelText.length * 7.5 + 32);
     const estimatedHeight = 28;
 
     // Get connection port positions
@@ -568,6 +595,13 @@ export function resolveEdgeLabelOverlaps(
       for (const placed of placedLabelBoxes) {
         if (doBoxesCollide(box, placed, 10)) {
           collisions += 40;
+        }
+      }
+
+      // 3. Overlap with cardinality / tech badges
+      for (const cardBox of placedCardBoxes) {
+        if (doBoxesCollide(box, cardBox, 8)) {
+          collisions += 35;
         }
       }
 

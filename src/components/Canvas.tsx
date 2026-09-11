@@ -890,21 +890,92 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Memoize computed edge paths, markers, and non-overlapping label / cardinality positions
   const computedEdges = useMemo(() => {
-    return edges.map(edge => {
+    // 1. Pre-calculate optimal ports for all valid edges
+    const validEdgePorts = edges.map(edge => {
       const srcNode = nodes.find(n => n.id === edge.source);
       const tgtNode = nodes.find(n => n.id === edge.target);
       if (!srcNode || !tgtNode) return null;
-
-      const isSelfLoop = edge.source === edge.target;
       const { srcPort, tgtPort } = getOptimalPorts(
-        srcNode, 
-        tgtNode, 
-        edge.sourceHandle, 
-        edge.targetHandle, 
+        srcNode,
+        tgtNode,
+        edge.sourceHandle,
+        edge.targetHandle,
         edge.directionHint
       );
-      const src = getPortCoord(srcNode, srcPort);
-      const tgt = getPortCoord(tgtNode, tgtPort);
+      return { edge, srcNode, tgtNode, srcPort, tgtPort };
+    }).filter(Boolean) as Array<{
+      edge: DiagramEdge;
+      srcNode: DiagramNode;
+      tgtNode: DiagramNode;
+      srcPort: PortPosition;
+      tgtPort: PortPosition;
+    }>;
+
+    // 2. Group connections along node faces to distribute multiple edges
+    const portGroups = new Map<string, Array<{
+      edgeId: string;
+      isSource: boolean;
+      otherNode: DiagramNode;
+    }>>();
+
+    validEdgePorts.forEach(({ edge, srcNode, tgtNode, srcPort, tgtPort }) => {
+      const srcKey = `${srcNode.id}_${srcPort}`;
+      const tgtKey = `${tgtNode.id}_${tgtPort}`;
+      if (!portGroups.has(srcKey)) portGroups.set(srcKey, []);
+      portGroups.get(srcKey)!.push({ edgeId: edge.id, isSource: true, otherNode: tgtNode });
+
+      if (!portGroups.has(tgtKey)) portGroups.set(tgtKey, []);
+      portGroups.get(tgtKey)!.push({ edgeId: edge.id, isSource: false, otherNode: srcNode });
+    });
+
+    // 3. Compute distinct, distributed connection coordinates along node sides
+    const connectionCoordMap = new Map<string, { x: number; y: number }>();
+
+    portGroups.forEach((conns, key) => {
+      const lastUnderscore = key.lastIndexOf('_');
+      const nodeId = key.slice(0, lastUnderscore);
+      const port = key.slice(lastUnderscore + 1) as PortPosition;
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return;
+
+      if (conns.length === 1) {
+        const pt = getPortCoord(node, port);
+        connectionCoordMap.set(`${conns[0].edgeId}_${conns[0].isSource ? 'src' : 'tgt'}`, pt);
+        return;
+      }
+
+      // Distribute multiple connections evenly across the face
+      if (port === 'top' || port === 'bottom') {
+        conns.sort((a, b) => (a.otherNode.x + a.otherNode.width / 2) - (b.otherNode.x + b.otherNode.width / 2));
+        const margin = Math.min(24, node.width * 0.15);
+        const usableW = Math.max(10, node.width - 2 * margin);
+        conns.forEach((c, idx) => {
+          const frac = (idx + 0.5) / conns.length;
+          const x = node.x + margin + frac * usableW;
+          const y = port === 'top' ? node.y : node.y + node.height;
+          connectionCoordMap.set(`${c.edgeId}_${c.isSource ? 'src' : 'tgt'}`, { x, y });
+        });
+      } else {
+        conns.sort((a, b) => (a.otherNode.y + a.otherNode.height / 2) - (b.otherNode.y + b.otherNode.height / 2));
+        const margin = Math.min(24, node.height * 0.15);
+        const usableH = Math.max(10, node.height - 2 * margin);
+        conns.forEach((c, idx) => {
+          const frac = (idx + 0.5) / conns.length;
+          const x = port === 'left' ? node.x : node.x + node.width;
+          const y = node.y + margin + frac * usableH;
+          connectionCoordMap.set(`${c.edgeId}_${c.isSource ? 'src' : 'tgt'}`, { x, y });
+        });
+      }
+    });
+
+    // 4. Registry for collision detection of placed overlay boxes
+    const placedCardBoxes: Array<{ x: number; y: number; width: number; height: number }> = [];
+    const placedLabelBoxes: Array<{ x: number; y: number; width: number; height: number }> = [];
+
+    return validEdgePorts.map(({ edge, srcNode, tgtNode, srcPort, tgtPort }) => {
+      const isSelfLoop = edge.source === edge.target;
+      const src = connectionCoordMap.get(`${edge.id}_src`) || getPortCoord(srcNode, srcPort);
+      const tgt = connectionCoordMap.get(`${edge.id}_tgt`) || getPortCoord(tgtNode, tgtPort);
 
       const isOrtho = diagram.settings?.linetype === 'ortho';
 
@@ -975,21 +1046,97 @@ export const Canvas: React.FC<CanvasProps> = ({
         pathData = `M ${src.x} ${src.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${tgt.x} ${tgt.y}`;
       }
 
-      // Multiplicity positions: floating clean above the line and safe from node borders & arrowheads
+      // Helper function to test box overlap against all placed cardinality boxes
+      const collidesWithPlacedCards = (cx: number, cy: number, w: number, h: number, pad = 6) => {
+        const left = cx - w / 2 - pad;
+        const right = cx + w / 2 + pad;
+        const top = cy - h / 2 - pad;
+        const bottom = cy + h / 2 + pad;
+        return placedCardBoxes.some(b => {
+          const bLeft = b.x - b.width / 2;
+          const bRight = b.x + b.width / 2;
+          const bTop = b.y - b.height / 2;
+          const bBottom = b.y + b.height / 2;
+          return !(right <= bLeft || left >= bRight || bottom <= bTop || top >= bBottom);
+        });
+      };
+
+      // 5. Source Cardinality Placement
       let sourceCardPos: { x: number; y: number } | null = null;
       if (edge.cardinalitySource) {
-        if (srcPort === 'right') sourceCardPos = { x: src.x + 14, y: src.y - 13 };
-        else if (srcPort === 'left') sourceCardPos = { x: src.x - 14, y: src.y - 13 };
-        else if (srcPort === 'bottom') sourceCardPos = { x: src.x + 12, y: src.y + 13 };
-        else sourceCardPos = { x: src.x + 12, y: src.y - 13 };
+        const cardW = Math.max(28, edge.cardinalitySource.length * 7.5 + 16);
+        const cardH = 20;
+        let baseX = src.x;
+        let baseY = src.y;
+
+        if (srcPort === 'right') { baseX = src.x + 14 + cardW / 2; baseY = src.y - 12; }
+        else if (srcPort === 'left') { baseX = src.x - 14 - cardW / 2; baseY = src.y - 12; }
+        else if (srcPort === 'bottom') { baseX = src.x; baseY = src.y + 14 + cardH / 2; }
+        else { baseX = src.x; baseY = src.y - 14 - cardH / 2; }
+
+        if (collidesWithPlacedCards(baseX, baseY, cardW, cardH)) {
+          const offsets = srcPort === 'top' || srcPort === 'bottom'
+            ? [{ x: baseX, y: baseY - 22 }, { x: baseX, y: baseY + 22 }, { x: baseX + cardW * 0.6, y: baseY }, { x: baseX - cardW * 0.6, y: baseY }]
+            : [{ x: baseX, y: baseY - 20 }, { x: baseX, y: baseY + 20 }, { x: baseX + 24, y: baseY }, { x: baseX - 24, y: baseY }];
+          for (const cand of offsets) {
+            if (!collidesWithPlacedCards(cand.x, cand.y, cardW, cardH)) {
+              baseX = cand.x;
+              baseY = cand.y;
+              break;
+            }
+          }
+        }
+
+        placedCardBoxes.push({ x: baseX, y: baseY, width: cardW, height: cardH });
+        sourceCardPos = { x: baseX, y: baseY };
       }
 
+      // 6. Target Cardinality / Technology Placement (Anti-collision with other blurbs)
       let targetCardPos: { x: number; y: number } | null = null;
       if (edge.cardinalityTarget) {
-        if (tgtPort === 'left') targetCardPos = { x: tgt.x - 22, y: tgt.y - 13 };
-        else if (tgtPort === 'right') targetCardPos = { x: tgt.x + 22, y: tgt.y - 13 };
-        else if (tgtPort === 'top') targetCardPos = { x: tgt.x + 12, y: tgt.y - 20 };
-        else targetCardPos = { x: tgt.x + 12, y: tgt.y + 20 };
+        const cardW = Math.max(28, edge.cardinalityTarget.length * 7.5 + 16);
+        const cardH = 20;
+        let baseX = tgt.x;
+        let baseY = tgt.y;
+
+        if (tgtPort === 'left') { baseX = tgt.x - 14 - cardW / 2; baseY = tgt.y - 12; }
+        else if (tgtPort === 'right') { baseX = tgt.x + 14 + cardW / 2; baseY = tgt.y - 12; }
+        else if (tgtPort === 'top') { baseX = tgt.x; baseY = tgt.y - 14 - cardH / 2; }
+        else { baseX = tgt.x; baseY = tgt.y + 14 + cardH / 2; }
+
+        if (collidesWithPlacedCards(baseX, baseY, cardW, cardH)) {
+          const offsets = tgtPort === 'top'
+            ? [
+                { x: baseX, y: baseY - 24 },
+                { x: baseX + cardW * 0.55, y: baseY },
+                { x: baseX - cardW * 0.55, y: baseY },
+                { x: baseX, y: baseY - 48 }
+              ]
+            : tgtPort === 'bottom'
+            ? [
+                { x: baseX, y: baseY + 24 },
+                { x: baseX + cardW * 0.55, y: baseY },
+                { x: baseX - cardW * 0.55, y: baseY },
+                { x: baseX, y: baseY + 48 }
+              ]
+            : [
+                { x: baseX, y: baseY - 20 },
+                { x: baseX, y: baseY + 20 },
+                { x: baseX - 24, y: baseY },
+                { x: baseX + 24, y: baseY }
+              ];
+
+          for (const cand of offsets) {
+            if (!collidesWithPlacedCards(cand.x, cand.y, cardW, cardH)) {
+              baseX = cand.x;
+              baseY = cand.y;
+              break;
+            }
+          }
+        }
+
+        placedCardBoxes.push({ x: baseX, y: baseY, width: cardW, height: cardH });
+        targetCardPos = { x: baseX, y: baseY };
       }
 
       // Sibling edges parallel offset
@@ -999,8 +1146,8 @@ export const Canvas: React.FC<CanvasProps> = ({
       const siblingIndex = siblingEdges.findIndex(e => e.id === edge.id);
       let autoNormalShift = 0;
       if (siblingEdges.length > 1 && !edge.labelOffset) {
-        if (siblingIndex % 2 === 1) autoNormalShift = Math.ceil(siblingIndex / 2) * 28;
-        else if (siblingIndex > 0) autoNormalShift = -Math.ceil(siblingIndex / 2) * 28;
+        if (siblingIndex % 2 === 1) autoNormalShift = Math.ceil(siblingIndex / 2) * 32;
+        else if (siblingIndex > 0) autoNormalShift = -Math.ceil(siblingIndex / 2) * 32;
       }
 
       const dx = tgt.x - src.x;
@@ -1013,7 +1160,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
       // Label dimensions
       const labelText = edge.label || getFriendlyRelationLabel(edge.arrowType, edge.style);
-      const badgeW = Math.max(48, labelText.length * 7.5 + 20);
+      const badgeW = Math.max(48, labelText.length * 7.5 + 24);
       const badgeH = 26;
 
       let labelX = midX + nx * autoNormalShift;
@@ -1026,24 +1173,46 @@ export const Canvas: React.FC<CanvasProps> = ({
         labelX = midX + edge.labelOffset.x;
         labelY = midY + edge.labelOffset.y;
       } else {
-        // Anti-collision testing against ALL nodes in diagram
-        const testOverlap = (cx: number, cy: number, pad = 8) => {
+        // Anti-collision testing against ALL nodes, placed labels, and placed cardinality badges
+        const testOverlap = (cx: number, cy: number, pad = 6) => {
           const left = cx - badgeW / 2 - pad;
           const right = cx + badgeW / 2 + pad;
           const top = cy - badgeH / 2 - pad;
           const bottom = cy + badgeH / 2 + pad;
-          return nodes.some(n => !(
+
+          // 1. Check nodes
+          const hitNode = nodes.some(n => !(
             right <= n.x ||
             left >= n.x + n.width ||
             bottom <= n.y ||
             top >= n.y + n.height
           ));
+          if (hitNode) return true;
+
+          // 2. Check already placed edge labels
+          const hitLabel = placedLabelBoxes.some(b => {
+            const bLeft = b.x - b.width / 2 - pad;
+            const bRight = b.x + b.width / 2 + pad;
+            const bTop = b.y - b.height / 2 - pad;
+            const bBottom = b.y + b.height / 2 + pad;
+            return !(right <= bLeft || left >= bRight || bottom <= bTop || top >= bBottom);
+          });
+          if (hitLabel) return true;
+
+          // 3. Check placed cardinality / tech badges
+          const hitBadge = placedCardBoxes.some(b => {
+            const bLeft = b.x - b.width / 2 - pad;
+            const bRight = b.x + b.width / 2 + pad;
+            const bTop = b.y - b.height / 2 - pad;
+            const bBottom = b.y + b.height / 2 + pad;
+            return !(right <= bLeft || left >= bRight || bottom <= bTop || top >= bBottom);
+          });
+          return hitBadge;
         };
 
-        // If default position collides with any node or distance is cramped:
         if (testOverlap(labelX, labelY) || dist < badgeW + 36) {
-          const normalDeltas = [26, -26, 46, -46, 68, -68, 92, -92];
-          const alongFractions = [0.5, 0.35, 0.65, 0.22, 0.78];
+          const normalDeltas = [0, 28, -28, 52, -52, 76, -76, 100, -100];
+          const alongFractions = [0.5, 0.35, 0.65, 0.22, 0.78, 0.15, 0.85];
           let bestCandidate: { x: number; y: number } | null = null;
           let bestPenalty = Infinity;
 
@@ -1063,23 +1232,25 @@ export const Canvas: React.FC<CanvasProps> = ({
             }
           }
 
-          // Fallback: clear above top or below bottom of endpoints
-          if (!bestCandidate) {
-            const topClearY = Math.min(srcNode.y, tgtNode.y) - 18;
-            const bottomClearY = Math.max(srcNode.y + srcNode.height, tgtNode.y + tgtNode.height) + 18;
-            if (!testOverlap(midX, topClearY)) {
-              bestCandidate = { x: midX, y: topClearY };
-            } else if (!testOverlap(midX, bottomClearY)) {
-              bestCandidate = { x: midX, y: bottomClearY };
-            }
-          }
-
           if (bestCandidate) {
             labelX = bestCandidate.x;
             labelY = bestCandidate.y;
+          } else {
+            // Fallback: clear above top or below bottom of endpoints
+            const topClearY = Math.min(srcNode.y, tgtNode.y) - 22;
+            const bottomClearY = Math.max(srcNode.y + srcNode.height, tgtNode.y + tgtNode.height) + 22;
+            if (!testOverlap(midX, topClearY)) {
+              labelX = midX;
+              labelY = topClearY;
+            } else if (!testOverlap(midX, bottomClearY)) {
+              labelX = midX;
+              labelY = bottomClearY;
+            }
           }
         }
       }
+
+      placedLabelBoxes.push({ x: labelX, y: labelY, width: badgeW, height: badgeH });
 
       return {
         edge,
@@ -1097,22 +1268,7 @@ export const Canvas: React.FC<CanvasProps> = ({
         badgeH,
         labelText
       };
-    }).filter(Boolean) as Array<{
-      edge: DiagramEdge;
-      srcNode: DiagramNode;
-      tgtNode: DiagramNode;
-      src: { x: number; y: number };
-      tgt: { x: number; y: number };
-      srcPort: PortPosition;
-      tgtPort: PortPosition;
-      pathData: string;
-      sourceCardPos: { x: number; y: number } | null;
-      targetCardPos: { x: number; y: number } | null;
-      labelPos: { x: number; y: number };
-      badgeW: number;
-      badgeH: number;
-      labelText: string;
-    }>;
+    });
   }, [diagram.edges, diagram.nodes, diagram.settings]);
 
   return (
