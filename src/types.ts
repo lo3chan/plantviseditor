@@ -41,7 +41,10 @@ export type EdgeArrowType =
   | 'crows-foot-zero-one'    // ||--o|
   | 'crows-foot-many-many'   // }|--|{
   | 'crows-foot-zero-zero'   // }o--o{
-  | 'crows-foot-opt-opt';    // |o--o|
+  | 'crows-foot-opt-opt'     // |o--o|
+  | 'crows-foot-many-zero-one' // }|--o|
+  | 'crows-foot-many-one'    // }|--||
+  | 'crows-foot-zero-many-one'; // }o--||
 
 export interface ErColumn {
   name: string;
@@ -174,6 +177,8 @@ export interface DiagramEdge {
   directionHint?: 'up' | 'down' | 'left' | 'right';
   length?: 1 | 2 | 3 | 4; // short, normal, long, extra-long
   labelOffset?: { x: number; y: number }; // custom offset to prevent overlapping or obscuring
+  sourceMarker?: string; // explicit SVG marker ID for source end
+  targetMarker?: string; // explicit SVG marker ID for target end
 }
 
 export interface GlobalCanvasSettings {

@@ -112,7 +112,34 @@ export function resolveOverlaps(
     return true;
   });
 
+  const prevContainerPositions = new Map<string, { x: number; y: number }>();
+  topLevelNodes.forEach(n => {
+    if (containerIds.has(n.id)) {
+      prevContainerPositions.set(n.id, { x: n.x, y: n.y });
+    }
+  });
+
   relaxNodeGroup(topLevelNodes, minMargin);
+
+  // Synchronize children of containers that moved during relaxation
+  topLevelNodes.forEach(n => {
+    if (containerIds.has(n.id)) {
+      const prev = prevContainerPositions.get(n.id);
+      if (prev) {
+        const dx = n.x - prev.x;
+        const dy = n.y - prev.y;
+        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+          const children = containerChildrenMap.get(n.id);
+          if (children) {
+            children.forEach(ch => {
+              ch.x += dx;
+              ch.y += dy;
+            });
+          }
+        }
+      }
+    }
+  });
 
   // 3. Keep all nodes comfortably within canvas bounds, ensuring at least 140px left margin for flanking edge badges
   let minX = Infinity;

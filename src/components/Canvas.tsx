@@ -86,7 +86,8 @@ export function getFriendlyRelationLabel(arrowType?: DiagramEdge['arrowType'], s
   }
 }
 
-function getMarkerEnd(arrowType?: DiagramEdge['arrowType'], isSelected?: boolean): string | undefined {
+function getMarkerEnd(arrowType?: DiagramEdge['arrowType'], isSelected?: boolean, edge?: DiagramEdge): string | undefined {
+  if (edge?.targetMarker) return `url(#${edge.targetMarker})`;
   switch (arrowType) {
     case 'inheritance':
       return 'url(#arrow-inheritance)';
@@ -108,14 +109,17 @@ function getMarkerEnd(arrowType?: DiagramEdge['arrowType'], isSelected?: boolean
       return 'url(#arrow-cancellation)';
     case 'crows-foot-many':
     case 'crows-foot-many-many':
+    case 'crows-foot-many-one':
       return 'url(#crows-foot-many)';
     case 'crows-foot-zero-many':
     case 'crows-foot-zero-zero':
+    case 'crows-foot-zero-many-one':
       return 'url(#crows-foot-zero-many)';
     case 'crows-foot-one':
       return 'url(#crows-foot-one)';
     case 'crows-foot-zero-one':
     case 'crows-foot-opt-opt':
+    case 'crows-foot-many-zero-one':
       return 'url(#crows-foot-zero-one)';
     case 'none':
       return undefined;
@@ -125,9 +129,19 @@ function getMarkerEnd(arrowType?: DiagramEdge['arrowType'], isSelected?: boolean
   }
 }
 
-function getMarkerStart(arrowType?: DiagramEdge['arrowType'], isSelected?: boolean): string | undefined {
-  if (arrowType === 'crows-foot-many' || arrowType === 'crows-foot-zero-many') {
+function getMarkerStart(arrowType?: DiagramEdge['arrowType'], isSelected?: boolean, edge?: DiagramEdge): string | undefined {
+  if (edge?.sourceMarker) return `url(#${edge.sourceMarker})`;
+  if (arrowType === 'crows-foot-many' || arrowType === 'crows-foot-zero-many' || arrowType === 'crows-foot-one' || arrowType === 'crows-foot-zero-one') {
     return 'url(#crows-foot-one-start)';
+  }
+  if (arrowType === 'crows-foot-many-many' || arrowType === 'crows-foot-many-zero-one' || arrowType === 'crows-foot-many-one') {
+    return 'url(#crows-foot-many-start)';
+  }
+  if (arrowType === 'crows-foot-zero-zero' || arrowType === 'crows-foot-zero-many-one') {
+    return 'url(#crows-foot-zero-many-start)';
+  }
+  if (arrowType === 'crows-foot-opt-opt') {
+    return 'url(#crows-foot-zero-one-start)';
   }
   if (arrowType === 'bi-arrow') {
     return isSelected ? 'url(#arrow-head-start-selected)' : 'url(#arrow-head-start)';
@@ -1065,7 +1079,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   const getPortCoord = (nodeOrId: string | DiagramNode, port?: PortPosition) => {
-    const node = typeof nodeOrId === 'string' ? diagram.nodes.find(n => n.id === nodeOrId) : nodeOrId;
+    const node = typeof nodeOrId === 'string' ? (nodes.find(n => n.id === nodeOrId) || diagram.nodes?.find(n => n.id === nodeOrId)) : nodeOrId;
     if (!node) return { x: 0, y: 0 };
     switch (port) {
       case 'top':
@@ -1758,6 +1772,52 @@ export const Canvas: React.FC<CanvasProps> = ({
               <line x1="11" y1="2" x2="11" y2="14" stroke="#A80036" strokeWidth="1.8" />
             </marker>
 
+            {/* Crow's Foot: Source One or Many (}| start) */}
+            <marker
+              id="crows-foot-many-start"
+              viewBox="0 0 20 16"
+              refX="2"
+              refY="8"
+              markerWidth="16"
+              markerHeight="14"
+              orient="auto"
+            >
+              <line x1="16" y1="2" x2="16" y2="14" stroke="#A80036" strokeWidth="1.8" />
+              <line x1="16" y1="8" x2="2" y2="1" stroke="#A80036" strokeWidth="1.8" />
+              <line x1="16" y1="8" x2="2" y2="8" stroke="#A80036" strokeWidth="1.8" />
+              <line x1="16" y1="8" x2="2" y2="15" stroke="#A80036" strokeWidth="1.8" />
+            </marker>
+
+            {/* Crow's Foot: Source Zero or Many (}o start) */}
+            <marker
+              id="crows-foot-zero-many-start"
+              viewBox="0 0 24 16"
+              refX="2"
+              refY="8"
+              markerWidth="18"
+              markerHeight="14"
+              orient="auto"
+            >
+              <circle cx="19" cy="8" r="3.5" fill="#faf5ee" stroke="#A80036" strokeWidth="1.6" />
+              <line x1="14" y1="8" x2="2" y2="1" stroke="#A80036" strokeWidth="1.8" />
+              <line x1="14" y1="8" x2="2" y2="8" stroke="#A80036" strokeWidth="1.8" />
+              <line x1="14" y1="8" x2="2" y2="15" stroke="#A80036" strokeWidth="1.8" />
+            </marker>
+
+            {/* Crow's Foot: Source Zero or One (|o start) */}
+            <marker
+              id="crows-foot-zero-one-start"
+              viewBox="0 0 20 16"
+              refX="2"
+              refY="8"
+              markerWidth="15"
+              markerHeight="14"
+              orient="auto"
+            >
+              <circle cx="15" cy="8" r="3.5" fill="#faf5ee" stroke="#A80036" strokeWidth="1.6" />
+              <line x1="7" y1="2" x2="7" y2="14" stroke="#A80036" strokeWidth="1.8" />
+            </marker>
+
             {/* Realization Triangle Dotted */}
             <marker
               id="arrow-realization"
@@ -2095,8 +2155,8 @@ export const Canvas: React.FC<CanvasProps> = ({
                   stroke={isSelected ? '#c2652a' : (edge.color || '#A80036')}
                   strokeWidth={isSelected ? 2.5 : 1.8}
                   strokeDasharray={edge.style === 'dashed' ? '6,4' : edge.style === 'dotted' ? '2,4' : undefined}
-                  markerStart={getMarkerStart(edge.arrowType)}
-                  markerEnd={getMarkerEnd(edge.arrowType, isSelected)}
+                  markerStart={getMarkerStart(edge.arrowType, isSelected, edge)}
+                  markerEnd={getMarkerEnd(edge.arrowType, isSelected, edge)}
                 />
               </g>
             );

@@ -2319,9 +2319,9 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
       lineForArrow = lineForArrow.slice(0, -1).trim();
     }
 
-    // Support: ||--||, ||--|{, ||--o{, ||--0{, ||--o|, ||--0|, }|--|{, }o--o{, |o--o|, <|--, --|>, ..|>, *--, o--, +--, x--, -0), ()--, -->, ..>, <-->
+    // Support: ||--||, ||--|{, ||--o{, ||--0{, ||--o|, ||--0|, }|--|{, }o--o{, |o--o|, }|--o|, }|--0|, <|--, --|>, ..|>, *--, o--, +--, x--, -0), ()--, -->, ..>, <-->
     // As well as single-dash arrows (->, <-), directional (-down->, -r->), dotted (.>, ..>), bracketed styles (-[#red]->, -[dashed]->), bracketed [Comp], usecase (UC), actor :Act:, quoted "Name"
-    const arrowRegex = /^\s*("(?:[^"\\]|\\.)*"|\([^)]+\)|\[[^\]]+\]|:[^:]+:|[a-zA-Z0-9_./$@#~-]+(?:::[a-zA-Z0-9_]+)?)\s*(?:"([^"]*)"|\(([^)]*)\)|\[([0-9.*]+)\])?\s*([<*o+#x}(]{0,2}[-.=~|]+(?:\[[^\]]*\])?[-.=~|]*(?:up|down|left|right|[udlr])?[-.=~|]*(?:\[[^\]]*\])?[-.=~|]*[>*o+#x{)]{0,2})\s*(?:"([^"]*)"|\(([^)]*)\)|\[([0-9.*]+)\])?\s*("(?:[^"\\]|\\.)*"|\([^)]+\)|\[[^\]]+\]|:[^:]+:|[a-zA-Z0-9_./$@#~-]+(?:::[a-zA-Z0-9_]+)?)(?:\s*:\s*(.+))?$/;
+    const arrowRegex = /^\s*("(?:[^"\\]|\\.)*"|\([^)]+\)|\[[^\]]+\]|:[^:]+:|[a-zA-Z0-9_./$@#~-]+(?:::[a-zA-Z0-9_]+)?)\s*(?:"([^"]*)"|\(([^)]*)\)|\[([0-9.*]+)\])?\s*([<*o0O+#x}(|]{0,3}[-.=~|]+(?:\[[^\]]*\])?[-.=~|]*(?:up|down|left|right|[udlr])?[-.=~|]*(?:\[[^\]]*\])?[-.=~|]*[>*o0O+#x{)|]{0,3})\s*(?:"([^"]*)"|\(([^)]*)\)|\[([0-9.*]+)\])?\s*("(?:[^"\\]|\\.)*"|\([^)]+\)|\[[^\]]+\]|:[^:]+:|[a-zA-Z0-9_./$@#~-]+(?:::[a-zA-Z0-9_]+)?)(?:\s*:\s*(.+))?$/;
     const arrowMatch = lineForArrow.match(arrowRegex);
     if (arrowMatch) {
       const rawSrc = arrowMatch[1];
@@ -2401,14 +2401,42 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
 
       let arrowType: DiagramEdge['arrowType'] = 'arrow';
       let style: DiagramEdge['style'] = bracketStyle || ((arrowOp.includes('..') || arrowOp.includes('.')) ? 'dashed' : (arrowOp.includes('==') ? 'thick' : 'solid'));
+      let sourceMarker: string | undefined = undefined;
+      let targetMarker: string | undefined = undefined;
 
-      if (arrowOp.includes('||--||')) arrowType = 'crows-foot-one';
-      else if (arrowOp.includes('||--|{') || arrowOp.includes('}|--||')) arrowType = 'crows-foot-many';
-      else if (arrowOp.includes('||--o{') || arrowOp.includes('}o--||') || arrowOp.includes('||--0{') || arrowOp.includes('}0--||')) arrowType = 'crows-foot-zero-many';
-      else if (arrowOp.includes('||--o|') || arrowOp.includes('|o--||') || arrowOp.includes('||--0|') || arrowOp.includes('|0--||')) arrowType = 'crows-foot-zero-one';
-      else if (arrowOp.includes('}|--|{')) arrowType = 'crows-foot-many-many';
-      else if (arrowOp.includes('}o--o{') || arrowOp.includes('}0--0{')) arrowType = 'crows-foot-zero-zero';
-      else if (arrowOp.includes('|o--o|') || arrowOp.includes('|0--0|')) arrowType = 'crows-foot-opt-opt';
+      // Extract ERD Crow's Foot markers & arrow types
+      const cleanOp = arrowOp.replace(/\[[^\]]*\]/g, '');
+      const isCrowsFoot = /^[|0oO}{]+[-.=~]+[|0oO}{]+$/.test(cleanOp);
+
+      if (isCrowsFoot) {
+        // Determine source marker
+        if (cleanOp.startsWith('||') || cleanOp.startsWith('|')) sourceMarker = 'crows-foot-one-start';
+        else if (cleanOp.startsWith('}|') || cleanOp.startsWith('|{')) sourceMarker = 'crows-foot-many-start';
+        else if (cleanOp.startsWith('}o') || cleanOp.startsWith('}0') || cleanOp.startsWith('o{') || cleanOp.startsWith('0{')) sourceMarker = 'crows-foot-zero-many-start';
+        else if (cleanOp.startsWith('|o') || cleanOp.startsWith('|0') || cleanOp.startsWith('o|') || cleanOp.startsWith('0|')) sourceMarker = 'crows-foot-zero-one-start';
+
+        // Determine target marker
+        if (cleanOp.endsWith('||') || cleanOp.endsWith('|')) targetMarker = 'crows-foot-one';
+        else if (cleanOp.endsWith('|{') || cleanOp.endsWith('}|')) targetMarker = 'crows-foot-many';
+        else if (cleanOp.endsWith('o{') || cleanOp.endsWith('0{') || cleanOp.endsWith('}o') || cleanOp.endsWith('}0')) targetMarker = 'crows-foot-zero-many';
+        else if (cleanOp.endsWith('o|') || cleanOp.endsWith('0|') || cleanOp.endsWith('|o') || cleanOp.endsWith('|0')) targetMarker = 'crows-foot-zero-one';
+
+        // Map to standard arrowType
+        if (cleanOp.includes('||--||')) arrowType = 'crows-foot-one';
+        else if (cleanOp.includes('||--|{') || cleanOp.includes('}|--||')) arrowType = 'crows-foot-many';
+        else if (cleanOp.includes('||--o{') || cleanOp.includes('}o--||') || cleanOp.includes('||--0{') || cleanOp.includes('}0--||')) arrowType = 'crows-foot-zero-many';
+        else if (cleanOp.includes('||--o|') || cleanOp.includes('|o--||') || cleanOp.includes('||--0|') || cleanOp.includes('|0--||')) arrowType = 'crows-foot-zero-one';
+        else if (cleanOp.includes('}|--|{')) arrowType = 'crows-foot-many-many';
+        else if (cleanOp.includes('}o--o{') || cleanOp.includes('}0--0{')) arrowType = 'crows-foot-zero-zero';
+        else if (cleanOp.includes('|o--o|') || cleanOp.includes('|0--0|')) arrowType = 'crows-foot-opt-opt';
+        else if (cleanOp.includes('}|--o|') || cleanOp.includes('}|--0|')) arrowType = 'crows-foot-many-zero-one';
+        else if (cleanOp.includes('}o--o|') || cleanOp.includes('}0--0|')) arrowType = 'crows-foot-zero-zero';
+        else if (cleanOp.includes('|o--|{') || cleanOp.includes('|0--|{')) arrowType = 'crows-foot-many';
+        else if (targetMarker === 'crows-foot-many') arrowType = 'crows-foot-many';
+        else if (targetMarker === 'crows-foot-zero-many') arrowType = 'crows-foot-zero-many';
+        else if (targetMarker === 'crows-foot-zero-one') arrowType = 'crows-foot-zero-one';
+        else arrowType = 'crows-foot-one';
+      }
       else if (arrowOp.includes('<|--') || arrowOp.includes('--|>') || arrowOp.includes('-|>') || arrowOp.includes('<|-')) arrowType = 'inheritance';
       else if (arrowOp.includes('..|>') || arrowOp.includes('<|..') || arrowOp.includes('.|>') || arrowOp.includes('<|.')) {
         arrowType = 'realization';
@@ -2438,7 +2466,9 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
         color: customColor,
         directionHint,
         sourceHandle,
-        targetHandle
+        targetHandle,
+        sourceMarker: isReverseArrow ? targetMarker : sourceMarker,
+        targetMarker: isReverseArrow ? sourceMarker : targetMarker
       });
     }
   }
@@ -2940,11 +2970,121 @@ function getColorForType(type: string): string {
 }
 
 /**
- * Applies a hierarchical rank layout
+ * Applies a hierarchical rank layout with proper container/child clustering
  */
 export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
   if (nodes.length === 0) return;
 
+  const isContainerNode = (n: DiagramNode) =>
+    Boolean(n.data?.isContainer) ||
+    n.category === 'container' ||
+    ['package', 'frame', 'folder', 'namespace', 'rectangle', 'node', 'cloud', 'together', 'boundary'].includes(n.type);
+
+  const containerMap = new Map<string, DiagramNode>();
+  nodes.forEach(n => {
+    if (isContainerNode(n)) containerMap.set(n.id, n);
+  });
+
+  const containerChildren = new Map<string, DiagramNode[]>();
+  const topLevelNodes: DiagramNode[] = [];
+
+  nodes.forEach(n => {
+    const pId = n.data?.parentId;
+    if (pId && containerMap.has(pId) && pId !== n.id) {
+      if (!containerChildren.has(pId)) containerChildren.set(pId, []);
+      containerChildren.get(pId)!.push(n);
+    } else {
+      topLevelNodes.push(n);
+    }
+  });
+
+  // If there are containers with children, use hierarchical cluster layout
+  if (containerChildren.size > 0) {
+    // 1. Layout children inside each container
+    containerChildren.forEach((children, cId) => {
+      const container = containerMap.get(cId)!;
+
+      const START_X = 40;
+      const START_Y = 56;
+      const GAP_X = 50;
+      const GAP_Y = 40;
+
+      let col0Y = START_Y;
+      let col1Y = START_Y;
+      const maxCol0W = Math.max(...children.map(c => c.width), 230);
+
+      children.forEach((child, idx) => {
+        if (children.length > 3 && idx % 2 === 1) {
+          child.x = START_X + maxCol0W + GAP_X;
+          child.y = col1Y;
+          col1Y += child.height + GAP_Y;
+        } else {
+          child.x = START_X;
+          child.y = col0Y;
+          col0Y += child.height + GAP_Y;
+        }
+      });
+
+      let maxChildR = 0;
+      let maxChildB = 0;
+      children.forEach(ch => {
+        maxChildR = Math.max(maxChildR, ch.x + ch.width);
+        maxChildB = Math.max(maxChildB, ch.y + ch.height);
+      });
+
+      container.width = Math.max(340, maxChildR + 40);
+      container.height = Math.max(240, maxChildB + 36);
+    });
+
+    // 2. Layout top-level nodes (containers and loose nodes)
+    const TOP_START_X = 80;
+    const TOP_START_Y = 60;
+    const TOP_GAP_X = 140;
+    const TOP_GAP_Y = 80;
+
+    let currX = TOP_START_X;
+    let currY = TOP_START_Y;
+    let rowMaxH = 0;
+    const MAX_WIDTH = 2600;
+
+    topLevelNodes.forEach(node => {
+      if (currX > TOP_START_X && currX + node.width > MAX_WIDTH) {
+        currX = TOP_START_X;
+        currY += rowMaxH + TOP_GAP_Y;
+        rowMaxH = 0;
+      }
+
+      node.x = currX;
+      node.y = currY;
+
+      // Shift enclosed children to absolute canvas coordinates
+      const children = containerChildren.get(node.id);
+      if (children) {
+        children.forEach(ch => {
+          ch.x += node.x;
+          ch.y += node.y;
+        });
+      }
+
+      currX += node.width + TOP_GAP_X;
+      if (node.height > rowMaxH) rowMaxH = node.height;
+    });
+
+    // Final pass: resolve any remaining overlaps
+    const deoverlapped = resolveOverlaps(nodes, 40);
+    deoverlapped.forEach((cleanNode, idx) => {
+      if (nodes[idx]) {
+        nodes[idx].x = cleanNode.x;
+        nodes[idx].y = cleanNode.y;
+        nodes[idx].width = cleanNode.width;
+        nodes[idx].height = cleanNode.height;
+      }
+    });
+
+    return;
+  }
+
+  // Fallback flat layout when no containers with children exist
   const inDegree = new Map<string, number>();
   const adj = new Map<string, string[]>();
 
@@ -2975,7 +3115,6 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
     queue.push(nodes[0].id);
   }
 
-  // Breadth-First-Search level assignment with cycle protection
   let iterations = 0;
   const maxIterations = Math.max(200, nodes.length * 6);
   while (queue.length > 0 && iterations < maxIterations) {
@@ -2986,7 +3125,6 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
 
     neighbors.forEach(nxt => {
       const existing = levels.get(nxt);
-      // Guard against infinite cycles by capping level depth to nodes.length
       if ((existing === undefined || existing < currLevel + 1) && currLevel + 1 < nodes.length) {
         levels.set(nxt, currLevel + 1);
         queue.push(nxt);
@@ -3023,7 +3161,6 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
     let rowMaxH = 0;
 
     group.forEach(node => {
-      // If adding this node exceeds max row width and we already placed at least 1 node in this row, wrap
       if (currentX > START_X && currentX + node.width > MAX_ROW_WIDTH) {
         currentX = START_X;
         currentY += rowMaxH + GAP_Y;
@@ -3049,33 +3186,6 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
       nodes[idx].y = cleanNode.y;
       nodes[idx].width = cleanNode.width;
       nodes[idx].height = cleanNode.height;
-    }
-  });
-
-  // Enclose children inside parent containers
-  const containers = nodes.filter(n => 
-    n.category === 'container' || 
-    Boolean(n.data?.isContainer) || 
-    n.type === 'package' || 
-    n.type === 'frame' || 
-    n.type === 'folder' ||
-    n.type === 'rectangle'
-  );
-
-  containers.forEach(cont => {
-    const children = nodes.filter(n => n.id !== cont.id && n.data?.parentId === cont.id);
-    if (children.length > 0) {
-      const minX = Math.min(...children.map(c => c.x));
-      const minY = Math.min(...children.map(c => c.y));
-      const maxX = Math.max(...children.map(c => c.x + c.width));
-      const maxY = Math.max(...children.map(c => c.y + c.height));
-      const PADDING_X = 35;
-      const PADDING_Y = 30;
-      const HEADER_H = 25;
-      cont.x = minX - PADDING_X;
-      cont.y = minY - PADDING_Y - HEADER_H;
-      cont.width = Math.max(cont.width, (maxX - minX) + PADDING_X * 2);
-      cont.height = Math.max(cont.height, (maxY - minY) + PADDING_Y * 2 + HEADER_H);
     }
   });
 }

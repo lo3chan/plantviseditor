@@ -388,6 +388,15 @@ function getEdgeDrawioStyle(edge: DiagramEdge, isErd = false): string {
     case 'crows-foot-opt-opt':
       style += 'startArrow=ERzeroToOne;endArrow=ERzeroToOne;';
       break;
+    case 'crows-foot-many-zero-one':
+      style += 'startArrow=ERmany;endArrow=ERzeroToOne;';
+      break;
+    case 'crows-foot-many-one':
+      style += 'startArrow=ERmany;endArrow=ERmandOne;';
+      break;
+    case 'crows-foot-zero-many-one':
+      style += 'startArrow=ERzeroToMany;endArrow=ERmandOne;';
+      break;
     default:
       style += 'endArrow=block;endFill=1;';
       break;
@@ -685,7 +694,7 @@ export function generateDrawioXml(diagram: DiagramData, rawPlantUML?: string): s
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <mxfile host="app.diagrams.net" modified="${now}" agent="PlantUML Visual Studio" version="24.0.0">
   <diagram name="${escapeXml(diagramTitle)}" id="puml_studio_${Date.now()}">
-    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="${pageWidth}" pageHeight="${pageHeight}" background="#faf5ee" math="0" shadow="0">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="${pageWidth}" pageHeight="${pageHeight}" background="none" math="0" shadow="0">
       <root>
         <mxCell id="0"/>
         <mxCell id="1" parent="0"/>
