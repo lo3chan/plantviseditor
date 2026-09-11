@@ -75,16 +75,40 @@ export const BugReportModal: React.FC<BugReportModalProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load logs when modal opens
+  const [copiedPuml, setCopiedPuml] = useState(false);
+
+  // Load logs and auto-copy loaded PUML when modal opens
   useEffect(() => {
     if (isOpen) {
       setLogs(debugLogger.getLogs());
       const unsubscribe = debugLogger.subscribe(() => {
         setLogs(debugLogger.getLogs());
       });
+
+      // Auto-copy loaded PUML to user's clipboard
+      if (pumlCode) {
+        try {
+          navigator.clipboard.writeText(pumlCode).then(() => {
+            setCopiedPuml(true);
+            setTimeout(() => setCopiedPuml(false), 2500);
+          }).catch(() => {});
+        } catch {
+          // ignore
+        }
+      }
+
       return () => unsubscribe();
     }
-  }, [isOpen]);
+  }, [isOpen, pumlCode]);
+
+  const handleCopyPuml = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (pumlCode) {
+      navigator.clipboard.writeText(pumlCode);
+      setCopiedPuml(true);
+      setTimeout(() => setCopiedPuml(false), 2000);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -308,6 +332,25 @@ export const BugReportModal: React.FC<BugReportModalProps> = ({
                 </div>
               )}
 
+              {/* Loaded PlantUML Auto-Copy Indicator */}
+              <div className="p-2.5 bg-[#faf5ee] border border-[#d8d0c8]/90 rounded-xl text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-[#5a504a] min-w-0">
+                  <FileCode className="w-4 h-4 text-[#c2652a] shrink-0" />
+                  <span className="truncate">
+                    Active PlantUML code ({pumlCode ? pumlCode.split('\n').length : 0} lines) copied to clipboard
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyPuml}
+                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-[#f6f0e8] border border-[#d8d0c8] text-[11px] font-semibold text-[#c2652a] flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                  title="Copy loaded PlantUML code to clipboard again"
+                >
+                  {copiedPuml ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedPuml ? 'Copied!' : 'Copy PUML'}</span>
+                </button>
+              </div>
+
               {/* Title & Severity */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="md:col-span-3">
@@ -448,17 +491,27 @@ export const BugReportModal: React.FC<BugReportModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                  <label className="flex items-center gap-2 p-2 rounded-lg bg-[#faf5ee] hover:bg-[#f2ece4] border border-[#e8e0d6] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={includePuml}
-                      onChange={e => setIncludePuml(e.target.checked)}
-                      className="rounded text-[#c2652a] focus:ring-[#c2652a]"
-                    />
-                    <div className="min-w-0">
-                      <div className="font-semibold text-[#3a302a]">Diagram Code</div>
-                      <div className="text-[10px] text-[#78706a] truncate">current_diagram.puml</div>
+                  <label className="flex items-center justify-between p-2 rounded-lg bg-[#faf5ee] hover:bg-[#f2ece4] border border-[#e8e0d6] cursor-pointer">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={includePuml}
+                        onChange={e => setIncludePuml(e.target.checked)}
+                        className="rounded text-[#c2652a] focus:ring-[#c2652a]"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-semibold text-[#3a302a]">Diagram Code</div>
+                        <div className="text-[10px] text-[#78706a] truncate">current_diagram.puml</div>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleCopyPuml}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-white hover:bg-[#f2ece4] border border-[#d8d0c8] text-[#c2652a] font-semibold shrink-0 ml-1 cursor-pointer transition-colors"
+                      title="Copy loaded PlantUML code"
+                    >
+                      {copiedPuml ? 'Copied' : 'Copy'}
+                    </button>
                   </label>
 
                   <label className="flex items-center gap-2 p-2 rounded-lg bg-[#faf5ee] hover:bg-[#f2ece4] border border-[#e8e0d6] cursor-pointer">

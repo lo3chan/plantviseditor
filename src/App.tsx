@@ -45,6 +45,7 @@ export default function App() {
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
   const [isBugModalOpen, setIsBugModalOpen] = useState<boolean>(false);
   const [copiedPlantUML, setCopiedPlantUML] = useState<boolean>(false);
+  const [loadedPlantUMLCode, setLoadedPlantUMLCode] = useState<string>('');
 
   // Initialize in-memory runtime debug logger on mount
   useEffect(() => {
@@ -202,6 +203,7 @@ export default function App() {
   // Blank New Diagram
   const handleNewDiagram = () => {
     const blank = JSON.parse(JSON.stringify(BLANK_DIAGRAM));
+    setLoadedPlantUMLCode('');
     setViewport({ x: 40, y: 30, zoom: 1 });
     pushHistory(blank, 'Blank Diagram');
   };
@@ -209,6 +211,7 @@ export default function App() {
   // Reset to default starter template
   const handleResetStarter = () => {
     const starter = JSON.parse(JSON.stringify(DEFAULT_DIAGRAM));
+    setLoadedPlantUMLCode('');
     setViewport({ x: 40, y: 30, zoom: 1 });
     pushHistory(starter, 'Reset to Starter Template');
   };
@@ -217,6 +220,7 @@ export default function App() {
   const handleSelectTemplate = (templateKey: string) => {
     const tpl = (UNIFIED_STARTER_PRESETS as any)[templateKey] || DEFAULT_DIAGRAM;
     const cloned = JSON.parse(JSON.stringify(tpl));
+    setLoadedPlantUMLCode('');
     setViewport({ x: 40, y: 30, zoom: 1 });
     pushHistory(cloned, `Preset: ${templateKey}`);
   };
@@ -530,7 +534,7 @@ export default function App() {
 
   // Quick Copy PlantUML
   const handleQuickCopyPlantUML = () => {
-    const code = generatePlantUML(diagram);
+    const code = loadedPlantUMLCode || generatePlantUML(diagram);
     navigator.clipboard.writeText(code);
     setCopiedPlantUML(true);
     setTimeout(() => setCopiedPlantUML(false), 2000);
@@ -545,6 +549,7 @@ export default function App() {
         return;
       }
 
+      setLoadedPlantUMLCode(newCode);
       const parsed = parsePlantUML(newCode);
 
       if (parsed.type === 'sequence') {
@@ -619,6 +624,7 @@ export default function App() {
               blocks: parsed.blocks || [],
               settings: parsed.settings
             };
+            setLoadedPlantUMLCode('');
             pushHistory(loadedDiagram, `Imported ${file.name}`);
             setToastMessage({ text: `Successfully loaded "${file.name}"`, type: 'success' });
             setTimeout(() => setToastMessage(null), 3500);
@@ -665,6 +671,7 @@ export default function App() {
   };
 
   const currentPlantUMLCode = generatePlantUML(diagram);
+  const activePlantUMLCode = loadedPlantUMLCode || currentPlantUMLCode;
 
   // Synchronized Selection between Canvas and Code Editor
   const [selectedCanvasElement, setSelectedCanvasElement] = useState<SelectedCanvasElement | null>(null);
@@ -672,8 +679,8 @@ export default function App() {
   // Compute line in PlantUML code corresponding to selected diagram element
   const highlightedCodeLine = useMemo(() => {
     if (!selectedCanvasElement) return null;
-    return findPlantUMLLinesForElement(currentPlantUMLCode, selectedCanvasElement, diagram);
-  }, [currentPlantUMLCode, selectedCanvasElement, diagram]);
+    return findPlantUMLLinesForElement(activePlantUMLCode, selectedCanvasElement, diagram);
+  }, [activePlantUMLCode, selectedCanvasElement, diagram]);
 
   // When cursor moves in code editor, select the matching diagram node or connector
   const handleCursorLineChange = useCallback((lineNumber: number, lineText: string) => {
@@ -746,7 +753,12 @@ export default function App() {
         historyIndex={historyIndex}
         onJumpToHistory={handleJumpToHistory}
         onOpenExport={() => setIsExportModalOpen(true)}
-        onOpenBugReport={() => setIsBugModalOpen(true)}
+        onOpenBugReport={() => {
+          if (activePlantUMLCode) {
+            navigator.clipboard.writeText(activePlantUMLCode).catch(() => {});
+          }
+          setIsBugModalOpen(true);
+        }}
         onQuickCopyPlantUML={handleQuickCopyPlantUML}
         copiedPlantUML={copiedPlantUML}
       />
@@ -759,7 +771,7 @@ export default function App() {
             {/* Left 45%: Full PlantUML Code Editor */}
             <div className="w-[42%] min-w-[360px] max-w-[650px] h-full">
               <CodePanel
-                code={currentPlantUMLCode}
+                code={activePlantUMLCode}
                 onApplyCode={handleApplyCode}
                 isSplitView={true}
                 highlightedLine={highlightedCodeLine}
@@ -805,7 +817,7 @@ export default function App() {
                 )
               ) : (
                 <OfficialRenderView 
-                  code={currentPlantUMLCode} 
+                  code={activePlantUMLCode} 
                   settings={diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }}
                   onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
                   isSequenceDiagram={isSequenceMode}
@@ -863,7 +875,7 @@ export default function App() {
                 )
               ) : (
                 <OfficialRenderView 
-                  code={currentPlantUMLCode} 
+                  code={activePlantUMLCode} 
                   settings={diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }}
                   onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
                   isSequenceDiagram={isSequenceMode}
@@ -877,7 +889,7 @@ export default function App() {
         {viewMode === 'code' && (
           <div className="w-full h-full">
             <CodePanel
-              code={currentPlantUMLCode}
+              code={activePlantUMLCode}
               onApplyCode={handleApplyCode}
               isSplitView={true}
               highlightedLine={highlightedCodeLine}
@@ -898,7 +910,7 @@ export default function App() {
       <BugReportModal
         isOpen={isBugModalOpen}
         onClose={() => setIsBugModalOpen(false)}
-        pumlCode={currentPlantUMLCode}
+        pumlCode={activePlantUMLCode}
         diagramState={diagram}
         diagramTitle={diagram.title}
       />
