@@ -29,14 +29,14 @@
 /* Exact canvas background from user specification - locked and invariant */
 .canvas-bg,
 .canvas-brick-bg {
-  background-color: #faf5ee !important;
+  background-color: #faf5ee;
   background-image: 
     linear-gradient(335deg, rgba(194, 101, 42, 0.04) 23px, transparent 23px),
     linear-gradient(155deg, rgba(194, 101, 42, 0.04) 23px, transparent 23px),
     linear-gradient(335deg, rgba(194, 101, 42, 0.04) 23px, transparent 23px),
-    linear-gradient(155deg, rgba(194, 101, 42, 0.04) 23px, transparent 23px) !important;
-  background-size: 58px 58px !important;
-  background-position: 0px 2px, 4px 35px, 29px 31px, 34px 6px !important;
+    linear-gradient(155deg, rgba(194, 101, 42, 0.04) 23px, transparent 23px);
+  background-size: 58px 58px;
+  background-position: 0px 2px, 4px 35px, 29px 31px, 34px 6px;
 }
 
 /* Glassmorphism subtle Sahara surface & HUD */

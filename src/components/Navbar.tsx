@@ -54,24 +54,8 @@ interface NavbarProps {
   copiedPlantUML: boolean;
   isSequenceDiagram?: boolean;
   onToggleDiagramMode?: () => void;
-  diagramType?: string;
-  onUpdateDiagramType?: (type: string) => void;
   onOpenBugReport?: () => void;
 }
-
-export const DIAGRAM_TYPES: Array<{ id: string; label: string; desc: string }> = [
-  { id: 'unified', label: 'Unified / Architecture', desc: 'Allows mixing classes, components, sequence, and packages' },
-  { id: 'sequence', label: 'Sequence Flow', desc: 'Lifelines, participants, calls, and fragment frames' },
-  { id: 'class', label: 'Class Diagram', desc: 'Object-oriented classes, interfaces, attributes, and methods' },
-  { id: 'component', label: 'Component Diagram', desc: 'Components, ports, interfaces, and connectors' },
-  { id: 'erd', label: 'ERD / Data Schema', desc: 'Entity-relationship tables with primary and foreign keys' },
-  { id: 'usecase', label: 'Use Case', desc: 'Actors, use cases, boundaries, and interactions' },
-  { id: 'state', label: 'State Machine', desc: 'States, transitions, composite states, and guards' },
-  { id: 'activity', label: 'Activity Diagram', desc: 'Actions, decisions, forks, joins, and swimlanes' },
-  { id: 'deployment', label: 'Deployment Diagram', desc: 'Nodes, devices, execution environments, and artifacts' },
-  { id: 'c4', label: 'C4 Architecture', desc: 'Context, Container, Component, and Deployment diagrams' },
-  { id: 'archimate', label: 'ArchiMate', desc: 'Enterprise architecture layers and elements' }
-];
 
 export const Navbar: React.FC<NavbarProps> = ({
   title,
@@ -98,18 +82,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   copiedPlantUML,
   isSequenceDiagram = false,
   onToggleDiagramMode,
-  diagramType = 'unified',
-  onUpdateDiagramType,
   onOpenBugReport
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
   const [isTemplateMenuOpen, setIsTemplateMenuOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isDiagramTypeMenuOpen, setIsDiagramTypeMenuOpen] = useState(false);
   const templateMenuRef = useRef<HTMLDivElement>(null);
   const historyMenuRef = useRef<HTMLDivElement>(null);
-  const diagramTypeMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -130,9 +110,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       }
       if (historyMenuRef.current && !historyMenuRef.current.contains(e.target as Node)) {
         setIsHistoryOpen(false);
-      }
-      if (diagramTypeMenuRef.current && !diagramTypeMenuRef.current.contains(e.target as Node)) {
-        setIsDiagramTypeMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -283,57 +260,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>De-Overlap</span>
           </button>
         )}
-
-        {/* Diagram Type Selector (Unified, Sequence, Class, Component, ERD, etc.) */}
-        <div className="relative" ref={diagramTypeMenuRef}>
-          <button
-            id="btn-diagram-type-dropdown"
-            onClick={() => setIsDiagramTypeMenuOpen(!isDiagramTypeMenuOpen)}
-            className="h-8 whitespace-nowrap shrink-0 flex items-center gap-1.5 px-2.5 rounded-lg text-xs font-medium bg-white hover:bg-[#faf5ee] border border-[#d8d0c8]/70 hover:border-[#c2652a] text-[#3a302a] transition-colors cursor-pointer shadow-xs"
-            title="Declared PlantUML Diagram Type"
-          >
-            <GitBranch className="w-3.5 h-3.5 text-[#c2652a] shrink-0" />
-            <span className="whitespace-nowrap font-semibold">
-              {DIAGRAM_TYPES.find(d => d.id === diagramType)?.label || diagramType}
-            </span>
-            <ChevronDown className="w-3 h-3 text-[#78706a]" />
-          </button>
-
-          {isDiagramTypeMenuOpen && (
-            <div className="absolute top-full left-0 mt-1.5 w-64 bg-white rounded-xl shadow-xl border border-[#d8d0c8] py-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-              <div className="px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-[#78706a] border-b border-[#f2ece4]">
-                Declared Diagram Type
-              </div>
-              <div className="max-h-72 overflow-y-auto py-1">
-                {DIAGRAM_TYPES.map(dt => {
-                  const isSelected = dt.id === diagramType;
-                  return (
-                    <button
-                      key={dt.id}
-                      onClick={() => {
-                        if (onUpdateDiagramType) {
-                          onUpdateDiagramType(dt.id);
-                        }
-                        setIsDiagramTypeMenuOpen(false);
-                      }}
-                      className={`w-full px-3 py-1.5 text-left text-xs flex items-start gap-2 transition-colors cursor-pointer ${
-                        isSelected ? 'bg-[#faf5ee] text-[#c2652a] font-semibold' : 'text-[#3a302a] hover:bg-[#f7f2eb]'
-                      }`}
-                    >
-                      <div className="w-4 h-4 flex items-center justify-center shrink-0 mt-0.5">
-                        {isSelected && <Check className="w-3.5 h-3.5 text-[#c2652a]" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="leading-tight">{dt.label}</div>
-                        <div className="text-[10px] text-[#78706a] font-normal truncate">{dt.desc}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Right: History, Clear/Reset & Export Actions */}

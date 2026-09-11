@@ -23,8 +23,11 @@ export function sanitizeId(str: string): string {
  * matching the entire Unified Structural Canvas Catalog
  */
 export function generatePlantUML(diagram: DiagramData): string {
-  // 0. Handle Sequence Diagrams (only if explicit sequence and no 2D nodes present)
-  if (diagram.type === 'sequence' && (!diagram.nodes || diagram.nodes.length === 0)) {
+  // 0. Handle Sequence Diagrams (if explicit sequence or has sequence messages)
+  const hasSequenceContent = (diagram.messages && diagram.messages.length > 0) ||
+    (diagram.type === 'sequence' && ((diagram.participants && diagram.participants.length > 0) || (diagram.nodes && diagram.nodes.length > 0)));
+
+  if (hasSequenceContent) {
     const seqLines: string[] = [];
     seqLines.push('@startuml');
 
@@ -150,15 +153,30 @@ export function generatePlantUML(diagram: DiagramData): string {
 
     seqLines.push('');
 
-    // Participants
-    (diagram.participants || []).forEach(p => {
+    // Participants: read from diagram.nodes (ordered by X coordinate) if available, or fallback to participants
+    const involvedNodeIds = new Set<string>();
+    (diagram.messages || []).forEach(m => {
+      involvedNodeIds.add(m.from);
+      involvedNodeIds.add(m.to);
+    });
+
+    const participantNodes = (diagram.nodes && diagram.nodes.length > 0)
+      ? [...diagram.nodes]
+          .filter(n => n.category === 'sequence' || n.type === 'participant' || n.type === 'seq-participant' || involvedNodeIds.has(n.id))
+          .sort((a, b) => a.x - b.x)
+      : [];
+
+    const participantsList = participantNodes.length > 0 ? participantNodes : (diagram.participants || []);
+
+    participantsList.forEach(p => {
       const id = sanitizeId(p.id);
-      const label = p.name ? `"${p.name.replace(/"/g, '\\"')}"` : `"${id}"`;
+      const name = ('label' in p ? p.label : (p as any).name) || id;
+      const label = name ? `"${name.replace(/"/g, '\\"')}"` : `"${id}"`;
       let type = 'participant';
       if (['actor', 'database', 'queue', 'boundary', 'control', 'entity', 'collections'].includes(p.type || '')) {
         type = p.type!;
       }
-      const rawStereo = p.stereotype || p.sublabel || '';
+      const rawStereo = ('sublabel' in p ? p.sublabel : (p as any).stereotype) || '';
       const cleanStereo = rawStereo.replace(/^[«<]+|[»>]+$/g, '').trim();
       const stereo = cleanStereo ? ` <<${cleanStereo}>>` : '';
       const colorStr = p.color && p.color.startsWith('#') ? ` ${p.color}` : '';
@@ -1167,17 +1185,38 @@ function parseSequencePlantUML(lines: string[], defaultTitle: string): Partial<D
       continue;
     }
 
-    // Messages: Alice -> Bob : message OR Alice --> Bob : reply OR Alice ->> Bob : async
+    // Activation commands
+    const actMatch = line.match(/^(activate|deactivate)\s+([a-zA-Z0-9_]+)/i);
+    if (actMatch) {
+      continue;
+    }
+
+    // Notes: note over User, Client : label
+    const noteMatch = line.match(/^note\s+(left\s+of|right\s+of|over)\s+([^:]+)(?:\s*:\s*(.+))?/i);
+    if (noteMatch) {
+      if (messages.length > 0) {
+        messages[messages.length - 1].noteText = noteMatch[3]?.trim() || '';
+      }
+      continue;
+    }
+
+    // Messages: Alice -> Bob : message OR Alice --> Bob : reply OR Alice ->> Bob : async OR Bob <- Alice : reply
     // Also supports quoted participants: "Web App" -> "API Gateway" : req
-    const msgMatch = line.match(/^("[^"]+"|`[^`]+`|[a-zA-Z0-9_]+)\s*(->>|-->|->)\s*("[^"]+"|`[^`]+`|[a-zA-Z0-9_]+)(?:\s*:\s*(.+))?/);
+    const msgMatch = line.match(/^("[^"]+"|`[^`]+`|[a-zA-Z0-9_]+)\s*(->>|-->|->|<<-|--<|<-)\s*("[^"]+"|`[^`]+`|[a-zA-Z0-9_]+)(?:\s*:\s*(.+))?/);
     if (msgMatch) {
-      const rawFrom = msgMatch[1].replace(/^["`]|["`]$/g, '').trim();
-      const from = sanitizeId(rawFrom);
+      let rawFrom = msgMatch[1].replace(/^["`]|["`]$/g, '').trim();
+      let rawTo = msgMatch[3].replace(/^["`]|["`]$/g, '').trim();
       const arrow = msgMatch[2];
-      const rawTo = msgMatch[3].replace(/^["`]|["`]$/g, '').trim();
+      const isReverse = arrow.startsWith('<');
+      if (isReverse) {
+        const temp = rawFrom;
+        rawFrom = rawTo;
+        rawTo = temp;
+      }
+      const from = sanitizeId(rawFrom);
       const to = sanitizeId(rawTo);
       const label = msgMatch[4]?.trim() || '';
-      const mType = arrow === '-->' ? 'reply' : (arrow === '->>' ? 'async' : 'sync');
+      const mType = (arrow === '-->' || arrow === '--<') ? 'reply' : ((arrow === '->>' || arrow === '<<-') ? 'async' : 'sync');
 
       // Ensure participants exist
       if (!participantMap.has(from)) {
@@ -1235,10 +1274,10 @@ function parseSequencePlantUML(lines: string[], defaultTitle: string): Partial<D
       category: 'sequence',
       label: p.name,
       sublabel: p.stereotype,
-      x: 100 + idx * 240,
-      y: 120,
-      width: 180,
-      height: 80,
+      x: 80 + idx * 220,
+      y: 100,
+      width: 160,
+      height: 70,
       color: p.color || 'sand',
       data: {
         shape: resolvedShape
@@ -1269,7 +1308,7 @@ function parseSequencePlantUML(lines: string[], defaultTitle: string): Partial<D
     const involvedNodes = nodes.filter(n => involvedPIds.has(n.id));
 
     let minX = 60;
-    let maxX = Math.max(400, 100 + (participants.length - 1) * 240 + 200);
+    let maxX = Math.max(400, 80 + (participants.length - 1) * 220 + 180);
     if (involvedNodes.length > 0) {
       minX = Math.min(...involvedNodes.map(n => n.x)) - 30;
       maxX = Math.max(...involvedNodes.map(n => n.x + n.width)) + 30;
@@ -1317,15 +1356,19 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
   const lines = cleanText.split('\n');
 
   // Detect if script is sequence diagram
-  const hasStructuralKeywords = /\b(class|interface|abstract\s+class|enum|entity|struct|component|usecase|package|state|archimate|database|node|cloud|storage)\b/i.test(cleanText) ||
-    /\b(Person|System|Container|Component|Rel)\s*\(/i.test(cleanText);
+  // A diagram is structural if it contains class/component/state block definitions, C4 macros, or ERD relationships
+  const hasStructuralBlocks = /\b(class|interface|abstract\s+class|enum|struct|component|usecase|package|namespace|state|archimate)\s+[^{\n]*\{/i.test(cleanText) ||
+    /\b(Person|System|Container|Component|Rel)\s*\(/i.test(cleanText) ||
+    /(\|\|--|\}--|--\|\{|\*--|o--|<\|--|--\|>|\.\.\|\>)/.test(cleanText);
 
-  const isSequence = !hasStructuralKeywords && (
+  const hasExplicitSequenceConstructs = 
     cleanText.includes('autonumber') || 
     /\bparticipant\s+/i.test(cleanText) ||
     /\b(activate|deactivate)\b/i.test(cleanText) ||
-    (/\bactor\s+/i.test(cleanText) && !cleanText.includes('usecase') && !cleanText.includes('('))
-  );
+    /^\s*(alt|opt|loop|par|critical)\b/im.test(cleanText) ||
+    /^\s*("[^"]+"|`[^`]+`|[a-zA-Z0-9_]+)\s*(->>|-->|->|<<-|--<|<-)\s*("[^"]+"|`[^`]+`|[a-zA-Z0-9_]+)\s*:/im.test(cleanText);
+
+  const isSequence = !hasStructuralBlocks && hasExplicitSequenceConstructs;
 
   if (isSequence) {
     return parseSequencePlantUML(lines, 'Sequence Diagram');

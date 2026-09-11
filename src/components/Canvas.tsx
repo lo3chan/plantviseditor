@@ -1009,10 +1009,49 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
+  // Sequence Lifelines & Timeline Metrics
+  const sequenceParticipants = useMemo(() => {
+    const msgs = diagram.messages || [];
+    const involvedIds = new Set<string>();
+    msgs.forEach(m => {
+      involvedIds.add(m.from);
+      involvedIds.add(m.to);
+    });
+    return nodes.filter(n =>
+      n.category === 'sequence' ||
+      n.type === 'participant' ||
+      n.type === 'seq-participant' ||
+      (msgs.length > 0 && involvedIds.has(n.id))
+    );
+  }, [nodes, diagram.messages]);
+
+  const sequenceMessages = diagram.messages || [];
+  const sequenceBlocks = diagram.blocks || [];
+
+  const sequenceMetrics = useMemo(() => {
+    if (sequenceParticipants.length === 0 || sequenceMessages.length === 0) {
+      return null;
+    }
+    const maxOrder = Math.max(...sequenceMessages.map(m => m.order || 0), 1);
+    const topY = Math.min(...sequenceParticipants.map(p => p.y + p.height));
+    const stepSpacing = 68;
+    const lifelineBottom = Math.max(520, topY + (maxOrder + 2) * stepSpacing + 40);
+
+    return {
+      maxOrder,
+      topY,
+      stepSpacing,
+      lifelineBottom
+    };
+  }, [sequenceParticipants, sequenceMessages]);
+
   // Memoize computed edge paths, markers, and non-overlapping label / cardinality positions
   const computedEdges = useMemo(() => {
+    const hasSeqMsgs = Boolean(diagram.messages && diagram.messages.length > 0);
+    const activeEdges = hasSeqMsgs ? edges.filter(e => !e.id.startsWith('edge_seq_') && !e.id.startsWith('msg_')) : edges;
+
     // 1. Pre-calculate optimal ports for all valid edges
-    const validEdgePorts = edges.map(edge => {
+    const validEdgePorts = activeEdges.map(edge => {
       const srcNode = nodes.find(n => n.id === edge.source);
       const tgtNode = nodes.find(n => n.id === edge.target);
       if (!srcNode || !tgtNode) return null;
@@ -1716,6 +1755,243 @@ export const Canvas: React.FC<CanvasProps> = ({
               <line x1="11" y1="3" x2="3" y2="11" stroke="#ef4444" strokeWidth="2" />
             </marker>
           </defs>
+
+          {/* Render Sequence Blocks (alt, opt, loop, par) */}
+          {sequenceMetrics && sequenceBlocks.map((block, bIdx) => {
+            const bTop = sequenceMetrics.topY + (block.startOrder - 0.7) * sequenceMetrics.stepSpacing;
+            const bBottom = sequenceMetrics.topY + (block.endOrder + 0.4) * sequenceMetrics.stepSpacing;
+            const bHeight = Math.max(50, bBottom - bTop);
+
+            const blockMsgs = sequenceMessages.filter(m => (m.order || 0) >= block.startOrder && (m.order || 0) <= block.endOrder);
+            const involvedIds = new Set<string>();
+            blockMsgs.forEach(m => { involvedIds.add(m.from); involvedIds.add(m.to); });
+            const involvedParts = sequenceParticipants.filter(p => involvedIds.has(p.id));
+            const targetParts = involvedParts.length > 0 ? involvedParts : sequenceParticipants;
+
+            const minX = Math.min(...targetParts.map(p => p.x)) - 30;
+            const maxX = Math.max(...targetParts.map(p => p.x + p.width)) + 30;
+            const bWidth = Math.max(220, maxX - minX);
+
+            return (
+              <g key={block.id || `seq-block-${bIdx}`} className="pointer-events-none">
+                <rect
+                  x={minX}
+                  y={bTop}
+                  width={bWidth}
+                  height={bHeight}
+                  fill="#ffffff"
+                  fillOpacity="0.5"
+                  stroke="#c2652a"
+                  strokeWidth="1.2"
+                  strokeDasharray={block.type === 'par' ? '4,4' : undefined}
+                  rx="6"
+                />
+                <path
+                  d={`M ${minX} ${bTop} H ${minX + 75} L ${minX + 85} ${bTop + 22} H ${minX} Z`}
+                  fill="#f4ebe1"
+                  stroke="#c2652a"
+                  strokeWidth="1.2"
+                />
+                <text
+                  x={minX + 8}
+                  y={bTop + 15}
+                  fontSize="11"
+                  fontWeight="bold"
+                  fill="#92400e"
+                  className="select-none font-mono"
+                >
+                  {block.type.toUpperCase()}
+                </text>
+                {block.condition && (
+                  <text
+                    x={minX + 92}
+                    y={bTop + 15}
+                    fontSize="11"
+                    fontWeight="500"
+                    fill="#5a4e44"
+                    className="select-none font-mono"
+                  >
+                    [{block.condition}]
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
+          {/* Render Sequence Lifelines */}
+          {sequenceMetrics && sequenceParticipants.map(part => {
+            const centerX = part.x + part.width / 2;
+            const topY = part.y + part.height;
+            const bottomY = sequenceMetrics.lifelineBottom;
+
+            return (
+              <g key={`seq-lifeline-${part.id}`} className="pointer-events-none">
+                {/* Dashed lifeline */}
+                <line
+                  x1={centerX}
+                  y1={topY}
+                  x2={centerX}
+                  y2={bottomY}
+                  stroke={diagram.settings?.arrowColor || '#A80036'}
+                  strokeWidth="1.6"
+                  strokeDasharray="5,5"
+                  opacity="0.75"
+                />
+                {/* Optional bottom participant footer box if not hidden */}
+                {!diagram.settings?.hideFootbox && (
+                  <g transform={`translate(${part.x}, ${bottomY})`}>
+                    <rect
+                      width={part.width}
+                      height={36}
+                      rx={6}
+                      fill="#ffffff"
+                      stroke={diagram.settings?.arrowColor || '#A80036'}
+                      strokeWidth="1.5"
+                      className="shadow-xs"
+                    />
+                    <text
+                      x={part.width / 2}
+                      y={22}
+                      textAnchor="middle"
+                      fontSize="12"
+                      fontWeight="600"
+                      fill="#2b2622"
+                      className="select-none font-sans"
+                    >
+                      {part.label}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+
+          {/* Render Sequence Timeline Messages */}
+          {sequenceMetrics && sequenceMessages.map((msg, mIdx) => {
+            const order = msg.order || (mIdx + 1);
+            const msgY = sequenceMetrics.topY + order * sequenceMetrics.stepSpacing;
+            const srcNode = nodes.find(n => n.id === msg.from);
+            const tgtNode = nodes.find(n => n.id === msg.to);
+
+            const srcX = srcNode ? srcNode.x + srcNode.width / 2 : 100;
+            const tgtX = tgtNode ? tgtNode.x + tgtNode.width / 2 : 300;
+            const isSelf = msg.from === msg.to || Math.abs(srcX - tgtX) < 5;
+            const isReply = msg.type === 'reply' || msg.isReturn;
+            const isAsync = msg.type === 'async';
+            const isSelected = selectedEdgeId === msg.id;
+
+            const strokeColor = isSelected ? '#c2652a' : (isReply ? '#64748b' : (isAsync ? '#d97706' : '#A80036'));
+            const strokeWidth = isSelected ? 2.5 : 1.8;
+            const dashArray = isReply ? '5,4' : undefined;
+
+            let pathD = '';
+            let labelX = 0;
+            let labelY = msgY - 7;
+
+            if (isSelf) {
+              pathD = `M ${srcX} ${msgY} H ${srcX + 42} V ${msgY + 24} H ${srcX}`;
+              labelX = srcX + 48;
+              labelY = msgY + 16;
+            } else {
+              pathD = `M ${srcX} ${msgY} L ${tgtX} ${msgY}`;
+              labelX = (srcX + tgtX) / 2;
+              labelY = msgY - 7;
+            }
+
+            const markerEnd = isSelected ? 'url(#arrow-head-selected)' : 'url(#arrow-head)';
+
+            return (
+              <g key={msg.id || `seq-msg-${mIdx}`} className="pointer-events-auto cursor-pointer group">
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke="transparent"
+                  strokeWidth="16"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectEdge({
+                      id: msg.id,
+                      source: msg.from,
+                      target: msg.to,
+                      label: msg.label,
+                      style: isReply ? 'dashed' : 'solid',
+                      arrowType: 'arrow'
+                    });
+                  }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEdgeLabelText(msg.label || '');
+                    setEditingEdgeId(msg.id);
+                  }}
+                />
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={dashArray}
+                  markerEnd={markerEnd}
+                />
+                {!isSelf && (
+                  <rect
+                    x={tgtX - 5}
+                    y={msgY - 6}
+                    width={10}
+                    height={28}
+                    fill="#ffffff"
+                    stroke={strokeColor}
+                    strokeWidth="1.2"
+                    rx="1"
+                    className="pointer-events-none"
+                  />
+                )}
+                {/* Message Label with background badge */}
+                <g
+                  transform={`translate(${labelX}, ${labelY})`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectEdge({
+                      id: msg.id,
+                      source: msg.from,
+                      target: msg.to,
+                      label: msg.label,
+                      style: isReply ? 'dashed' : 'solid',
+                      arrowType: 'arrow'
+                    });
+                  }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEdgeLabelText(msg.label || '');
+                    setEditingEdgeId(msg.id);
+                  }}
+                >
+                  <rect
+                    x={isSelf ? -4 : -(Math.max(44, (msg.label?.length || 0) * 7.2 + 24) / 2)}
+                    y={-14}
+                    width={Math.max(44, (msg.label?.length || 0) * 7.2 + 24)}
+                    height={18}
+                    rx={4}
+                    fill="#faf5ee"
+                    fillOpacity="0.95"
+                    stroke={isSelected ? '#c2652a' : '#d8d0c8'}
+                    strokeWidth={isSelected ? 1.5 : 0.8}
+                    className="shadow-xs"
+                  />
+                  <text
+                    x={isSelf ? 8 : 0}
+                    y={-1}
+                    textAnchor={isSelf ? 'start' : 'middle'}
+                    fontSize="11"
+                    fontWeight="500"
+                    fill={isSelected ? '#c2652a' : '#2b2622'}
+                    className="select-none font-sans"
+                  >
+                    {diagram.settings?.autonumberFormat !== 'disabled' ? `${order}. ` : ''}{msg.label}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
 
           {/* Render Connections */}
           {computedEdges.map(({ edge, pathData }) => {

@@ -582,8 +582,6 @@ export default function App() {
         onResetStarter={handleResetStarter}
         onSelectTemplate={handleSelectTemplate}
         onImportFile={handleImportFile}
-        diagramType={diagram.type || 'unified'}
-        onUpdateDiagramType={(type) => updateDiagram({ type }, `Changed Diagram Type to ${type}`)}
         canUndo={historyIndex > 0}
         canRedo={historyIndex < history.length - 1}
         onUndo={handleUndo}
