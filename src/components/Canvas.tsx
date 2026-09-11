@@ -329,6 +329,8 @@ export const Canvas: React.FC<CanvasProps> = ({
       node.type === 'cloud' || 
       node.type === 'node' || 
       node.category === 'container' || 
+      Boolean(node.data?.isContainer) ||
+      node.data?.containerType === 'frame' ||
       node.type.includes('boundary');
 
     // If dragging a container, locate enclosed child nodes to move together
@@ -707,22 +709,49 @@ export const Canvas: React.FC<CanvasProps> = ({
   // Wrap selected node in a Package boundary
   const handleWrapInPackage = () => {
     if (!selectedNode) return;
-    const pad = 36;
+    const padX = 36;
+    const padTop = 44;
+    const padBottom = 32;
     const pkgNode: DiagramNode = {
       id: `package_${Date.now()}`,
       type: 'package',
       label: 'Package',
       category: 'container',
-      x: snap(selectedNode.x - pad),
-      y: snap(selectedNode.y - pad - 16),
-      width: snap(selectedNode.width + pad * 2),
-      height: snap(selectedNode.height + pad * 2 + 16),
+      x: snap(selectedNode.x - padX),
+      y: snap(selectedNode.y - padTop),
+      width: snap(selectedNode.width + padX * 2),
+      height: snap(selectedNode.height + padTop + padBottom),
       color: 'sand'
     };
 
     // Place package at the beginning of the array so it's behind the child node
     onUpdateNodes([pkgNode, ...diagram.nodes]);
-    setSelectedNodeId(pkgNode.id);
+    selectNode(pkgNode);
+  };
+
+  // Wrap selected node in a Frame boundary
+  const handleWrapInFrame = () => {
+    if (!selectedNode) return;
+    const padX = 36;
+    const padTop = 44;
+    const padBottom = 32;
+    const frameNode: DiagramNode = {
+      id: `frame_${Date.now()}`,
+      type: 'frame',
+      label: 'Frame',
+      category: 'container',
+      shape: 'frame',
+      x: snap(selectedNode.x - padX),
+      y: snap(selectedNode.y - padTop),
+      width: snap(selectedNode.width + padX * 2),
+      height: snap(selectedNode.height + padTop + padBottom),
+      color: 'slate',
+      data: { isContainer: true, containerType: 'frame', shape: 'frame' }
+    };
+
+    // Place frame at the beginning of the array so it's behind the child node
+    onUpdateNodes([frameNode, ...diagram.nodes]);
+    selectNode(frameNode);
   };
 
   // Keyboard Delete / Duplicate
@@ -1461,6 +1490,7 @@ export const Canvas: React.FC<CanvasProps> = ({
               onAddConnectedNode={(dir) => handleAddConnectedNode(dir, selectedNode.id)}
               onAddNote={handleAddNoteToSelected}
               onWrapInPackage={handleWrapInPackage}
+              onWrapInFrame={handleWrapInFrame}
               onDelete={handleDeleteSelected}
               onOpenInspector={() => setIsInspectorOpen(true)}
             />

@@ -202,14 +202,14 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const isDataTree = node.type === 'data-json' || node.type === 'data-yaml' || node.type === 'json' || node.type === 'yaml';
   const isEmbedded = ['embedded-salt', 'embedded-ditaa', 'embedded-math'].includes(node.type) || Boolean(node.data?.embeddedType);
   const isNote = node.type === 'note' || node.data?.shape === 'note';
-  const isPackage = node.type === 'package' || node.type === 'namespace' || node.category === 'container' || Boolean(node.data?.isContainer) || node.data?.shape === 'package';
+  const isFrame = node.type === 'frame' || node.data?.shape === 'frame' || node.data?.containerType === 'frame';
+  const isFolder = (node.type === 'folder' || node.data?.shape === 'folder' || node.data?.containerType === 'folder') && !isFrame;
+  const isPackage = ((node.type === 'package' || node.type === 'namespace' || node.category === 'container' || Boolean(node.data?.isContainer) || node.data?.shape === 'package') && !isFrame && !isFolder && node.type !== 'rectangle');
 
   // Shapes
   const isCylinder = node.type === 'database' || node.data?.shape === 'cylinder';
   const isQueue = node.type === 'queue' || node.data?.shape === 'queue' || node.data?.shape === 'horiz-cylinder';
   const isNode3d = node.type === 'node' || node.data?.shape === 'node3d';
-  const isFolder = node.type === 'folder' || node.data?.shape === 'folder';
-  const isFrame = node.type === 'frame' || node.data?.shape === 'frame';
   const isComponentTab = (node.type === 'component' && !isC4) || node.data?.shape === 'component';
   const isFileDoc = (node.type === 'file' || node.type === 'artifact') || node.data?.shape === 'file' || node.data?.shape === 'artifact';
   const isHexagon = node.type === 'hexagon' || node.data?.shape === 'hexagon';
@@ -1552,7 +1552,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: node.width,
           minHeight: node.height,
-          zIndex: isSelected ? 30 : (isPackage ? 5 : 10)
+          zIndex: (isPackage || isFrame || isFolder || Boolean(node.data?.isContainer)) ? (isSelected ? 9 : 5) : (isSelected ? 30 : 10)
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1599,6 +1599,36 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </div>
         )}
 
+        {/* 4A2. Specific PlantUML Frame Header Cut-out Tab Labeling */}
+        {isFrame && (
+          <div className="absolute top-0 left-2.5 h-[24px] max-w-[220px] flex items-center pr-3 z-20 overflow-hidden select-none">
+            <span className="text-[9px] font-mono text-[#A80036] font-bold uppercase tracking-wider mr-1.5 shrink-0">frame</span>
+            {node.sublabel && (
+              <span className="text-[9px] font-mono text-gray-600 mr-1 italic shrink-0">
+                {node.sublabel.startsWith('<<') ? node.sublabel : `<<${node.sublabel}>>`}
+              </span>
+            )}
+            {isEditing ? (
+              <input
+                ref={inputRef}
+                value={editLabel}
+                onChange={(e) => setEditLabel(e.target.value)}
+                onBlur={handleCommitEdit}
+                onKeyDown={handleKeyDown}
+                className="text-xs font-bold text-gray-900 bg-white border border-[#A80036] rounded px-1 py-0 outline-none w-full shadow-xs"
+              />
+            ) : (
+              <span
+                className="text-xs font-bold text-[#181818] font-sans truncate cursor-text"
+                onDoubleClick={() => setIsEditing(true)}
+                title="Double click to rename frame"
+              >
+                {node.label}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* 4B. Specific PlantUML Note Content (Multiline formatted) */}
         {isNote && (
           <div className="relative z-10 w-full h-full p-2.5 pt-2 flex flex-col text-left overflow-auto">
@@ -1627,7 +1657,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         )}
 
         {/* 4C. Standard Content Container for All Other Shapes */}
-        {!isPackage && !isNote && (
+        {!isPackage && !isFrame && !isNote && (
           isState ? (
             <div className="relative z-10 w-full h-full flex flex-col items-center justify-between p-2.5 text-center overflow-hidden">
               <div className="w-full text-center">

@@ -251,16 +251,20 @@ export const FrameShape: React.FC<{
   stroke?: string;
   strokeWidth?: number;
   isSelected?: boolean;
+  tabWidth?: number;
+  tabHeight?: number;
 }> = ({
   width,
   height,
   fill = '#FEFECE',
   stroke = '#A80036',
   strokeWidth = 1.5,
-  isSelected = false
+  isSelected = false,
+  tabWidth,
+  tabHeight = 24
 }) => {
-  const tabW = Math.min(80, width * 0.45);
-  const tabH = 18;
+  const tabW = tabWidth ?? Math.min(220, Math.max(110, width * 0.42));
+  const tabH = tabHeight;
 
   return (
     <svg
@@ -269,7 +273,7 @@ export const FrameShape: React.FC<{
       className="absolute top-0 left-0 pointer-events-none overflow-visible"
       style={{ filter: isSelected ? 'drop-shadow(0 0 6px rgba(194, 101, 42, 0.4))' : 'drop-shadow(2px 2px 2px rgba(0,0,0,0.15))' }}
     >
-      {/* Outer Rectangle */}
+      {/* Outer Frame Rectangle */}
       <rect
         x={0}
         y={0}
@@ -279,9 +283,15 @@ export const FrameShape: React.FC<{
         stroke={stroke}
         strokeWidth={strokeWidth}
       />
-      {/* Cut-out tab line */}
+      {/* Top-left cut-out title tab background tint */}
+      <polygon
+        points={`0,0 ${tabW},0 ${tabW + 10},${tabH} 0,${tabH}`}
+        fill={stroke}
+        fillOpacity={0.06}
+      />
+      {/* Cut-out tab separation line */}
       <polyline
-        points={`0,${tabH} ${tabW},${tabH} ${tabW + 8},0`}
+        points={`0,${tabH} ${tabW},${tabH} ${tabW + 10},0`}
         fill="none"
         stroke={stroke}
         strokeWidth={strokeWidth}

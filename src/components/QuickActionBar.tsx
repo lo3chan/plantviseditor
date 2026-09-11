@@ -40,6 +40,7 @@ interface QuickActionBarProps {
   onAddConnectedNode: (direction: 'right' | 'down') => void;
   onAddNote?: () => void;
   onWrapInPackage?: () => void;
+  onWrapInFrame?: () => void;
   onDelete: () => void;
   onOpenInspector?: () => void;
 }
@@ -149,6 +150,7 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
   onAddConnectedNode,
   onAddNote,
   onWrapInPackage,
+  onWrapInFrame,
   onDelete,
   onOpenInspector
 }) => {
@@ -666,6 +668,19 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
                 >
                   <FolderPlus className="w-3.5 h-3.5 text-blue-600" />
                   <span>Wrap in Package</span>
+                </button>
+              )}
+
+              {onWrapInFrame && (
+                <button
+                  onClick={() => {
+                    onWrapInFrame();
+                    setActiveMenu('none');
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
+                >
+                  <Layers className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Wrap in Frame</span>
                 </button>
               )}
 

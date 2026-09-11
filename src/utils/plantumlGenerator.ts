@@ -410,7 +410,72 @@ export function generatePlantUML(diagram: DiagramData): string {
   lines.push('');
 
   // 2. Elements Declarations
+  const isContainer = (n: DiagramNode) =>
+    n.type === 'package' ||
+    n.type === 'namespace' ||
+    n.type === 'frame' ||
+    n.type === 'folder' ||
+    n.type === 'rectangle' ||
+    n.category === 'container' ||
+    Boolean(n.data?.isContainer) ||
+    n.data?.containerType === 'frame' ||
+    n.data?.containerType === 'package' ||
+    n.data?.containerType === 'folder';
+
+  const containerNodes = diagram.nodes.filter(isContainer);
+  const containerChildrenMap = new Map<string, DiagramNode[]>();
+  const parentContainerMap = new Map<string, string>();
+
+  // Determine container-child hierarchy
   diagram.nodes.forEach(node => {
+    if (isContainer(node)) return;
+
+    if (node.data?.parentId && containerNodes.some(c => c.id === node.data!.parentId)) {
+      parentContainerMap.set(node.id, node.data.parentId);
+      const list = containerChildrenMap.get(node.data.parentId) || [];
+      list.push(node);
+      containerChildrenMap.set(node.data.parentId, list);
+      return;
+    }
+
+    let bestContainer: DiagramNode | null = null;
+    let bestArea = Infinity;
+
+    containerNodes.forEach(c => {
+      const isEnclosed = 
+        node.x >= c.x &&
+        node.x + node.width <= c.x + c.width &&
+        node.y >= c.y &&
+        node.y + node.height <= c.y + c.height;
+
+      if (isEnclosed) {
+        const area = c.width * c.height;
+        if (area < bestArea) {
+          bestArea = area;
+          bestContainer = c;
+        }
+      }
+    });
+
+    if (bestContainer) {
+      parentContainerMap.set(node.id, (bestContainer as DiagramNode).id);
+      const list = containerChildrenMap.get((bestContainer as DiagramNode).id) || [];
+      list.push(node);
+      containerChildrenMap.set((bestContainer as DiagramNode).id, list);
+    }
+  });
+
+  const emitNode = (node: DiagramNode, indent = '') => {
+    const startIdx = lines.length;
+    emitNodeBody(node);
+    if (indent) {
+      for (let k = startIdx; k < lines.length; k++) {
+        lines[k] = indent + lines[k];
+      }
+    }
+  };
+
+  const emitNodeBody = (node: DiagramNode): void => {
     const id = sanitizeId(node.id);
     const label = (node.label || id).replace(/"/g, '\\"');
     const generics = node.data?.generics ? node.data.generics : '';
@@ -748,10 +813,36 @@ export function generatePlantUML(diagram: DiagramData): string {
       return;
     }
 
-    // Boundary & Grouping Containers
-    if (node.type === 'package' || node.type === 'namespace' || node.category === 'container' || node.data?.isContainer || node.data?.shape === 'package') {
-      const kw = node.data?.containerType === 'namespace' || node.type === 'namespace' ? 'namespace' : 'package';
+    // Boundary & Grouping Containers (package, namespace, frame, folder, rectangle)
+    if (
+      node.type === 'package' || 
+      node.type === 'namespace' || 
+      node.type === 'frame' || 
+      node.type === 'folder' || 
+      node.type === 'rectangle' || 
+      node.category === 'container' || 
+      Boolean(node.data?.isContainer) || 
+      node.data?.containerType === 'frame' ||
+      node.data?.containerType === 'package' ||
+      node.data?.shape === 'package' ||
+      node.data?.shape === 'frame'
+    ) {
+      let kw = 'package';
+      if (node.type === 'frame' || node.data?.containerType === 'frame' || node.data?.shape === 'frame') {
+        kw = 'frame';
+      } else if (node.type === 'folder' || node.data?.containerType === 'folder' || node.data?.shape === 'folder') {
+        kw = 'folder';
+      } else if (node.type === 'namespace' || node.data?.containerType === 'namespace') {
+        kw = 'namespace';
+      } else if (node.type === 'rectangle' || node.data?.containerType === 'rectangle') {
+        kw = 'rectangle';
+      } else if (node.type === 'node' || node.data?.containerType === 'node') {
+        kw = 'node';
+      }
+
       lines.push(`${kw} "${label}" as ${id}${stereotype} {`);
+      const children = containerChildrenMap.get(node.id) || [];
+      children.forEach(child => emitNode(child, '  '));
       lines.push('}');
       return;
     }
@@ -798,12 +889,6 @@ export function generatePlantUML(diagram: DiagramData): string {
         break;
       case 'file':
         lines.push(`file "${label}" as ${id}${stereotype}`);
-        break;
-      case 'folder':
-        lines.push(`folder "${label}" as ${id}${stereotype}`);
-        break;
-      case 'frame':
-        lines.push(`frame "${label}" as ${id}${stereotype}`);
         break;
       case 'card':
         lines.push(`card "${label}" as ${id}${stereotype}`);
@@ -870,6 +955,11 @@ export function generatePlantUML(diagram: DiagramData): string {
         lines.push(`rectangle "${label}" as ${id}${stereotype}`);
         break;
     }
+  };
+
+  diagram.nodes.forEach(node => {
+    if (parentContainerMap.has(node.id)) return;
+    emitNode(node, '');
   });
 
   lines.push('');
@@ -1218,13 +1308,13 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     }
 
     // Check for block start:
-    // class "Name<T>" as id <<stereotype>> { OR struct Name { OR entity Name { OR json id { OR state "Name" as id {
-    const blockStartMatch = rawLine.match(/^(class|abstract\s+class|interface|enum|annotation|struct|protocol|exception|metaclass|entity|object|map|package|namespace|node|component|database|json|yaml|state)\s+(?:"([^"]+)"\s+as\s+([a-zA-Z0-9_]+)|([a-zA-Z0-9_]+)(?:<([^>]+)>)?(?:\s+as\s+([a-zA-Z0-9_]+))?)(?:\s*<<\s*(?:\(([A-Z]),\s*(#[a-fA-F0-9]{3,6})\)\s*)?([^>]*)>>)?\s*\{/i);
+    // class "Name<T>" as id <<stereotype>> { OR struct Name { OR frame "Name" as id { OR frame "Name" {
+    const blockStartMatch = rawLine.match(/^(class|abstract\s+class|interface|enum|annotation|struct|protocol|exception|metaclass|entity|object|map|package|namespace|frame|folder|node|component|database|json|yaml|state|rectangle|cloud)\s+(?:"([^"]+)"(?:\s+as\s+([a-zA-Z0-9_]+))?|([a-zA-Z0-9_]+)(?:<([^>]+)>)?(?:\s+as\s+([a-zA-Z0-9_]+))?)(?:\s*<<\s*(?:\(([A-Z]),\s*(#[a-fA-F0-9]{3,6})\)\s*)?([^>]*)>>)?\s*\{/i);
     if (blockStartMatch) {
       const type = blockStartMatch[1].toLowerCase().replace(/\s+/, '-');
       const label = blockStartMatch[2] || blockStartMatch[4];
       const generics = blockStartMatch[5] ? `<${blockStartMatch[5]}>` : undefined;
-      const id = blockStartMatch[3] || blockStartMatch[6] || blockStartMatch[4];
+      const id = blockStartMatch[3] || blockStartMatch[6] || blockStartMatch[4] || label;
       const spotChar = blockStartMatch[7];
       const spotColor = blockStartMatch[8];
       const stereotype = blockStartMatch[9]?.trim();
@@ -1825,7 +1915,19 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
         let width = 190;
         let height = 85;
 
-        if (type === 'state') {
+        if (type === 'frame') {
+          resolvedType = 'frame';
+          resolvedCategory = 'container';
+          shape = 'frame';
+          width = 340;
+          height = 240;
+        } else if (type === 'folder') {
+          resolvedType = 'folder';
+          resolvedCategory = 'container';
+          shape = 'folder';
+          width = 320;
+          height = 220;
+        } else if (type === 'state') {
           resolvedCategory = 'activity-state';
           if (label === '[H]' || label === '[H*]') {
             resolvedType = 'state-history';
@@ -1894,7 +1996,11 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
         }
 
         let nodeData: DiagramNode['data'] = shape ? { shape } : {};
-        if (resolvedType === 'embedded-salt') {
+        if (resolvedType === 'frame') {
+          nodeData = { ...nodeData, isContainer: true, containerType: 'frame', shape: 'frame' };
+        } else if (resolvedType === 'folder') {
+          nodeData = { ...nodeData, isContainer: true, containerType: 'folder', shape: 'folder' };
+        } else if (resolvedType === 'embedded-salt') {
           nodeData.embeddedType = 'salt';
         } else if (resolvedType === 'embedded-ditaa') {
           nodeData.embeddedType = 'ditaa';
@@ -2204,7 +2310,10 @@ function finishBlock(
 ) {
   const { type, id, label, generics, stereotype, spot, lines } = block;
 
-  if (type === 'package' || type === 'namespace') {
+  if (['package', 'namespace', 'frame', 'folder', 'rectangle', 'node'].includes(type)) {
+    const isFrame = type === 'frame';
+    const isFolder = type === 'folder';
+    const isRect = type === 'rectangle';
     const node: DiagramNode = {
       id,
       type: type as any,
@@ -2213,16 +2322,83 @@ function finishBlock(
       sublabel: stereotype ? `<<${stereotype}>>` : undefined,
       x: 0,
       y: 0,
-      width: 340,
-      height: 240,
-      color: 'sand',
+      width: isFrame ? 360 : 340,
+      height: isFrame ? 260 : 240,
+      color: isFrame ? 'slate' : 'sand',
+      shape: (isFrame ? 'frame' : isFolder ? 'folder' : (isRect ? 'rectangle' : 'package')) as any,
       data: {
         isContainer: true,
-        containerType: type as any
+        containerType: type as any,
+        shape: (isFrame ? 'frame' : isFolder ? 'folder' : (isRect ? 'rectangle' : 'package')) as any
       }
     };
     nodes.push(node);
     nodeMap.set(id, node);
+
+    // Parse enclosed child elements inside this container!
+    if (lines.length > 0) {
+      lines.forEach(subLine => {
+        const cleanSub = subLine.trim();
+        if (!cleanSub || cleanSub.startsWith("'") || cleanSub.startsWith('!')) return;
+
+        // Try single-line decl match
+        const subDecl = cleanSub.match(/^(actor|agent|component|database|storage|cloud|node|queue|stack|artifact|file|folder|frame|card|hexagon|collections|boundary|control|interface|class|abstract\s+class|enum|entity|object|state|usecase|rectangle)\s+(?:"([^"]+)"|:([^:]+):|\(([^)]+)\)|\[([^\]]+)\]|([a-zA-Z0-9_]+))(?:\s+as\s+([a-zA-Z0-9_]+))?(?:\s*<<([^>]+)>>)?(?:\s*(#[a-fA-F0-9]{3,6}|#[a-zA-Z]+))?(?:\s*<<([^>]+)>>)?/i);
+        if (subDecl) {
+          const subType = subDecl[1].toLowerCase().replace(/\s+class$/, '');
+          const subLabel = subDecl[2] || subDecl[3] || subDecl[4] || subDecl[5] || subDecl[6];
+          const subId = sanitizeId(subDecl[7] || subDecl[6] || subLabel);
+          const subStereo = (subDecl[8] || subDecl[10])?.trim();
+
+          if (!nodeMap.has(subId)) {
+            const childNode: DiagramNode = {
+              id: subId,
+              type: subType,
+              category: getCategoryForType(subType),
+              label: subLabel,
+              sublabel: subStereo ? `<<${subStereo}>>` : undefined,
+              x: 0,
+              y: 0,
+              width: 180,
+              height: 85,
+              color: getColorForType(subType),
+              data: {
+                parentId: id,
+                shape: subType === 'database' ? 'cylinder' : (subType === 'queue' ? 'queue' : undefined)
+              }
+            };
+            nodes.push(childNode);
+            nodeMap.set(subId, childNode);
+          }
+          return;
+        }
+
+        // Try bracket notation [Component]
+        const subBracket = cleanSub.match(/^\[([^\]]+)\](?:\s+as\s+([a-zA-Z0-9_]+))?(?:\s*<<([^>]+)>>)?/i);
+        if (subBracket) {
+          const subLabel = subBracket[1];
+          const subId = sanitizeId(subBracket[2] || subLabel);
+          const subStereo = subBracket[3]?.trim();
+          if (!nodeMap.has(subId)) {
+            const childNode: DiagramNode = {
+              id: subId,
+              type: 'component',
+              category: 'component',
+              label: subLabel,
+              sublabel: subStereo ? `<<${subStereo}>>` : undefined,
+              x: 0,
+              y: 0,
+              width: 180,
+              height: 80,
+              color: 'sienna',
+              data: { parentId: id }
+            };
+            nodes.push(childNode);
+            nodeMap.set(subId, childNode);
+          }
+          return;
+        }
+      });
+    }
     return;
   }
 
@@ -2528,13 +2704,13 @@ function getCategoryForType(type: string): DiagramNode['category'] {
   if (['component', 'port', 'interface-lollipop', 'collections', 'boundary', 'control'].includes(type)) {
     return 'component';
   }
-  if (['node', 'database', 'storage', 'cloud', 'queue', 'stack', 'artifact', 'file', 'folder', 'frame', 'card', 'hexagon'].includes(type)) {
+  if (['node', 'database', 'storage', 'cloud', 'queue', 'stack', 'artifact', 'file', 'card', 'hexagon'].includes(type)) {
     return 'infrastructure';
   }
   if (['entity', 'json', 'yaml'].includes(type)) {
     return 'data-schema';
   }
-  if (['package', 'namespace', 'rectangle'].includes(type)) {
+  if (['package', 'namespace', 'frame', 'folder', 'rectangle'].includes(type)) {
     return 'container';
   }
   if (['actor', 'agent'].includes(type)) {

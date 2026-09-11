@@ -34,14 +34,18 @@ export function resolveOverlaps(
     height: Math.max(Number.isFinite(n.height) ? n.height : 80, 30)
   }));
 
-  // Separate container nodes (packages, namespaces) from loose nodes
+  // Separate container nodes (packages, namespaces, frames, folders) from loose nodes
   const containerIds = new Set<string>();
   cloned.forEach(n => {
     if (
       n.type === 'package' ||
       n.type === 'namespace' ||
+      n.type === 'frame' ||
+      n.type === 'folder' ||
       n.category === 'container' ||
-      n.data?.isContainer
+      Boolean(n.data?.isContainer) ||
+      n.data?.containerType === 'frame' ||
+      n.data?.containerType === 'package'
     ) {
       containerIds.add(n.id);
     }
@@ -49,6 +53,7 @@ export function resolveOverlaps(
 
   // Determine if a node is currently inside a container bounding box
   const isInsideContainer = (child: DiagramNode, container: DiagramNode): boolean => {
+    if (child.data?.parentId === container.id) return true;
     const childCenterX = child.x + child.width / 2;
     const childCenterY = child.y + child.height / 2;
     return (
