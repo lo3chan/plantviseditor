@@ -327,8 +327,9 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
       style={{ left: position.x, top: position.y - 12 }}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
+      onWheel={(e) => e.stopPropagation()}
     >
-      {/* 1. MODULAR VERBAL SENTENCE BAR: [ Source ▾ ]  ➔  [ Verb / Relation ▾ ]  ➔  [ Target ▾ ]  [ ⇄ Swap ] */}
+      {/* UNIFIED MODULAR VERBAL EDGE TOOLBAR: [ Source ▾ ] ➔ [ Verb / Relation ▾ ] ➔ [ Target ▾ ] [ ⇄ ] | [ Card: 1 : * ▾ ] [ Line: Solid ▾ ] | [ 🗑 ] */}
       <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#c2652a]/40 shadow-xl rounded-full px-3 py-1.5 text-xs text-[#2c2420]">
         
         {/* SOURCE NODE SELECTOR */}
@@ -342,7 +343,7 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
             }`}
             title={`Source node: ${displaySource}`}
           >
-            <span className="max-w-[110px] truncate">{displaySource}</span>
+            <span className="max-w-[100px] truncate">{displaySource}</span>
             <ChevronDown className="w-2.5 h-2.5 opacity-60" />
           </button>
 
@@ -387,7 +388,7 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
             title="Configure relationship and action verb"
           >
             <span>➔</span>
-            <span className="max-w-[140px] truncate text-[11.5px]">
+            <span className="max-w-[130px] truncate text-[11.5px]">
               {edge.label ? `${edge.label} (${currentOption.label.split(' ')[0]})` : currentOption.label}
             </span>
             <ChevronDown className="w-3 h-3 opacity-70" />
@@ -429,82 +430,67 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
                   ))}
                 </div>
 
-                {/* Custom Verb Input */}
-                <div className="flex items-center gap-1 mt-2">
+                {/* Custom Verb input */}
+                <div className="mt-1.5 flex gap-1">
                   <input
                     type="text"
-                    placeholder="Custom verb (e.g. subscribes to)..."
+                    placeholder="Custom verb (e.g. dispatches, notifies)..."
                     value={customVerb}
                     onChange={(e) => setCustomVerb(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        onUpdateEdge({ label: customVerb.trim() || undefined });
-                        setActiveMenu('none');
+                      if (e.key === 'Enter' && customVerb.trim()) {
+                        onUpdateEdge({ label: customVerb.trim() });
                       }
                     }}
-                    className="flex-1 text-[11px] px-2.5 py-1 bg-[#faf5ee] border border-[#d8d0c8] rounded-lg outline-none focus:border-[#c2652a]"
+                    className="flex-1 text-[11px] px-2 py-1 bg-[#faf5ee] border border-[#d8d0c8] rounded-lg outline-none focus:border-[#c2652a]"
                   />
-                  {edge.label && (
-                    <button
-                      onClick={() => {
-                        setCustomVerb('');
-                        onUpdateEdge({ label: undefined });
-                      }}
-                      className="text-[10px] text-red-500 hover:underline px-1"
-                    >
-                      Clear
-                    </button>
-                  )}
                   <button
                     onClick={() => {
-                      onUpdateEdge({ label: customVerb.trim() || undefined });
-                      setActiveMenu('none');
+                      if (customVerb.trim()) {
+                        onUpdateEdge({ label: customVerb.trim() });
+                      }
                     }}
-                    className="px-2.5 py-1 bg-[#c2652a] text-white rounded-lg text-[10.5px] font-bold"
+                    className="px-2 py-1 bg-[#c2652a] text-white rounded-lg text-[10.5px] font-semibold hover:bg-[#a85420]"
                   >
-                    Apply
+                    Set
                   </button>
                 </div>
               </div>
 
-              {/* Relationship Type Selector */}
-              <div className="pt-2 border-t border-[#d8d0c8]/50">
+              {/* Relationship Archetype Presets */}
+              <div className="mt-2.5 pt-2 border-t border-[#d8d0c8]/50">
                 <label className="text-[10px] font-semibold text-[#78706a] uppercase block mb-1">
-                  Structural Relationship Type:
+                  Architecture & Relationship Type:
                 </label>
-                <div className="space-y-1 max-h-48 overflow-y-auto scrollbar-thin pr-1">
-                  {RELATION_OPTIONS.map(opt => {
-                    const isSelected = edge.arrowType === opt.id;
-                    return (
-                      <button
-                        key={opt.id}
-                        onClick={() => {
-                          onUpdateEdge({
-                            arrowType: opt.id,
-                            style: opt.defaultStyle || edge.style || 'solid'
-                          });
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-xl border flex items-center justify-between transition-colors ${
-                          isSelected
-                            ? 'bg-[#c2652a]/10 border-[#c2652a] text-[#c2652a] font-bold'
-                            : 'bg-white border-[#d8d0c8]/50 hover:bg-[#faf5ee] text-[#2c2420]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          {opt.renderIcon(isSelected ? '#c2652a' : '#78706a')}
-                          <div>
-                            <span className="font-semibold text-[11.5px] block leading-tight">
-                              {opt.label}
-                            </span>
-                            <span className="text-[10px] text-[#78706a] block leading-tight">
-                              {opt.description}
-                            </span>
-                          </div>
-                        </div>
-                        {isSelected && <Check className="w-3.5 h-3.5 text-[#c2652a] shrink-0" />}
-                      </button>
-                    );
-                  })}
+                <div className="space-y-1 max-h-44 overflow-y-auto pr-1 scrollbar-thin">
+                  {EDGE_TYPE_OPTIONS.map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => {
+                        onUpdateEdge({
+                          type: opt.type,
+                          arrowDirection: opt.arrowDirection,
+                          style: opt.style,
+                          technology: opt.technology || undefined,
+                          isAsync: opt.isAsync
+                        });
+                        setActiveMenu('none');
+                      }}
+                      className={`w-full text-left p-1.5 rounded-lg border text-xs flex items-center justify-between transition-colors ${
+                        currentOption.id === opt.id
+                          ? 'bg-[#c2652a]/10 border-[#c2652a] text-[#c2652a] font-semibold'
+                          : 'bg-[#faf5ee]/70 border-[#d8d0c8]/60 hover:bg-[#ebd9c8]/50 text-[#3a302a]'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-semibold text-[11.5px]">{opt.label}</div>
+                        <div className="text-[9.5px] text-[#78706a] leading-tight">{opt.description}</div>
+                      </div>
+                      <span className="text-[10px] font-mono text-[#78706a] bg-white px-1.5 py-0.5 rounded border border-[#d8d0c8]/40 shrink-0 ml-1">
+                        {opt.syntax}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -522,7 +508,7 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
             }`}
             title={`Target node: ${displayTarget}`}
           >
-            <span className="max-w-[110px] truncate">{displayTarget}</span>
+            <span className="max-w-[100px] truncate">{displayTarget}</span>
             <ChevronDown className="w-2.5 h-2.5 opacity-60" />
           </button>
 
@@ -563,19 +549,21 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
         >
           <ArrowLeftRight className="w-3.5 h-3.5" />
         </button>
-      </div>
 
-      {/* 2. SECONDARY MODULAR VERBAL CONTROLS: Multiplicity, Line Style, Delete */}
-      <div className="mt-1 flex items-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#d8d0c8]/80 shadow-md rounded-full px-2.5 py-1 text-[11px] text-[#2c2420]">
-        
+        {/* DIVIDER */}
+        <div className="w-[1px] h-4 bg-[#d8d0c8]/80 mx-0.5" />
+
         {/* MULTIPLICITY SELECTOR */}
         <div className="relative flex items-center gap-1">
-          <span className="text-[#78706a] font-medium">Card:</span>
+          <span className="text-[#78706a] font-medium text-[11px]">Card:</span>
           
-          {/* Source Multiplicity */}
           <button
             onClick={() => setActiveMenu(activeMenu === 'cardinality' ? 'none' : 'cardinality')}
-            className="px-1.5 py-0.5 rounded-md bg-[#faf5ee] hover:bg-[#ebd9c8] font-mono font-bold text-[#c2652a] transition-colors"
+            className={`px-1.5 py-0.5 rounded-md font-mono font-bold text-[11px] transition-colors ${
+              activeMenu === 'cardinality'
+                ? 'bg-[#c2652a] text-white'
+                : 'bg-[#faf5ee] hover:bg-[#ebd9c8] text-[#c2652a]'
+            }`}
             title="Configure multiplicity"
           >
             {edge.cardinalitySource || '1'} : {edge.cardinalityTarget || '*'}
@@ -583,7 +571,7 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
 
           {/* Multiplicity Popover */}
           {activeMenu === 'cardinality' && (
-            <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-[#d8d0c8] rounded-2xl shadow-xl p-2.5 z-50 animate-in fade-in zoom-in-95">
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-64 bg-white border border-[#d8d0c8] rounded-2xl shadow-xl p-2.5 z-50 animate-in fade-in zoom-in-95">
               <span className="text-[10px] font-bold text-[#78706a] uppercase block mb-2">
                 Configure Multiplicity / Cardinality
               </span>
@@ -633,22 +621,24 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
           )}
         </div>
 
-        <div className="w-[1px] h-3.5 bg-[#d8d0c8]/60" />
-
         {/* LINE STYLE MODULAR DROPDOWN */}
         <div className="relative">
           <button
             onClick={() => setActiveMenu(activeMenu === 'style' ? 'none' : 'style')}
-            className="flex items-center gap-1 px-1.5 py-0.5 rounded-md hover:bg-[#faf5ee] text-[#3a302a] font-medium"
+            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+              activeMenu === 'style'
+                ? 'bg-[#c2652a] text-white'
+                : 'hover:bg-[#faf5ee] text-[#3a302a]'
+            }`}
             title="Line style"
           >
-            <span>Line:</span>
-            <span className="font-bold text-[#c2652a] capitalize">{edge.style || 'solid'}</span>
+            <span className={activeMenu === 'style' ? 'text-white/80' : 'text-[#78706a]'}>Line:</span>
+            <span className={`font-bold capitalize ${activeMenu === 'style' ? 'text-white' : 'text-[#c2652a]'}`}>{edge.style || 'solid'}</span>
             <ChevronDown className="w-2.5 h-2.5 opacity-60" />
           </button>
 
           {activeMenu === 'style' && (
-            <div className="absolute top-full left-0 mt-2 w-44 bg-white border border-[#d8d0c8] rounded-2xl shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
+            <div className="absolute top-full right-0 mt-2 w-44 bg-white border border-[#d8d0c8] rounded-2xl shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95">
               {[
                 { id: 'solid' as EdgeStyle, label: 'Solid (Direct / Sync)' },
                 { id: 'dashed' as EdgeStyle, label: 'Dashed (Async / Weak)' },
@@ -674,12 +664,13 @@ export const EdgeToolbar: React.FC<EdgeToolbarProps> = ({
           )}
         </div>
 
-        <div className="w-[1px] h-3.5 bg-[#d8d0c8]/60" />
+        {/* DIVIDER */}
+        <div className="w-[1px] h-4 bg-[#d8d0c8]/80 mx-0.5" />
 
         {/* DELETE LINK */}
         <button
           onClick={onDeleteEdge}
-          className="p-1 rounded-md hover:bg-red-50 text-red-500 hover:text-red-700 transition-colors"
+          className="p-1 rounded-full hover:bg-red-50 text-red-500 hover:text-red-700 transition-colors"
           title="Delete Link"
         >
           <Trash2 className="w-3.5 h-3.5" />

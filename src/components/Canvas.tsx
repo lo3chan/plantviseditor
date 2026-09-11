@@ -562,6 +562,20 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Zoom with Wheel
   const handleWheel = (e: React.WheelEvent) => {
+    // If the wheel event happened inside a scrollable menu, popover, drawer, or input, do NOT zoom canvas
+    const target = e.target as HTMLElement | null;
+    if (target && (
+      target.closest('.overflow-y-auto') || 
+      target.closest('.overflow-x-auto') || 
+      target.closest('.overflow-auto') || 
+      target.closest('[data-scrollable]') ||
+      target.closest('#quick-action-bar-container') ||
+      target.closest('#edge-toolbar-container') ||
+      target.closest('.scrollbar-thin')
+    )) {
+      return;
+    }
+
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
     const newZoom = Math.min(Math.max(viewport.zoom * zoomFactor, 0.3), 2.5);

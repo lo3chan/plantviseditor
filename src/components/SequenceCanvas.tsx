@@ -882,6 +882,18 @@ export const SequenceCanvas: React.FC<SequenceCanvasProps> = ({
 
   // Zoom with Wheel
   const handleWheel = (e: React.WheelEvent) => {
+    // If the wheel event happened inside a scrollable menu, popover, drawer, or input, do NOT zoom canvas
+    const target = e.target as HTMLElement | null;
+    if (target && (
+      target.closest('.overflow-y-auto') || 
+      target.closest('.overflow-x-auto') || 
+      target.closest('.overflow-auto') || 
+      target.closest('[data-scrollable]') ||
+      target.closest('.scrollbar-thin')
+    )) {
+      return;
+    }
+
     e.preventDefault();
     if (!onUpdateViewport) return;
     const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;

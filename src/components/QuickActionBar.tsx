@@ -188,10 +188,12 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
   return (
     <div 
       ref={barRef}
+      id="quick-action-bar-container"
       className="absolute z-40 -translate-x-1/2 -translate-y-full mb-3 pointer-events-auto select-none"
       style={{ left: x, top: y }}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
+      onWheel={(e) => e.stopPropagation()}
     >
       {/* Primary Condensed Verbal Pill Bar */}
       <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#c2652a]/40 shadow-xl rounded-full p-1.5 text-xs text-[#2c2420]">

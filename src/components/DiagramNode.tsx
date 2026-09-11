@@ -451,6 +451,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             left: node.x,
             top: node.y,
             width: node.width,
+            height: node.height,
             minHeight: node.height,
             zIndex: 5
           }}
@@ -479,6 +480,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -602,6 +604,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -688,6 +691,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -758,6 +762,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -825,6 +830,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -892,6 +898,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -953,6 +960,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -1016,6 +1024,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             left: node.x,
             top: node.y,
             width: node.width,
+            height: node.height,
             minHeight: node.height,
             zIndex: 5
           }}
@@ -1056,6 +1065,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -1125,6 +1135,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -1358,6 +1369,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width || 220,
+          height: node.height || 140,
           minHeight: node.height || 140,
           zIndex: isSelected ? 30 : 10
         }}
@@ -1392,6 +1404,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width || 240,
+          height: node.height || 140,
           minHeight: node.height || 140,
           zIndex: isSelected ? 30 : 10
         }}
@@ -1426,6 +1439,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width || 240,
+          height: node.height || 100,
           minHeight: node.height || 100,
           zIndex: isSelected ? 30 : 10
         }}
@@ -1460,6 +1474,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width || 190,
+          height: node.height || 85,
           minHeight: node.height || 85,
           zIndex: isSelected ? 30 : 10
         }}
@@ -1498,6 +1513,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: isSelected ? 30 : 10
         }}
@@ -1552,6 +1568,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           left: node.x,
           top: node.y,
           width: node.width,
+          height: node.height,
           minHeight: node.height,
           zIndex: (isPackage || isFrame || isFolder || Boolean(node.data?.isContainer)) ? (isSelected ? 9 : 5) : (isSelected ? 30 : 10)
         }}
@@ -1796,13 +1813,14 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   return (
     <div
       id={node.id}
-      className={`absolute cursor-move select-none transition-shadow ${
+      className={`absolute cursor-move select-none transition-shadow flex flex-col ${
         isSelected ? 'ring-2 ring-[#A80036] ring-offset-2' : ''
       }`}
       style={{
         left: node.x,
         top: node.y,
         width: node.width,
+        height: node.height,
         minHeight: node.height,
         zIndex: isSelected ? 30 : 10,
         filter: 'drop-shadow(2px 2px 2px rgba(0,0,0,0.15))'
@@ -1822,7 +1840,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       )}
 
       {/* Main Classifier Card */}
-      <div className="w-full h-full bg-[#FEFECE] border border-[#A80036] overflow-hidden flex flex-col">
+      <div className="w-full h-full flex-1 bg-[#FEFECE] border border-[#A80036] overflow-hidden flex flex-col">
         {/* Header with Spot Circle and Name */}
         <div className="p-2 border-b border-[#A80036] flex flex-col items-center justify-center text-center relative bg-[#FEFECE]">
           {/* Stereotype (e.g. <<interface>>, <<abstract>>) */}
@@ -2303,6 +2321,9 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             onUpdateContent={(newContent) => onUpdate({ data: { ...node.data, treeContent: newContent } })}
           />
         )}
+
+        {/* Fill remaining card height when resized taller */}
+        <div className="flex-1 w-full bg-[#FEFECE]" />
       </div>
 
       {/* Ports */}
