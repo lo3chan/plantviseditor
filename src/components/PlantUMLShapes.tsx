@@ -232,6 +232,7 @@ export const FolderShape: React.FC<{
         width={width}
         height={height - tabH}
         fill={fill}
+        fillOpacity={0.15}
         stroke={stroke}
         strokeWidth={strokeWidth}
         rx={2}
@@ -273,21 +274,23 @@ export const FrameShape: React.FC<{
       className="absolute top-0 left-0 pointer-events-none overflow-visible"
       style={{ filter: isSelected ? 'drop-shadow(0 0 6px rgba(194, 101, 42, 0.4))' : 'drop-shadow(2px 2px 2px rgba(0,0,0,0.15))' }}
     >
-      {/* Outer Frame Rectangle */}
+      {/* Outer Frame Rectangle with authentic translucent background */}
       <rect
         x={0}
         y={0}
         width={width}
         height={height}
         fill={fill}
+        fillOpacity={0.15}
         stroke={stroke}
         strokeWidth={strokeWidth}
       />
-      {/* Top-left cut-out title tab background tint */}
+      {/* Top-left cut-out title tab background */}
       <polygon
         points={`0,0 ${tabW},0 ${tabW + 10},${tabH} 0,${tabH}`}
-        fill={stroke}
-        fillOpacity={0.06}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
       />
       {/* Cut-out tab separation line */}
       <polyline

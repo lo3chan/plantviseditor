@@ -453,7 +453,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             width: node.width,
             height: node.height,
             minHeight: node.height,
-            zIndex: 5
+            zIndex: isSelected ? 4 : 2
           }}
           onClick={onSelect}
         >
@@ -1026,7 +1026,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             width: node.width,
             height: node.height,
             minHeight: node.height,
-            zIndex: 5
+            zIndex: isSelected ? 4 : 2
           }}
           onClick={onSelect}
         >
@@ -1570,7 +1570,9 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           width: node.width,
           height: node.height,
           minHeight: node.height,
-          zIndex: (isPackage || isFrame || isFolder || Boolean(node.data?.isContainer)) ? (isSelected ? 9 : 5) : (isSelected ? 30 : 10)
+          zIndex: (isPackage || isFrame || isFolder || Boolean(node.data?.isContainer) || node.category === 'container' || node.type === 'package' || node.type === 'frame' || node.type === 'folder' || node.type === 'namespace') 
+            ? (isSelected ? 4 : 2) 
+            : (isSelected ? 30 : 10)
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}

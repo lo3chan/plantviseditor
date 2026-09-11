@@ -1607,7 +1607,10 @@ export const Canvas: React.FC<CanvasProps> = ({
         }}
       >
         {/* SVG Layer for Edges and Connectors */}
-        <svg className="absolute top-0 left-0 w-[5000px] h-[5000px] overflow-visible pointer-events-none">
+        <svg 
+          className="absolute top-0 left-0 w-[5000px] h-[5000px] overflow-visible pointer-events-none z-[8]"
+          style={{ zIndex: 8 }}
+        >
           <defs>
             {/* Standard Arrow Marker (End) */}
             <marker
