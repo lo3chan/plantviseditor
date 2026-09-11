@@ -1605,7 +1605,8 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
             technology,
             description,
             isContainer: isBoundary,
-            containerType: isBoundary ? 'boundary' : undefined
+            containerType: isBoundary ? 'boundary' : undefined,
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
           }
         };
         nodes.push(node);
@@ -2225,7 +2226,10 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
           width,
           height,
           color: getColorForType(resolvedType),
-          data: nodeData
+          data: {
+            ...nodeData,
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
         };
         nodes.push(node);
         nodeMap.set(id, node);
@@ -2251,7 +2255,10 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
           y: 0,
           width: 180,
           height: 80,
-          color: explicitColor ? 'sienna' : 'sienna'
+          color: explicitColor ? 'sienna' : 'sienna',
+          data: {
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
         };
         nodes.push(node);
         nodeMap.set(id, node);
@@ -2278,7 +2285,10 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
           width: 180,
           height: 80,
           color: explicitColor ? 'sand' : 'sand',
-          data: { shape: 'usecase' }
+          data: { 
+            shape: 'usecase',
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
         };
         nodes.push(node);
         nodeMap.set(id, node);
@@ -2304,7 +2314,10 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
           y: 0,
           width: 130,
           height: 90,
-          color: explicitColor ? 'sienna' : 'sienna'
+          color: explicitColor ? 'sienna' : 'sienna',
+          data: {
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
         };
         nodes.push(node);
         nodeMap.set(id, node);
@@ -2328,7 +2341,10 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
           width: 190,
           height: 80,
           color: 'gold',
-          data: { description: label }
+          data: { 
+            description: label,
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
         };
         nodes.push(node);
         nodeMap.set(id, node);

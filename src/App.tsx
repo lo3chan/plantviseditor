@@ -150,6 +150,12 @@ export default function App() {
       ...patch
     };
     diagramRef.current = updated;
+
+    // Reset raw loaded code string whenever visual edits occur so code editor re-generates cleanly
+    if (actionName !== 'Apply PlantUML Code' && !options?.skipHistory) {
+      setLoadedPlantUMLCode('');
+    }
+
     if (options?.skipHistory) {
       setDiagram(updated);
       return;
@@ -160,6 +166,7 @@ export default function App() {
   // Undo / Redo handlers
   const handleUndo = () => {
     if (historyIndex > 0) {
+      setLoadedPlantUMLCode('');
       setHistoryIndex(historyIndex - 1);
       setDiagram(history[historyIndex - 1].diagram);
     }
@@ -167,6 +174,7 @@ export default function App() {
 
   const handleRedo = () => {
     if (historyIndex < history.length - 1) {
+      setLoadedPlantUMLCode('');
       setHistoryIndex(historyIndex + 1);
       setDiagram(history[historyIndex + 1].diagram);
     }
@@ -174,6 +182,7 @@ export default function App() {
 
   const handleJumpToHistory = (index: number) => {
     if (index >= 0 && index < history.length) {
+      setLoadedPlantUMLCode('');
       setHistoryIndex(index);
       setDiagram(history[index].diagram);
     }

@@ -70,6 +70,7 @@ import {
 interface DiagramNodeProps {
   node: DiagramNode;
   isSelected: boolean;
+  isDropTarget?: boolean;
   onSelect: (e: React.MouseEvent) => void;
   onUpdate: (updatedNode: Partial<DiagramNode>) => void;
   onStartConnection: (nodeId: string, port: PortPosition, e: React.MouseEvent) => void;
@@ -80,6 +81,7 @@ interface DiagramNodeProps {
 export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   node,
   isSelected,
+  isDropTarget = false,
   onSelect,
   onUpdate,
   onStartConnection,
@@ -446,6 +448,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           id={node.id}
           className={`absolute select-none border-2 border-dashed border-[#444444] rounded-lg p-3 bg-white/20 transition-all ${
             isSelected ? 'ring-2 ring-[#c2652a] shadow-lg' : ''
+          } ${
+            isDropTarget ? 'ring-2 ring-amber-500 ring-offset-2 ring-dashed bg-amber-500/10 shadow-lg' : ''
           }`}
           style={{
             left: node.x,
@@ -453,10 +457,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             width: node.width,
             height: node.height,
             minHeight: node.height,
-            zIndex: isSelected ? 4 : 2
+            zIndex: isSelected ? 4 : (isDropTarget ? 5 : 2)
           }}
           onClick={onSelect}
         >
+          {isDropTarget && (
+            <div className="absolute -top-3 right-4 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold tracking-tight shadow-md pointer-events-none flex items-center gap-1 z-30 animate-pulse">
+              <span>✦ Snap into {node.label || 'boundary'}</span>
+            </div>
+          )}
           <div className="text-xs font-bold text-[#444444] font-sans">
             [System Boundary: {node.label}]
           </div>
@@ -1019,6 +1028,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           id={node.id}
           className={`absolute select-none border-2 border-dashed border-[#555555] rounded-xl p-3 bg-amber-50/20 transition-all ${
             isSelected ? 'ring-2 ring-[#c2652a] shadow-lg' : ''
+          } ${
+            isDropTarget ? 'ring-2 ring-amber-500 ring-offset-2 ring-dashed bg-amber-500/10 shadow-lg' : ''
           }`}
           style={{
             left: node.x,
@@ -1026,10 +1037,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             width: node.width,
             height: node.height,
             minHeight: node.height,
-            zIndex: isSelected ? 4 : 2
+            zIndex: isSelected ? 4 : (isDropTarget ? 5 : 2)
           }}
           onClick={onSelect}
         >
+          {isDropTarget && (
+            <div className="absolute -top-3 right-4 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold tracking-tight shadow-md pointer-events-none flex items-center gap-1 z-30 animate-pulse">
+              <span>✦ Snap into {node.label || 'boundary'}</span>
+            </div>
+          )}
           <div className="text-xs font-bold text-gray-700 font-sans tracking-wide uppercase flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
             [Domain Boundary: {node.label}]
@@ -1558,11 +1574,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     const strokeColor = colorConfig.borderHex || '#A80036';
     const fillColor = colorConfig.bgHex || (isNote ? '#FEFFDD' : '#FEFECE');
 
+    const isContainerNode = isPackage || isFrame || isFolder || Boolean(node.data?.isContainer) || node.category === 'container' || node.type === 'package' || node.type === 'frame' || node.type === 'folder' || node.type === 'namespace';
+
     return (
       <div
         id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-[#A80036] ring-offset-2' : ''
+        } ${
+          isDropTarget && isContainerNode ? 'ring-2 ring-amber-500 ring-offset-2 ring-dashed bg-amber-500/10 shadow-lg' : ''
         }`}
         style={{
           left: node.x,
@@ -1570,14 +1590,21 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           width: node.width,
           height: node.height,
           minHeight: node.height,
-          zIndex: (isPackage || isFrame || isFolder || Boolean(node.data?.isContainer) || node.category === 'container' || node.type === 'package' || node.type === 'frame' || node.type === 'folder' || node.type === 'namespace') 
-            ? (isSelected ? 4 : 2) 
+          zIndex: isContainerNode 
+            ? (isSelected ? 4 : (isDropTarget ? 5 : 2)) 
             : (isSelected ? 30 : 10)
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
+        {/* Floating Snap Indicator Badge */}
+        {isDropTarget && isContainerNode && (
+          <div className="absolute -top-3 right-4 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold tracking-tight shadow-md pointer-events-none flex items-center gap-1 z-30 animate-pulse">
+            <span>✦ Snap into {node.label || 'container'}</span>
+          </div>
+        )}
+
         {/* SVG Background Shape */}
         {isPackage && <PackageShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
         {isCylinder && <CylinderDatabaseShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}

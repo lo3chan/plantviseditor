@@ -241,6 +241,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
   const [edgeLabelText, setEdgeLabelText] = useState('');
+  const [hoveredDropTargetId, setHoveredDropTargetId] = useState<string | null>(null);
   const selectedEdge = selectedEdgeId ? edges.find(e => e.id === selectedEdgeId) : null;
 
   // Selection handlers notifying onSelectElement
@@ -524,6 +525,37 @@ export const Canvas: React.FC<CanvasProps> = ({
       const effectiveDeltaX = newX - draggingNode.initialNodeX;
       const effectiveDeltaY = newY - draggingNode.initialNodeY;
 
+      // Detect hover over enclosing container for live magnetic drop-target feedback
+      const target = diagram.nodes.find(n => n.id === draggingNode.id);
+      const isTargetContainer = target && (
+        target.type === 'package' || 
+        target.type === 'frame' || 
+        target.type === 'folder' || 
+        target.type === 'namespace' ||
+        target.type === 'c4-boundary' ||
+        target.category === 'container' || 
+        Boolean(target.data?.isContainer)
+      );
+
+      if (target && !isTargetContainer) {
+        const centerX = newX + target.width / 2;
+        const centerY = newY + target.height / 2;
+        const enclosingContainers = diagram.nodes.filter(c => 
+          c.id !== target.id &&
+          (c.type === 'package' || c.type === 'frame' || c.type === 'folder' || c.type === 'namespace' || c.type === 'c4-boundary' || c.category === 'container' || c.data?.isContainer) &&
+          centerX >= c.x && centerX <= c.x + c.width &&
+          centerY >= c.y && centerY <= c.y + c.height
+        );
+        if (enclosingContainers.length > 0) {
+          enclosingContainers.sort((a, b) => (a.width * a.height) - (b.width * b.height));
+          setHoveredDropTargetId(enclosingContainers[0].id);
+        } else {
+          setHoveredDropTargetId(null);
+        }
+      } else {
+        setHoveredDropTargetId(null);
+      }
+
       onUpdateNodes(diagram.nodes.map(n => {
         if (n.id === draggingNode.id) {
           return { ...n, x: newX, y: newY };
@@ -597,11 +629,14 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingNode) {
+      setHoveredDropTargetId(null);
       const target = diagram.nodes.find(n => n.id === draggingNode.id);
       const isTargetContainer = target && (
         target.type === 'package' || 
         target.type === 'frame' || 
         target.type === 'folder' || 
+        target.type === 'namespace' ||
+        target.type === 'c4-boundary' ||
         target.category === 'container' || 
         Boolean(target.data?.isContainer)
       );
@@ -611,13 +646,15 @@ export const Canvas: React.FC<CanvasProps> = ({
         Math.abs(target.y - draggingNode.initialNodeY) > 2
       );
       if (hasMoved) {
-        let updatedNodes = diagram.nodes;
+        let updatedNodes = [...diagram.nodes];
+        let moveActionName = `Moved ${target?.label || 'Element'}`;
+
         if (target && !isTargetContainer) {
           const centerX = target.x + target.width / 2;
           const centerY = target.y + target.height / 2;
           const enclosingContainers = diagram.nodes.filter(c => 
             c.id !== target.id &&
-            (c.type === 'package' || c.type === 'frame' || c.type === 'folder' || c.category === 'container' || c.data?.isContainer) &&
+            (c.type === 'package' || c.type === 'frame' || c.type === 'folder' || c.type === 'namespace' || c.type === 'c4-boundary' || c.category === 'container' || c.data?.isContainer) &&
             centerX >= c.x && centerX <= c.x + c.width &&
             centerY >= c.y && centerY <= c.y + c.height
           );
@@ -626,16 +663,68 @@ export const Canvas: React.FC<CanvasProps> = ({
             enclosingContainers.sort((a, b) => (a.width * a.height) - (b.width * b.height));
             enclosing = enclosingContainers[0];
           }
-          const newParentId = enclosing ? enclosing.id : undefined;
-          if (target.data?.parentId !== newParentId) {
-            updatedNodes = diagram.nodes.map(n => 
-              n.id === target.id ? { ...n, data: { ...(n.data || {}), parentId: newParentId } } : n
-            );
+
+          if (enclosing) {
+            const newParentId = enclosing.id;
+            moveActionName = `Snapped ${target.label || 'Element'} into ${enclosing.label || 'Container'}`;
+            // Magnetic tab clearance: ensure top doesn't collide with the frame/package title tab
+            const headerPadding = enclosing.type === 'frame' ? 36 : (enclosing.type === 'folder' ? 32 : 30);
+            let finalTargetX = target.x;
+            let finalTargetY = target.y;
+
+            if (finalTargetY < enclosing.y + headerPadding) {
+              finalTargetY = enclosing.y + headerPadding;
+            }
+            if (finalTargetX < enclosing.x + 16) {
+              finalTargetX = enclosing.x + 16;
+            }
+
+            // Auto-expand container if child exceeds right or bottom boundary
+            const requiredWidth = Math.max(enclosing.width, (finalTargetX + target.width + 24) - enclosing.x);
+            const requiredHeight = Math.max(enclosing.height, (finalTargetY + target.height + 24) - enclosing.y);
+
+            updatedNodes = updatedNodes.map(n => {
+              if (n.id === target.id) {
+                return {
+                  ...n,
+                  x: finalTargetX,
+                  y: finalTargetY,
+                  data: { ...(n.data || {}), parentId: newParentId }
+                };
+              }
+              if (n.id === enclosing.id) {
+                return {
+                  ...n,
+                  width: requiredWidth,
+                  height: requiredHeight
+                };
+              }
+              return n;
+            });
+          } else {
+            // Unsnapped from container: clear parentId if previously attached
+            if (target.data?.parentId) {
+              moveActionName = `Unsnapped ${target.label || 'Element'} from Container`;
+              updatedNodes = updatedNodes.map(n => 
+                n.id === target.id ? { ...n, data: { ...(n.data || {}), parentId: undefined } } : n
+              );
+            }
           }
+        } else if (target && isTargetContainer && draggingNode.childOffsets) {
+          // Explicitly sync final positions for all enclosed children when container moved
+          const deltaX = target.x - draggingNode.initialNodeX;
+          const deltaY = target.y - draggingNode.initialNodeY;
+          updatedNodes = updatedNodes.map(n => {
+            const child = draggingNode.childOffsets?.find(c => c.id === n.id);
+            if (child) {
+              return { ...n, x: snap(child.initialX + deltaX), y: snap(child.initialY + deltaY) };
+            }
+            return n;
+          });
         }
 
         onUpdateNodes(updatedNodes, { 
-          actionName: `Moved ${target?.label || 'Element'}` 
+          actionName: moveActionName 
         });
       }
       setDraggingNode(null);
@@ -2222,11 +2311,13 @@ export const Canvas: React.FC<CanvasProps> = ({
           {nodes.map(node => (
             <div
               key={node.id}
+              data-node-id={node.id}
               onMouseDown={(e) => handleNodeMouseDown(node, e)}
             >
               <DiagramNodeView
                 node={node}
                 isSelected={selectedNodeId === node.id}
+                isDropTarget={hoveredDropTargetId === node.id}
                 onSelect={(e) => {
                   e.stopPropagation();
                   selectNode(node);
