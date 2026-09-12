@@ -119,7 +119,7 @@ export const AssetPanel: React.FC<AssetPanelProps> = ({
   }
 
   return (
-    <aside className="w-80 h-[calc(100vh-3.5rem)] bg-[#fdfaf5]/95 backdrop-blur-md border-r border-[#d8d0c8]/60 flex flex-col z-20 select-none shadow-sm transition-all duration-200">
+    <aside className="w-88 h-[calc(100vh-3.5rem)] bg-[#fdfaf5]/95 backdrop-blur-md border-r border-[#d8d0c8]/60 flex flex-col z-20 select-none shadow-sm transition-all duration-200">
       {/* Panel Header */}
       <div className="p-3 border-b border-[#d8d0c8]/50 flex items-center justify-between">
         <div>
@@ -143,8 +143,8 @@ export const AssetPanel: React.FC<AssetPanelProps> = ({
         </button>
       </div>
 
-      {/* Search Input */}
-      <div className="px-3 pt-2.5 pb-1.5">
+      {/* Search Input & Category Dropdown */}
+      <div className="px-3 pt-2.5 pb-2 space-y-2 border-b border-[#d8d0c8]/40">
         <div className="relative flex items-center">
           <Search className="w-3.5 h-3.5 absolute left-2.5 text-[#9a9088]" />
           <input
@@ -155,13 +155,37 @@ export const AssetPanel: React.FC<AssetPanelProps> = ({
             className="w-full text-xs pl-8 pr-2.5 py-1.5 bg-white border border-[#d8d0c8]/70 rounded-lg text-[#3a302a] placeholder-[#9a9088] focus:border-[#c2652a] focus:ring-1 focus:ring-[#c2652a] outline-none transition-all"
           />
         </div>
+
+        {/* Category Dropdown Selector */}
+        <div className="relative">
+          <select
+            id="select-asset-category"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full text-xs py-1.5 pl-2.5 pr-7 bg-white border border-[#d8d0c8]/80 rounded-lg text-[#3a302a] font-medium focus:border-[#c2652a] focus:ring-1 focus:ring-[#c2652a] outline-none cursor-pointer appearance-none shadow-2xs"
+          >
+            <option value="all">All Models & Categories ({UNIFIED_ASSETS.length})</option>
+            {STRUCTURAL_CATEGORIES.map(cat => {
+              const count = UNIFIED_ASSETS.filter(a => a.category === cat.id).length;
+              return (
+                <option key={cat.id} value={cat.id}>
+                  {cat.label} ({count})
+                </option>
+              );
+            })}
+          </select>
+          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#78706a]">
+            <ListFilter className="w-3.5 h-3.5" />
+          </div>
+        </div>
       </div>
 
-      {/* Category Pills Filter */}
-      <div className="px-3 py-1.5 border-b border-[#d8d0c8]/40 overflow-x-auto scrollbar-none flex items-center gap-1.5">
+      {/* Category Pills Filter (Wrapped & Scrollable) */}
+      <div className="px-3 py-2 border-b border-[#d8d0c8]/40 max-h-36 overflow-y-auto scrollbar-thin flex flex-wrap gap-1.5 bg-[#fbf7f0]/50">
         <button
+          id="btn-cat-all"
           onClick={() => setSelectedCategory('all')}
-          className={`shrink-0 text-[10.5px] px-2.5 py-1 rounded-full font-medium transition-colors cursor-pointer ${
+          className={`text-[10.5px] px-2.5 py-1 rounded-full font-medium transition-colors cursor-pointer ${
             selectedCategory === 'all'
               ? 'bg-[#c2652a] text-white shadow-2xs'
               : 'bg-white text-[#78706a] border border-[#d8d0c8]/70 hover:border-[#c2652a] hover:text-[#3a302a]'
@@ -171,18 +195,20 @@ export const AssetPanel: React.FC<AssetPanelProps> = ({
         </button>
         {STRUCTURAL_CATEGORIES.map(cat => {
           const isSelected = selectedCategory === cat.id;
+          const count = UNIFIED_ASSETS.filter(a => a.category === cat.id).length;
           return (
             <button
               key={cat.id}
+              id={`btn-cat-${cat.id}`}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`shrink-0 text-[10.5px] px-2 py-1 rounded-full font-medium transition-colors whitespace-nowrap cursor-pointer ${
+              className={`text-[10.5px] px-2 py-1 rounded-full font-medium transition-colors whitespace-nowrap cursor-pointer ${
                 isSelected
                   ? 'bg-[#c2652a] text-white shadow-2xs'
                   : 'bg-white text-[#78706a] border border-[#d8d0c8]/70 hover:border-[#c2652a] hover:text-[#3a302a]'
               }`}
               title={cat.description}
             >
-              {cat.label}
+              {cat.label} ({count})
             </button>
           );
         })}

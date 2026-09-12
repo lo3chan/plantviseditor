@@ -433,6 +433,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   PlantUML Standard Libraries
                 </div>
                 <button
+                  id="btn-preset-domain-er"
                   onClick={() => {
                     onSelectTemplate('domain_and_er');
                     setIsTemplateMenuOpen(false);
@@ -493,6 +494,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span className="text-[10px] text-gray-500">ASCII vector art, LaTeX &lt;math&gt;, JSON &amp; WBS packages</span>
                 </button>
                 <button
+                  id="btn-preset-sequence-auth"
                   onClick={() => {
                     onSelectTemplate('sequence_auth');
                     setIsTemplateMenuOpen(false);

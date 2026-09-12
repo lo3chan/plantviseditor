@@ -12,7 +12,16 @@ import {
   ArrowLeftRight,
   Palette,
   PenTool,
-  X
+  X,
+  Scissors,
+  Copy,
+  ClipboardPaste,
+  CopyPlus,
+  ArrowUp,
+  ArrowDown,
+  ZoomIn,
+  ZoomOut,
+  BoxSelect
 } from 'lucide-react';
 import { 
   DiagramData, 
@@ -388,6 +397,24 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
+  // Draw.io Control States: Spacebar Hand Tool, Marquee Rubberband, Right-Click Drag, Context Menu & Clipboard
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [marquee, setMarquee] = useState<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    isAdditive: boolean;
+  } | null>(null);
+  const [isRightDragging, setIsRightDragging] = useState(false);
+  const rightMouseDownPos = useRef<{ x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    targetNodeId?: string;
+  } | null>(null);
+  const clipboardRef = useRef<DiagramNode[]>([]);
+
   // Connection Dragging State
   const [connecting, setConnecting] = useState<{
     sourceId: string;
@@ -492,10 +519,19 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
-  // Start Canvas Pan or Deselect
+  // Start Canvas Pan, Marquee Selection, or Deselect (Draw.io Scheme)
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    // Middle click or Alt+click always pans anywhere
-    if (e.button === 1 || e.altKey) {
+    // Middle click (button 1) always pans
+    if (e.button === 1) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
+      return;
+    }
+
+    // Right click (button 2) starts Draw.io pan; if dragged > 4px, suppresses context menu
+    if (e.button === 2) {
+      rightMouseDownPos.current = { x: e.clientX, y: e.clientY };
+      setIsRightDragging(false);
       setIsPanning(true);
       setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
       return;
@@ -503,22 +539,70 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     const target = e.target as HTMLElement | SVGElement | null;
     const isInteractive = target?.closest?.(
-      '[data-node-id], [data-port], button, input, textarea, [data-interactive], [data-drag-handle]'
+      '[data-node-id], [data-port], button, input, textarea, [data-interactive], [data-drag-handle], #drawio-context-menu'
     );
     if (isInteractive) return;
 
+    // Left click (button 0)
     if (e.button === 0) {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
-      if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        clearSelection();
+      setContextMenu(null);
+
+      // Spacebar Hand Tool panning
+      if (isSpacePressed) {
+        setIsPanning(true);
+        setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
+        return;
       }
+
+      // Draw.io Marquee selection on empty canvas
+      const pos = screenToCanvas(e.clientX, e.clientY);
+      setMarquee({
+        startX: pos.x,
+        startY: pos.y,
+        currentX: pos.x,
+        currentY: pos.y,
+        isAdditive: e.shiftKey
+      });
     }
   };
 
-  // Start Node Dragging
+  // Start Node Dragging (Draw.io Alt+Drag Duplicate, Selection, Multi-Drag)
   const handleNodeMouseDown = (node: DiagramNode, e: React.MouseEvent) => {
     e.stopPropagation();
+    setContextMenu(null);
+
+    // Draw.io: Alt + Drag duplicates node and begins dragging the duplicate immediately
+    if (e.altKey) {
+      const cloneId = `${node.type}_clone_${Date.now()}`;
+      const clonedNode: DiagramNode = {
+        ...node,
+        id: cloneId,
+        label: `${node.label}`
+      };
+      onAddNode(clonedNode);
+      setSelectedNodeId(cloneId);
+      setSelectedNodeIds([cloneId]);
+      onSelectElement?.({ type: 'node', id: cloneId, label: clonedNode.label });
+
+      setDraggingNode({
+        id: cloneId,
+        startX: e.clientX,
+        startY: e.clientY,
+        initialNodeX: clonedNode.x,
+        initialNodeY: clonedNode.y
+      });
+      return;
+    }
+
+    // Right-click on node: select node for Draw.io context menu
+    if (e.button === 2) {
+      if (!selectedNodeIds.includes(node.id)) {
+        setSelectedNodeId(node.id);
+        setSelectedNodeIds([node.id]);
+        onSelectElement?.({ type: 'node', id: node.id, label: node.label });
+      }
+      return;
+    }
 
     const isMulti = e.shiftKey || e.ctrlKey || e.metaKey;
     let nextSelected = selectedNodeIds;
@@ -617,14 +701,46 @@ export const Canvas: React.FC<CanvasProps> = ({
     });
   };
 
-  // Mouse Move on Canvas
+  // Mouse Move on Canvas (Draw.io Pan, Marquee, Dragging)
   const handleMouseMove = (e: React.MouseEvent) => {
+    if (rightMouseDownPos.current) {
+      const dist = Math.hypot(e.clientX - rightMouseDownPos.current.x, e.clientY - rightMouseDownPos.current.y);
+      if (dist > 4) {
+        setIsRightDragging(true);
+      }
+    }
+
     if (isPanning) {
       onUpdateViewport({
         ...viewport,
         x: e.clientX - panStart.x,
         y: e.clientY - panStart.y
       });
+      return;
+    }
+
+    if (marquee) {
+      const pos = screenToCanvas(e.clientX, e.clientY);
+      setMarquee(prev => prev ? { ...prev, currentX: pos.x, currentY: pos.y } : null);
+
+      const minX = Math.min(marquee.startX, pos.x);
+      const maxX = Math.max(marquee.startX, pos.x);
+      const minY = Math.min(marquee.startY, pos.y);
+      const maxY = Math.max(marquee.startY, pos.y);
+
+      // Find all nodes intersecting the rubberband box
+      const enclosed = diagram.nodes.filter(n => {
+        return !(n.x + n.width < minX || n.x > maxX || n.y + n.height < minY || n.y > maxY);
+      }).map(n => n.id);
+
+      if (marquee.isAdditive) {
+        const combined = Array.from(new Set([...selectedNodeIds, ...enclosed]));
+        setSelectedNodeIds(combined);
+        setSelectedNodeId(combined[combined.length - 1] || null);
+      } else {
+        setSelectedNodeIds(enclosed);
+        setSelectedNodeId(enclosed[enclosed.length - 1] || null);
+      }
       return;
     }
 
@@ -681,15 +797,9 @@ export const Canvas: React.FC<CanvasProps> = ({
       const deltaY = (e.clientY - draggingNode.startY) / viewport.zoom;
 
       const target = diagram.nodes.find(n => n.id === draggingNode.id);
-      const isSeqParticipant = target && (
-        target.category === 'sequence' ||
-        target.type === 'participant' ||
-        target.type === 'seq-participant' ||
-        diagram.messages?.some(m => m.from === target.id || m.to === target.id)
-      );
 
       const newX = snap(draggingNode.initialNodeX + deltaX);
-      const newY = isSeqParticipant ? draggingNode.initialNodeY : snap(draggingNode.initialNodeY + deltaY);
+      const newY = snap(draggingNode.initialNodeY + deltaY);
       const effectiveDeltaX = newX - draggingNode.initialNodeX;
       const effectiveDeltaY = newY - draggingNode.initialNodeY;
 
@@ -728,11 +838,10 @@ export const Canvas: React.FC<CanvasProps> = ({
         onUpdateNodes(diagram.nodes.map(n => {
           const off = offsetMap.get(n.id);
           if (!off) return n;
-          const isThisSeq = n.category === 'sequence' || n.type === 'participant' || n.type === 'seq-participant';
           return {
             ...n,
             x: snap(off.initialX + effectiveDeltaX),
-            y: isThisSeq ? off.initialY : snap(off.initialY + effectiveDeltaY)
+            y: snap(off.initialY + effectiveDeltaY)
           };
         }), { skipHistory: true });
         return;
@@ -786,24 +895,55 @@ export const Canvas: React.FC<CanvasProps> = ({
     });
   };
 
-  // Mouse Up on Canvas
+  // Mouse Up on Canvas (Draw.io Marquee commit, Pan stop, Drag end)
   const handleMouseUp = (e: React.MouseEvent) => {
+    if (marquee) {
+      const dist = Math.hypot(marquee.currentX - marquee.startX, marquee.currentY - marquee.startY);
+      if (dist < 4 && !marquee.isAdditive) {
+        // Pure click on empty canvas without drag: deselect all
+        clearSelection();
+      }
+      setMarquee(null);
+    }
+
     if (isPanning) {
       setIsPanning(false);
     }
+
+    rightMouseDownPos.current = null;
 
     if (draggingEdgeLabel) {
       setDraggingEdgeLabel(null);
     }
 
     if (resizingNode) {
+      const deltaX = (e.clientX - resizingNode.startX) / viewport.zoom;
+      const deltaY = (e.clientY - resizingNode.startY) / viewport.zoom;
       const target = diagram.nodes.find(n => n.id === resizingNode.id);
+      const isContainer = target && (
+        target.type === 'package' || target.type === 'frame' || target.type === 'folder' ||
+        target.type === 'namespace' || target.type === 'c4-boundary' ||
+        target.category === 'container' || Boolean(target.data?.isContainer)
+      );
+      const minW = isContainer ? 140 : 60;
+      const minH = isContainer ? 100 : 40;
+
+      const finalWidth = ['se', 'e'].includes(resizingNode.direction)
+        ? Math.max(minW, snap(resizingNode.initialWidth + deltaX))
+        : resizingNode.initialWidth;
+
+      const finalHeight = ['se', 's'].includes(resizingNode.direction)
+        ? Math.max(minH, snap(resizingNode.initialHeight + deltaY))
+        : resizingNode.initialHeight;
+
       const hasResized = target && (
-        target.width !== resizingNode.initialWidth ||
-        target.height !== resizingNode.initialHeight
+        finalWidth !== resizingNode.initialWidth ||
+        finalHeight !== resizingNode.initialHeight
       );
       if (hasResized) {
-        onUpdateNodes(diagram.nodes, { 
+        onUpdateNodes(diagram.nodes.map(n => 
+          n.id === resizingNode.id ? { ...n, width: finalWidth, height: finalHeight } : n
+        ), { 
           actionName: `Resized ${target?.label || 'Element'}` 
         });
       }
@@ -847,28 +987,44 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     if (draggingNode) {
       setHoveredDropTargetId(null);
+      const deltaX = (e.clientX - draggingNode.startX) / viewport.zoom;
+      const deltaY = (e.clientY - draggingNode.startY) / viewport.zoom;
+      const finalNewX = snap(draggingNode.initialNodeX + deltaX);
+      const finalNewY = snap(draggingNode.initialNodeY + deltaY);
+      const effectiveDeltaX = finalNewX - draggingNode.initialNodeX;
+      const effectiveDeltaY = finalNewY - draggingNode.initialNodeY;
+
       const target = diagram.nodes.find(n => n.id === draggingNode.id);
       const isTargetContainer = target && (
         target.type === 'package' || 
         target.type === 'frame' || 
         target.type === 'folder' || 
-        target.type === 'namespace' ||
-        target.type === 'c4-boundary' ||
+        target.type === 'namespace' || 
+        target.type === 'c4-boundary' || 
         target.category === 'container' || 
         Boolean(target.data?.isContainer)
       );
 
-      const hasMoved = target && (
-        Math.abs(target.x - draggingNode.initialNodeX) > 2 ||
-        Math.abs(target.y - draggingNode.initialNodeY) > 2
-      );
+      const hasMoved = Math.abs(effectiveDeltaX) > 0 || Math.abs(effectiveDeltaY) > 0;
       if (hasMoved) {
         let updatedNodes = [...diagram.nodes];
         let moveActionName = `Moved ${target?.label || 'Element'}`;
 
-        if (target && !isTargetContainer) {
-          const centerX = target.x + target.width / 2;
-          const centerY = target.y + target.height / 2;
+        if (draggingNode.multiOffsets && draggingNode.multiOffsets.length > 1) {
+          const offsetMap = new Map(draggingNode.multiOffsets.map(o => [o.id, o]));
+          updatedNodes = diagram.nodes.map(n => {
+            const off = offsetMap.get(n.id);
+            if (!off) return n;
+            return {
+              ...n,
+              x: snap(off.initialX + effectiveDeltaX),
+              y: snap(off.initialY + effectiveDeltaY)
+            };
+          });
+          moveActionName = `Moved ${draggingNode.multiOffsets.length} Elements`;
+        } else if (target && !isTargetContainer) {
+          const centerX = finalNewX + target.width / 2;
+          const centerY = finalNewY + target.height / 2;
           const enclosingContainers = diagram.nodes.filter(c => 
             c.id !== target.id &&
             (c.type === 'package' || c.type === 'frame' || c.type === 'folder' || c.type === 'namespace' || c.type === 'c4-boundary' || c.category === 'container' || c.data?.isContainer) &&
@@ -886,8 +1042,8 @@ export const Canvas: React.FC<CanvasProps> = ({
             moveActionName = `Snapped ${target.label || 'Element'} into ${enclosing.label || 'Container'}`;
             // Magnetic tab clearance: ensure top doesn't collide with the frame/package title tab
             const headerPadding = enclosing.type === 'frame' ? 36 : (enclosing.type === 'folder' ? 32 : 30);
-            let finalTargetX = target.x;
-            let finalTargetY = target.y;
+            let finalTargetX = finalNewX;
+            let finalTargetY = finalNewY;
 
             if (finalTargetY < enclosing.y + headerPadding) {
               finalTargetY = enclosing.y + headerPadding;
@@ -919,22 +1075,31 @@ export const Canvas: React.FC<CanvasProps> = ({
               return n;
             });
           } else {
-            // Unsnapped from container: clear parentId if previously attached
+            // Normal move (or unsnapped from container)
+            updatedNodes = updatedNodes.map(n => {
+              if (n.id === target.id) {
+                return {
+                  ...n,
+                  x: finalNewX,
+                  y: finalNewY,
+                  data: target.data?.parentId ? { ...(n.data || {}), parentId: undefined } : n.data
+                };
+              }
+              return n;
+            });
             if (target.data?.parentId) {
               moveActionName = `Unsnapped ${target.label || 'Element'} from Container`;
-              updatedNodes = updatedNodes.map(n => 
-                n.id === target.id ? { ...n, data: { ...(n.data || {}), parentId: undefined } } : n
-              );
             }
           }
-        } else if (target && isTargetContainer && draggingNode.childOffsets) {
+        } else if (target && isTargetContainer) {
           // Explicitly sync final positions for all enclosed children when container moved
-          const deltaX = target.x - draggingNode.initialNodeX;
-          const deltaY = target.y - draggingNode.initialNodeY;
           updatedNodes = updatedNodes.map(n => {
+            if (n.id === target.id) {
+              return { ...n, x: finalNewX, y: finalNewY };
+            }
             const child = draggingNode.childOffsets?.find(c => c.id === n.id);
             if (child) {
-              return { ...n, x: snap(child.initialX + deltaX), y: snap(child.initialY + deltaY) };
+              return { ...n, x: snap(child.initialX + effectiveDeltaX), y: snap(child.initialY + effectiveDeltaY) };
             }
             return n;
           });
@@ -987,9 +1152,70 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
   };
 
-  // Zoom with Wheel
+  // Draw.io Right-Click Context Menu
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isRightDragging) {
+      setIsRightDragging(false);
+      return;
+    }
+
+    const target = e.target as HTMLElement | SVGElement | null;
+    const nodeEl = target?.closest('[data-node-id]');
+    const clickedNodeId = nodeEl?.getAttribute('data-node-id') || undefined;
+
+    if (clickedNodeId && !selectedNodeIds.includes(clickedNodeId)) {
+      setSelectedNodeId(clickedNodeId);
+      setSelectedNodeIds([clickedNodeId]);
+      const clickedNode = diagram.nodes.find(n => n.id === clickedNodeId);
+      if (clickedNode) onSelectElement?.({ type: 'node', id: clickedNode.id, label: clickedNode.label });
+    }
+
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      targetNodeId: clickedNodeId || selectedNodeId || undefined
+    });
+  };
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClickOutside = () => setContextMenu(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [contextMenu]);
+
+  // Window-level mouse tracking ensuring fast drags and out-of-bounds mouse releases always commit
+  const handleMouseMoveRef = useRef(handleMouseMove);
+  handleMouseMoveRef.current = handleMouseMove;
+  const handleMouseUpRef = useRef(handleMouseUp);
+  handleMouseUpRef.current = handleMouseUp;
+
+  useEffect(() => {
+    const isInteracting = Boolean(
+      draggingNode || resizingNode || isPanning || draggingBlock || draggingMessage || draggingEdgeLabel || connecting || marquee
+    );
+    if (!isInteracting) return;
+
+    const onWindowMouseMove = (e: MouseEvent) => {
+      handleMouseMoveRef.current(e as unknown as React.MouseEvent);
+    };
+    const onWindowMouseUp = (e: MouseEvent) => {
+      handleMouseUpRef.current(e as unknown as React.MouseEvent);
+    };
+
+    window.addEventListener('mousemove', onWindowMouseMove);
+    window.addEventListener('mouseup', onWindowMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', onWindowMouseMove);
+      window.removeEventListener('mouseup', onWindowMouseUp);
+    };
+  }, [Boolean(draggingNode || resizingNode || isPanning || draggingBlock || draggingMessage || draggingEdgeLabel || connecting || marquee)]);
+
+  // Zoom & Pan with Wheel (Draw.io Scheme)
   const handleWheel = (e: React.WheelEvent) => {
-    // If the wheel event happened inside a scrollable menu, popover, drawer, or input, do NOT zoom canvas
+    // If the wheel event happened inside a scrollable menu, popover, drawer, or input, do NOT pan/zoom canvas
     const target = e.target as HTMLElement | null;
     if (target && (
       target.closest('.overflow-y-auto') || 
@@ -998,25 +1224,49 @@ export const Canvas: React.FC<CanvasProps> = ({
       target.closest('[data-scrollable]') ||
       target.closest('#quick-action-bar-container') ||
       target.closest('#edge-toolbar-container') ||
-      target.closest('.scrollbar-thin')
+      target.closest('.scrollbar-thin') ||
+      target.closest('#drawio-context-menu')
     )) {
       return;
     }
 
     e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-    const newZoom = Math.min(Math.max(viewport.zoom * zoomFactor, 0.3), 2.5);
 
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const mouseY = e.clientY - rect.top;
+    // Draw.io Wheel Scheme:
+    // 1. Ctrl / Cmd + Wheel: Zoom centered at mouse cursor
+    if (e.ctrlKey || e.metaKey) {
+      const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+      const newZoom = Math.min(Math.max(viewport.zoom * zoomFactor, 0.25), 2.5);
 
-      const newX = mouseX - (mouseX - viewport.x) * (newZoom / viewport.zoom);
-      const newY = mouseY - (mouseY - viewport.y) * (newZoom / viewport.zoom);
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
 
-      onUpdateViewport({ x: newX, y: newY, zoom: newZoom });
+        const newX = mouseX - (mouseX - viewport.x) * (newZoom / viewport.zoom);
+        const newY = mouseY - (mouseY - viewport.y) * (newZoom / viewport.zoom);
+
+        onUpdateViewport({ x: newX, y: newY, zoom: newZoom });
+      }
+      return;
     }
+
+    // 2. Shift + Wheel: Horizontal pan
+    if (e.shiftKey) {
+      const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+      onUpdateViewport({
+        ...viewport,
+        x: viewport.x - delta
+      });
+      return;
+    }
+
+    // 3. Normal Wheel: Vertical pan (and deltaX if trackpad 2D scrolling)
+    onUpdateViewport({
+      ...viewport,
+      x: viewport.x - (e.deltaX || 0),
+      y: viewport.y - e.deltaY
+    });
   };
 
   // Quick Action Handlers
@@ -1065,20 +1315,8 @@ export const Canvas: React.FC<CanvasProps> = ({
     setSelectedNodeId(null);
   };
 
-  const handleDuplicateSelected = () => {
-    if (!selectedNode) return;
-    const newNode: DiagramNode = {
-      ...selectedNode,
-      id: `${selectedNode.type}_copy_${Date.now()}`,
-      x: selectedNode.x + 40,
-      y: selectedNode.y + 40,
-      label: `${selectedNode.label} (Copy)`
-    };
-    onAddNode(newNode);
-    setSelectedNodeId(newNode.id);
-  };
-
-  const handleDeleteSelected = () => {
+  // Draw.io Clipboard, Deletion & Layering operations
+  const handleDeleteSelected = useCallback(() => {
     if (selectedNodeIds.length > 0 || selectedNodeId) {
       const idsToDelete = new Set(selectedNodeIds.length > 0 ? selectedNodeIds : [selectedNodeId!]);
       onUpdateNodes(diagram.nodes.filter(n => !idsToDelete.has(n.id)));
@@ -1108,6 +1346,81 @@ export const Canvas: React.FC<CanvasProps> = ({
       }
       setSelectedBlockId(null);
     }
+  }, [selectedNodeIds, selectedNodeId, selectedEdgeId, selectedBlockId, diagram.nodes, diagram.edges, diagram.messages, diagram.blocks, onUpdateNodes, onUpdateEdges, onUpdateDiagram]);
+
+  const handleSelectAll = useCallback(() => {
+    const allIds = diagram.nodes.map(n => n.id);
+    setSelectedNodeIds(allIds);
+    setSelectedNodeId(allIds[0] || null);
+    setSelectedEdgeId(null);
+    setSelectedBlockId(null);
+  }, [diagram.nodes]);
+
+  const handleCopySelected = useCallback(() => {
+    const activeIds = selectedNodeIds.length > 0 ? selectedNodeIds : (selectedNodeId ? [selectedNodeId] : []);
+    if (activeIds.length === 0) return;
+    const targets = diagram.nodes.filter(n => activeIds.includes(n.id));
+    clipboardRef.current = JSON.parse(JSON.stringify(targets));
+  }, [diagram.nodes, selectedNodeIds, selectedNodeId]);
+
+  const handlePaste = useCallback(() => {
+    if (clipboardRef.current.length === 0) return;
+    const now = Date.now();
+    const pastedNodes: DiagramNode[] = clipboardRef.current.map((n, idx) => {
+      const newId = `${n.type}_pasted_${now}_${idx}`;
+      return {
+        ...n,
+        id: newId,
+        x: n.x + 32,
+        y: n.y + 32,
+        label: `${n.label}`
+      };
+    });
+
+    onUpdateNodes([...diagram.nodes, ...pastedNodes], { actionName: `Pasted ${pastedNodes.length} element(s)` });
+    const newIds = pastedNodes.map(n => n.id);
+    setSelectedNodeIds(newIds);
+    setSelectedNodeId(newIds[newIds.length - 1] || null);
+    clipboardRef.current = pastedNodes;
+  }, [diagram.nodes, onUpdateNodes]);
+
+  const handleCutSelected = useCallback(() => {
+    handleCopySelected();
+    handleDeleteSelected();
+  }, [handleCopySelected, handleDeleteSelected]);
+
+  const handleDuplicateAllSelected = useCallback(() => {
+    handleCopySelected();
+    handlePaste();
+  }, [handleCopySelected, handlePaste]);
+
+  const handleBringToFront = useCallback(() => {
+    const activeIds = new Set(selectedNodeIds.length > 0 ? selectedNodeIds : (selectedNodeId ? [selectedNodeId] : []));
+    if (activeIds.size === 0) return;
+    const nonSelected = diagram.nodes.filter(n => !activeIds.has(n.id));
+    const selected = diagram.nodes.filter(n => activeIds.has(n.id));
+    onUpdateNodes([...nonSelected, ...selected], { actionName: 'Bring to Front' });
+  }, [diagram.nodes, selectedNodeIds, selectedNodeId, onUpdateNodes]);
+
+  const handleSendToBack = useCallback(() => {
+    const activeIds = new Set(selectedNodeIds.length > 0 ? selectedNodeIds : (selectedNodeId ? [selectedNodeId] : []));
+    if (activeIds.size === 0) return;
+    const nonSelected = diagram.nodes.filter(n => !activeIds.has(n.id));
+    const selected = diagram.nodes.filter(n => activeIds.has(n.id));
+    onUpdateNodes([...selected, ...nonSelected], { actionName: 'Send to Back' });
+  }, [diagram.nodes, selectedNodeIds, selectedNodeId, onUpdateNodes]);
+
+  const handleDuplicateSelected = () => {
+    if (!selectedNode) return;
+    const newNode: DiagramNode = {
+      ...selectedNode,
+      id: `${selectedNode.type}_copy_${Date.now()}`,
+      x: selectedNode.x + 40,
+      y: selectedNode.y + 40,
+      label: `${selectedNode.label} (Copy)`
+    };
+    onAddNode(newNode);
+    setSelectedNodeId(newNode.id);
   };
 
   // Fast connect / branch out new node
@@ -1294,25 +1607,153 @@ export const Canvas: React.FC<CanvasProps> = ({
     selectNode(frameNode);
   };
 
-  // Keyboard Delete / Duplicate
+  // Draw.io Keyboard Shortcuts & Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if typing in an input
-      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+      // Don't intercept if typing in an input, textarea, or contentEditable
+      const target = e.target as HTMLElement | null;
+      if (
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName || '') ||
+        target?.isContentEditable
+      ) {
         return;
       }
 
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        handleDeleteSelected();
-      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+      // Spacebar Hand Tool Pan
+      if (e.code === 'Space' || e.key === ' ') {
         e.preventDefault();
-        handleDuplicateSelected();
+        setIsSpacePressed(true);
+        return;
+      }
+
+      // Escape: clear selection, marquee, context menu
+      if (e.key === 'Escape') {
+        clearSelection();
+        setContextMenu(null);
+        setMarquee(null);
+        return;
+      }
+
+      // Ctrl/Cmd + A: Select All
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        handleSelectAll();
+        return;
+      }
+
+      // Ctrl/Cmd + C: Copy
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        handleCopySelected();
+        return;
+      }
+
+      // Ctrl/Cmd + V: Paste
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        handlePaste();
+        return;
+      }
+
+      // Ctrl/Cmd + X: Cut
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        e.preventDefault();
+        handleCutSelected();
+        return;
+      }
+
+      // Ctrl/Cmd + D: Duplicate
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        handleDuplicateAllSelected();
+        return;
+      }
+
+      // Delete / Backspace
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        handleDeleteSelected();
+        return;
+      }
+
+      // Zoom shortcuts: Ctrl + '=', Ctrl + '+', Ctrl + '-'
+      if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        onUpdateViewport({ ...viewport, zoom: Math.min(viewport.zoom * 1.15, 2.5) });
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === '-' || e.key === '_')) {
+        e.preventDefault();
+        onUpdateViewport({ ...viewport, zoom: Math.max(viewport.zoom * 0.85, 0.3) });
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+        e.preventDefault();
+        onUpdateViewport({ x: 60, y: 40, zoom: 1 });
+        return;
+      }
+
+      // Arrow keys: Nudge selected nodes (10px default, 1px with Shift)
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        const activeIds = selectedNodeIds.length > 0 ? selectedNodeIds : (selectedNodeId ? [selectedNodeId] : []);
+        if (activeIds.length > 0) {
+          e.preventDefault();
+          const step = e.shiftKey ? 1 : (snapToGrid ? 16 : 10);
+          const dx = e.key === 'ArrowLeft' ? -step : (e.key === 'ArrowRight' ? step : 0);
+          const dy = e.key === 'ArrowUp' ? -step : (e.key === 'ArrowDown' ? step : 0);
+
+          const activeSet = new Set(activeIds);
+          const updated = diagram.nodes.map(n => {
+            if (!activeSet.has(n.id)) return n;
+            return {
+              ...n,
+              x: n.x + dx,
+              y: n.y + dy
+            };
+          });
+          onUpdateNodes(updated, { actionName: `Nudge ${activeIds.length} element(s)` });
+          return;
+        }
       }
     };
 
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space' || e.key === ' ') {
+        setIsSpacePressed(false);
+      }
+    };
+
+    const handleWindowBlur = () => {
+      setIsSpacePressed(false);
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, selectedNodeIds, selectedEdgeId, selectedBlockId, diagram]);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [
+    selectedNodeId,
+    selectedNodeIds,
+    selectedEdgeId,
+    selectedBlockId,
+    diagram,
+    snapToGrid,
+    viewport,
+    onUpdateViewport,
+    onUpdateNodes,
+    handleSelectAll,
+    handleCopySelected,
+    handlePaste,
+    handleCutSelected,
+    handleDuplicateAllSelected,
+    handleDeleteSelected,
+    clearSelection
+  ]);
 
   // Edge Calculations helper
   const getNodeCenter = (nodeId: string) => {
@@ -1925,11 +2366,19 @@ export const Canvas: React.FC<CanvasProps> = ({
   const canvasBg = isDark ? '#181412' : '#faf5ee';
   const brickColor = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(194, 101, 42, 0.04)';
 
+  const canvasCursor = isSpacePressed 
+    ? (isPanning ? 'cursor-grabbing' : 'cursor-grab')
+    : isPanning
+    ? 'cursor-grabbing'
+    : marquee
+    ? 'cursor-crosshair'
+    : 'cursor-default';
+
   return (
     <div
       ref={containerRef}
       id="diagram-canvas-root"
-      className="relative w-full h-full overflow-hidden canvas-bg cursor-default"
+      className={`relative w-full h-full overflow-hidden canvas-bg ${canvasCursor}`}
       style={{
         backgroundColor: canvasBg,
         backgroundImage: `
@@ -1947,6 +2396,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onWheel={handleWheel}
+      onContextMenu={handleContextMenu}
     >
       {/* Zoom / Pan Transformed Layer */}
       <div
@@ -2675,6 +3125,28 @@ export const Canvas: React.FC<CanvasProps> = ({
               markerEnd="url(#arrow-head)"
             />
           )}
+
+          {/* Draw.io Marquee Rubberband Selection Rectangle */}
+          {marquee && (() => {
+            const mX = Math.min(marquee.startX, marquee.currentX);
+            const mY = Math.min(marquee.startY, marquee.currentY);
+            const mW = Math.abs(marquee.currentX - marquee.startX);
+            const mH = Math.abs(marquee.currentY - marquee.startY);
+            return (
+              <rect
+                x={mX}
+                y={mY}
+                width={mW}
+                height={mH}
+                fill="rgba(194, 101, 42, 0.08)"
+                stroke="#c2652a"
+                strokeWidth="1.5"
+                strokeDasharray="4,3"
+                rx="2"
+                className="pointer-events-none"
+              />
+            );
+          })()}
         </svg>
 
         {/* HTML Nodes Layer */}
@@ -3125,11 +3597,246 @@ export const Canvas: React.FC<CanvasProps> = ({
         )}
       </aside>
 
-      {/* Mini Pan hint indicator */}
-      <div className="absolute bottom-4 left-4 pointer-events-none text-[11px] text-[#78706a]/70 flex items-center gap-1 bg-[#faf5ee]/80 px-2 py-1 rounded-md border border-[#d8d0c8]/40 backdrop-blur-xs">
-        <Move className="w-3 h-3" />
-        <span>Drag canvas to pan • Wheel to zoom</span>
+      {/* Draw.io Control Scheme hint indicator */}
+      <div className="absolute bottom-4 left-4 pointer-events-none text-[11px] text-[#78706a] dark:text-[#a19991] flex items-center gap-2 bg-[#faf5ee]/90 dark:bg-[#201d1a]/90 px-2.5 py-1.5 rounded-lg border border-[#d8d0c8]/60 dark:border-[#3f3a34] backdrop-blur-md shadow-xs">
+        <Move className="w-3.5 h-3.5 text-[#c2652a]" />
+        <span><strong className="font-semibold text-[#2b2622] dark:text-[#f4f4f5]">Right-drag / Space-drag:</strong> Pan</span>
+        <span className="text-[#d8d0c8] dark:text-[#524941]">•</span>
+        <span><strong className="font-semibold text-[#2b2622] dark:text-[#f4f4f5]">Left-drag:</strong> Select</span>
+        <span className="text-[#d8d0c8] dark:text-[#524941]">•</span>
+        <span><strong className="font-semibold text-[#2b2622] dark:text-[#f4f4f5]">Alt-drag:</strong> Duplicate</span>
+        <span className="text-[#d8d0c8] dark:text-[#524941]">•</span>
+        <span><strong className="font-semibold text-[#2b2622] dark:text-[#f4f4f5]">Ctrl+Wheel:</strong> Zoom</span>
       </div>
+
+      {/* Draw.io Right-Click Context Menu */}
+      {contextMenu && (
+        <div
+          id="drawio-context-menu"
+          className="fixed z-50 min-w-[200px] bg-white dark:bg-[#1f1d1a] border border-[#d8d0c8] dark:border-[#3f3a34] rounded-xl shadow-2xl py-1 text-xs text-[#2b2622] dark:text-[#f4f4f5] select-none backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
+          style={{
+            left: `${Math.max(8, Math.min(contextMenu.x, window.innerWidth - 220))}px`,
+            top: `${Math.max(8, Math.min(contextMenu.y, window.innerHeight - 340))}px`
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {selectedNodeIds.length > 0 || selectedNodeId ? (
+            <>
+              <button
+                type="button"
+                onClick={() => { handleCutSelected(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Scissors className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Cut</span>
+                </span>
+                <kbd className="font-mono text-[10px] text-[#78706a]/70">Ctrl+X</kbd>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { handleCopySelected(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Copy className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Copy</span>
+                </span>
+                <kbd className="font-mono text-[10px] text-[#78706a]/70">Ctrl+C</kbd>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { handleDuplicateAllSelected(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <CopyPlus className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Duplicate</span>
+                </span>
+                <kbd className="font-mono text-[10px] text-[#78706a]/70">Ctrl+D</kbd>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { handleDeleteSelected(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                  <span>Delete</span>
+                </span>
+                <kbd className="font-mono text-[10px] text-red-600/70">Del</kbd>
+              </button>
+
+              <div className="my-1 border-t border-gray-100 dark:border-[#35302b]" />
+
+              <button
+                type="button"
+                onClick={() => { handleBringToFront(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <ArrowUp className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Bring to Front</span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { handleSendToBack(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <ArrowDown className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Send to Back</span>
+                </span>
+              </button>
+
+              <div className="my-1 border-t border-gray-100 dark:border-[#35302b]" />
+
+              <button
+                type="button"
+                onClick={() => { handleWrapInPackage(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Edit3 className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Wrap in Package</span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { handleWrapInFrame(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Edit3 className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Wrap in Frame</span>
+                </span>
+              </button>
+
+              <div className="my-1 border-t border-gray-100 dark:border-[#35302b]" />
+
+              <button
+                type="button"
+                onClick={() => { handleSelectAll(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <BoxSelect className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Select All</span>
+                </span>
+                <kbd className="font-mono text-[10px] text-[#78706a]/70">Ctrl+A</kbd>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setIsInspectorOpen(true); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Edit3 className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Inspect Properties</span>
+                </span>
+              </button>
+            </>
+          ) : (
+            <>
+              {clipboardRef.current.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { handlePaste(); setContextMenu(null); }}
+                  className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <ClipboardPaste className="w-3.5 h-3.5 text-[#78706a]" />
+                    <span>Paste ({clipboardRef.current.length})</span>
+                  </span>
+                  <kbd className="font-mono text-[10px] text-[#78706a]/70">Ctrl+V</kbd>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => { handleSelectAll(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <BoxSelect className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Select All</span>
+                </span>
+                <kbd className="font-mono text-[10px] text-[#78706a]/70">Ctrl+A</kbd>
+              </button>
+
+              <div className="my-1 border-t border-gray-100 dark:border-[#35302b]" />
+
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateViewport({ ...viewport, zoom: Math.min(viewport.zoom * 1.15, 2.5) });
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <ZoomIn className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Zoom In</span>
+                </span>
+                <kbd className="font-mono text-[10px] text-[#78706a]/70">Ctrl +</kbd>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateViewport({ ...viewport, zoom: Math.max(viewport.zoom * 0.85, 0.3) });
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <ZoomOut className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Zoom Out</span>
+                </span>
+                <kbd className="font-mono text-[10px] text-[#78706a]/70">Ctrl -</kbd>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onUpdateViewport({ x: 60, y: 40, zoom: 1 });
+                  setContextMenu(null);
+                }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Maximize className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Reset View</span>
+                </span>
+                <kbd className="font-mono text-[10px] text-[#78706a]/70">Ctrl 0</kbd>
+              </button>
+
+              <div className="my-1 border-t border-gray-100 dark:border-[#35302b]" />
+
+              <button
+                type="button"
+                onClick={() => { onToggleSnap(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Grid className="w-3.5 h-3.5 text-[#78706a]" />
+                  <span>Snap to Grid</span>
+                </span>
+                <span className={`text-[10px] font-semibold ${snapToGrid ? 'text-[#c2652a]' : 'text-gray-400'}`}>
+                  {snapToGrid ? 'ON' : 'OFF'}
+                </span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Floating Element Properties Inspector Drawer */}
       <ElementInspector
