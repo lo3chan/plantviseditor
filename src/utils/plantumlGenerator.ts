@@ -12,6 +12,7 @@ import {
   PortPosition
 } from '../types';
 import { resolveOverlaps } from './overlapResolver';
+import { getOptimalNodeDimensions, ensureNodeDimensions } from './nodeSizing';
 
 export function sanitizeId(str: string): string {
   const clean = str.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -2526,13 +2527,16 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     finishBlock(unclosed, nodes, nodeMap);
   }
 
+  // Ensure all nodes start out sized so all contents (headers, columns, attributes) are fully visible
+  const sizedNodes = nodes.map(n => ensureNodeDimensions(n));
+
   // Automatic Layout
-  applyAutoLayout(nodes, edges);
+  applyAutoLayout(sizedNodes, edges);
 
   return {
     title,
     settings,
-    nodes,
+    nodes: sizedNodes,
     edges
   };
 }

@@ -52,8 +52,8 @@ export const DEFAULT_DIAGRAM: DiagramData = {
       label: 'Customer',
       x: 60,
       y: 60,
-      width: 220,
-      height: 140,
+      width: 240,
+      height: 220,
       color: 'sienna',
       data: {
         attributes: ['+id: Long', '+name: String', '+email: String'],
@@ -67,8 +67,8 @@ export const DEFAULT_DIAGRAM: DiagramData = {
       label: 'Order',
       x: 420,
       y: 60,
-      width: 220,
-      height: 140,
+      width: 240,
+      height: 220,
       color: 'sienna',
       data: {
         attributes: ['+id: Long', '+total: Double', '+status: OrderStatus'],
@@ -83,8 +83,8 @@ export const DEFAULT_DIAGRAM: DiagramData = {
       sublabel: '<<entity>>',
       x: 780,
       y: 60,
-      width: 220,
-      height: 140,
+      width: 240,
+      height: 220,
       color: 'ochre',
       data: {
         tableName: 'OrderItem',
@@ -103,9 +103,9 @@ export const DEFAULT_DIAGRAM: DiagramData = {
       label: 'PostgreSQL',
       sublabel: '<<Database>>',
       x: 420,
-      y: 290,
+      y: 340,
       width: 190,
-      height: 75,
+      height: 85,
       color: 'slate'
     },
     {
@@ -114,9 +114,9 @@ export const DEFAULT_DIAGRAM: DiagramData = {
       category: 'component',
       label: 'AWS Cloud',
       x: 60,
-      y: 290,
+      y: 340,
       width: 190,
-      height: 75,
+      height: 85,
       color: 'sand'
     }
   ],

@@ -13,6 +13,7 @@ import {
 import { DEFAULT_DIAGRAM, BLANK_DIAGRAM, UNIFIED_STARTER_PRESETS } from './utils/templates';
 import { generatePlantUML, parsePlantUML, applyAutoLayout } from './utils/plantumlGenerator';
 import { resolveOverlaps, resolveDiagramOverlaps, resolveEdgeLabelOverlaps, findVacantPosition } from './utils/overlapResolver';
+import { ensureNodeDimensions } from './utils/nodeSizing';
 import { Navbar, WorkspaceViewMode, RenderEngineMode } from './components/Navbar';
 import { AssetPanel } from './components/AssetPanel';
 import { Canvas } from './components/Canvas';
@@ -403,7 +404,7 @@ export default function App() {
       }
     }
 
-    const newNode: DiagramNode = {
+    const newNode: DiagramNode = ensureNodeDimensions({
       id: `${resolvedType}_${Date.now()}`,
       type: resolvedType,
       category: resolvedCategory,
@@ -419,7 +420,7 @@ export default function App() {
         ...(resolvedShape ? { shape: resolvedShape } : {}),
         ...(asset.description ? { description: asset.description } : {})
       }
-    };
+    });
 
     updateDiagram((prev) => ({
       nodes: [...(prev.nodes || []), newNode]
@@ -447,18 +448,21 @@ export default function App() {
       const parsed = parsePlantUML(newCode);
 
       if (parsed.nodes !== undefined || parsed.edges !== undefined) {
-        // Preserve positions of existing nodes where IDs match so canvas doesn't jump randomly
+        // Preserve positions of existing nodes where IDs match while ensuring all contents remain visible
         const existingNodeMap = new Map<string, DiagramNode>((diagram.nodes || []).map(n => [n.id, n]));
         const initialNodes = (parsed.nodes || []).map(n => {
+          const sized = ensureNodeDimensions(n);
           const existing = existingNodeMap.get(n.id);
           if (existing) {
             return {
-              ...n,
+              ...sized,
               x: existing.x,
-              y: existing.y
+              y: existing.y,
+              width: Math.max(existing.width || sized.width, sized.width),
+              height: Math.max(existing.height || sized.height, sized.height)
             };
           }
-          return n;
+          return sized;
         });
 
         const resolvedNodes = resolveOverlaps(initialNodes, 36);

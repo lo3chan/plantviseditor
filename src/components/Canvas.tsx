@@ -28,8 +28,9 @@ import { DiagramNodeView } from './DiagramNode';
 import { QuickActionBar } from './QuickActionBar';
 import { EdgeToolbar } from './EdgeToolbar';
 import { QuickBranchPopup } from './QuickBranchPopup';
-import { ElementInspector } from './ElementInspector';
 import { isMultiplicity } from '../utils/overlapResolver';
+import { getOptimalNodeDimensions } from '../utils/nodeSizing';
+import { ElementInspector } from './ElementInspector';
 
 interface CanvasProps {
   diagram: DiagramData;
@@ -502,12 +503,15 @@ export const Canvas: React.FC<CanvasProps> = ({
       const deltaX = (e.clientX - resizingNode.startX) / viewport.zoom;
       const deltaY = (e.clientY - resizingNode.startY) / viewport.zoom;
 
+      const target = diagram.nodes.find(n => n.id === resizingNode.id);
+      const minDims = target ? getOptimalNodeDimensions(target) : { width: 80, height: 50 };
+
       const newWidth = ['se', 'e'].includes(resizingNode.direction)
-        ? Math.max(80, snap(resizingNode.initialWidth + deltaX))
+        ? Math.max(minDims.width, snap(resizingNode.initialWidth + deltaX))
         : resizingNode.initialWidth;
 
       const newHeight = ['se', 's'].includes(resizingNode.direction)
-        ? Math.max(50, snap(resizingNode.initialHeight + deltaY))
+        ? Math.max(minDims.height, snap(resizingNode.initialHeight + deltaY))
         : resizingNode.initialHeight;
 
       onUpdateNodes(diagram.nodes.map(n => 
@@ -1131,14 +1135,21 @@ export const Canvas: React.FC<CanvasProps> = ({
       }
     }
 
-    const srcCenter = { x: srcNode.x + srcNode.width / 2, y: srcNode.y + srcNode.height / 2 };
-    const tgtCenter = { x: tgtNode.x + tgtNode.width / 2, y: tgtNode.y + tgtNode.height / 2 };
+    const srcOptimal = getOptimalNodeDimensions(srcNode);
+    const tgtOptimal = getOptimalNodeDimensions(tgtNode);
+    const srcW = Math.max(srcNode.width || srcOptimal.width, srcOptimal.width);
+    const srcH = Math.max(srcNode.height || srcOptimal.height, srcOptimal.height);
+    const tgtW = Math.max(tgtNode.width || tgtOptimal.width, tgtOptimal.width);
+    const tgtH = Math.max(tgtNode.height || tgtOptimal.height, tgtOptimal.height);
+
+    const srcCenter = { x: srcNode.x + srcW / 2, y: srcNode.y + srcH / 2 };
+    const tgtCenter = { x: tgtNode.x + tgtW / 2, y: tgtNode.y + tgtH / 2 };
 
     const dx = tgtCenter.x - srcCenter.x;
     const dy = tgtCenter.y - srcCenter.y;
 
-    const wRatio = (srcNode.width + tgtNode.width) / 2 || 1;
-    const hRatio = (srcNode.height + tgtNode.height) / 2 || 1;
+    const wRatio = (srcW + tgtW) / 2 || 1;
+    const hRatio = (srcH + tgtH) / 2 || 1;
 
     let computedSrcPort: PortPosition = 'right';
     let computedTgtPort: PortPosition = 'left';
@@ -1170,17 +1181,20 @@ export const Canvas: React.FC<CanvasProps> = ({
   const getPortCoord = (nodeOrId: string | DiagramNode, port?: PortPosition) => {
     const node = typeof nodeOrId === 'string' ? (nodes.find(n => n.id === nodeOrId) || diagram.nodes?.find(n => n.id === nodeOrId)) : nodeOrId;
     if (!node) return { x: 0, y: 0 };
+    const optimal = getOptimalNodeDimensions(node);
+    const w = Math.max(node.width || optimal.width, optimal.width);
+    const h = Math.max(node.height || optimal.height, optimal.height);
     switch (port) {
       case 'top':
-        return { x: node.x + node.width / 2, y: node.y };
+        return { x: node.x + w / 2, y: node.y };
       case 'right':
-        return { x: node.x + node.width, y: node.y + node.height / 2 };
+        return { x: node.x + w, y: node.y + h / 2 };
       case 'bottom':
-        return { x: node.x + node.width / 2, y: node.y + node.height };
+        return { x: node.x + w / 2, y: node.y + h };
       case 'left':
-        return { x: node.x, y: node.y + node.height / 2 };
+        return { x: node.x, y: node.y + h / 2 };
       default:
-        return { x: node.x + node.width / 2, y: node.y + node.height / 2 };
+        return { x: node.x + w / 2, y: node.y + h / 2 };
     }
   };
 

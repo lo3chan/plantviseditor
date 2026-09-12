@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { DiagramNode, PortPosition, ErColumn, ObjectSlot, MapEntry } from '../types';
 import { getColorConfig } from '../utils/assetsData';
+import { getOptimalNodeDimensions } from '../utils/nodeSizing';
 import {
   CylinderDatabaseShape,
   QueueShape,
@@ -95,6 +96,12 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const colorConfig = getColorConfig(node.color);
+
+  // Content-aware optimal dimensions ensuring everything starts out visible
+  // and serves as the floor during interactive resizing
+  const optimal = getOptimalNodeDimensions(node);
+  const effectiveWidth = Math.max(node.width || optimal.width, optimal.width);
+  const effectiveHeight = Math.max(node.height || optimal.height, optimal.height);
 
   useEffect(() => {
     setEditLabel(node.label);
@@ -244,10 +251,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       type: 'varchar(64)',
       isPk: false
     };
+    const updatedCols = [...cols, newCol];
+    const simulatedNode: DiagramNode = { ...node, data: { ...node.data, columns: updatedCols } };
+    const needed = getOptimalNodeDimensions(simulatedNode);
     onUpdate({
+      width: Math.max(effectiveWidth, needed.width),
+      height: Math.max(effectiveHeight, needed.height),
       data: {
         ...node.data,
-        columns: [...cols, newCol]
+        columns: updatedCols
       }
     });
   };
@@ -261,10 +273,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const handleAddAttribute = (e: React.MouseEvent) => {
     e.stopPropagation();
     const attrs = node.data?.attributes || [];
+    const updatedAttrs = [...attrs, `+field_${attrs.length + 1}: String`];
+    const simulatedNode: DiagramNode = { ...node, data: { ...node.data, attributes: updatedAttrs } };
+    const needed = getOptimalNodeDimensions(simulatedNode);
     onUpdate({
+      width: Math.max(effectiveWidth, needed.width),
+      height: Math.max(effectiveHeight, needed.height),
       data: {
         ...node.data,
-        attributes: [...attrs, `+field_${attrs.length + 1}: String`]
+        attributes: updatedAttrs
       }
     });
   };
@@ -277,10 +294,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const handleAddMethod = (e: React.MouseEvent) => {
     e.stopPropagation();
     const methods = node.data?.methods || [];
+    const updatedMethods = [...methods, `+operation_${methods.length + 1}(): void`];
+    const simulatedNode: DiagramNode = { ...node, data: { ...node.data, methods: updatedMethods } };
+    const needed = getOptimalNodeDimensions(simulatedNode);
     onUpdate({
+      width: Math.max(effectiveWidth, needed.width),
+      height: Math.max(effectiveHeight, needed.height),
       data: {
         ...node.data,
-        methods: [...methods, `+operation_${methods.length + 1}(): void`]
+        methods: updatedMethods
       }
     });
   };
@@ -294,10 +316,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const handleAddMapEntry = (e: React.MouseEvent) => {
     e.stopPropagation();
     const entries = node.data?.mapEntries || [];
+    const updatedEntries = [...entries, { key: `prop_${entries.length + 1}`, value: '"val"' }];
+    const simulatedNode: DiagramNode = { ...node, data: { ...node.data, mapEntries: updatedEntries } };
+    const needed = getOptimalNodeDimensions(simulatedNode);
     onUpdate({
+      width: Math.max(effectiveWidth, needed.width),
+      height: Math.max(effectiveHeight, needed.height),
       data: {
         ...node.data,
-        mapEntries: [...entries, { key: `prop_${entries.length + 1}`, value: '"val"' }]
+        mapEntries: updatedEntries
       }
     });
   };
@@ -311,10 +338,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const handleAddObjectSlot = (e: React.MouseEvent) => {
     e.stopPropagation();
     const slots = node.data?.slots || [];
+    const updatedSlots = [...slots, { key: `key_${slots.length + 1}`, value: '"value"' }];
+    const simulatedNode: DiagramNode = { ...node, data: { ...node.data, slots: updatedSlots } };
+    const needed = getOptimalNodeDimensions(simulatedNode);
     onUpdate({
+      width: Math.max(effectiveWidth, needed.width),
+      height: Math.max(effectiveHeight, needed.height),
       data: {
         ...node.data,
-        slots: [...slots, { key: `key_${slots.length + 1}`, value: '"value"' }]
+        slots: updatedSlots
       }
     });
   };
@@ -1384,9 +1416,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 220,
-          height: node.height || 140,
-          minHeight: node.height || 140,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: optimal.width,
+          minHeight: optimal.height,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1394,14 +1427,21 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         onMouseLeave={() => setIsHovered(false)}
       >
         <SaltWireframeMockup
-          width={node.width || 220}
-          height={node.height || 140}
+          width={effectiveWidth}
+          height={effectiveHeight}
           title={node.label}
           content={node.data?.saltContent || node.data?.embeddedContent}
           onUpdateContent={(newContent) => onUpdate({ data: { ...node.data, saltContent: newContent, embeddedContent: newContent } })}
           onUpdateTitle={(newTitle) => onUpdate({ label: newTitle })}
         />
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-blue-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -1419,9 +1459,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 240,
-          height: node.height || 140,
-          minHeight: node.height || 140,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: optimal.width,
+          minHeight: optimal.height,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1429,14 +1470,21 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         onMouseLeave={() => setIsHovered(false)}
       >
         <DitaaAsciiMockup
-          width={node.width || 240}
-          height={node.height || 140}
+          width={effectiveWidth}
+          height={effectiveHeight}
           title={node.label}
           content={node.data?.embeddedContent}
           onUpdateContent={(newContent) => onUpdate({ data: { ...node.data, embeddedContent: newContent } })}
           onUpdateTitle={(newTitle) => onUpdate({ label: newTitle })}
         />
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-amber-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -1454,9 +1502,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 240,
-          height: node.height || 100,
-          minHeight: node.height || 100,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: optimal.width,
+          minHeight: optimal.height,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1464,14 +1513,21 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         onMouseLeave={() => setIsHovered(false)}
       >
         <MathFormulaCard
-          width={node.width || 240}
-          height={node.height || 100}
+          width={effectiveWidth}
+          height={effectiveHeight}
           title={node.label}
           formula={node.data?.mathFormula || node.data?.embeddedContent}
           onUpdateFormula={(newFormula) => onUpdate({ data: { ...node.data, mathFormula: newFormula, embeddedContent: newFormula } })}
           onUpdateTitle={(newTitle) => onUpdate({ label: newTitle })}
         />
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#A80036] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -1489,9 +1545,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 190,
-          height: node.height || 85,
-          minHeight: node.height || 85,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: optimal.width,
+          minHeight: optimal.height,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1509,6 +1566,13 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           onUpdateTitle={(newTitle) => onUpdate({ label: newTitle })}
         />
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-emerald-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -1528,9 +1592,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: optimal.width,
+          minHeight: optimal.height,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1563,6 +1628,13 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </span>
         )}
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#A80036] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -1587,9 +1659,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: optimal.width,
+          minHeight: optimal.height,
           zIndex: isContainerNode 
             ? (isSelected ? 4 : (isDropTarget ? 5 : 2)) 
             : (isSelected ? 30 : 10)
@@ -1606,20 +1679,20 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         )}
 
         {/* SVG Background Shape */}
-        {isPackage && <PackageShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isCylinder && <CylinderDatabaseShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isQueue && <QueueShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isNode3d && <Node3dShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isFolder && <FolderShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isFrame && <FrameShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isComponentTab && <ComponentTabsShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isFileDoc && <FileFoldShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isHexagon && <HexagonShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isCloud && <CloudShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isNote && <NoteFoldShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isUseCase && <UseCaseShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isCollections && <CollectionsShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
-        {isState && <StateBoxShape width={node.width} height={node.height} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isPackage && <PackageShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isCylinder && <CylinderDatabaseShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isQueue && <QueueShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isNode3d && <Node3dShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isFolder && <FolderShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isFrame && <FrameShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isComponentTab && <ComponentTabsShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isFileDoc && <FileFoldShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isHexagon && <HexagonShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isCloud && <CloudShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isNote && <NoteFoldShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isUseCase && <UseCaseShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isCollections && <CollectionsShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isState && <StateBoxShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
 
         {/* 4A. Specific PlantUML Package Tab Labeling */}
         {isPackage && (
@@ -1848,9 +1921,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       style={{
         left: node.x,
         top: node.y,
-        width: node.width,
-        height: node.height,
-        minHeight: node.height,
+        width: effectiveWidth,
+        height: effectiveHeight,
+        minWidth: optimal.width,
+        minHeight: optimal.height,
         zIndex: isSelected ? 30 : 10,
         filter: 'drop-shadow(2px 2px 2px rgba(0,0,0,0.15))'
       }}
