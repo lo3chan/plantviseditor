@@ -2023,6 +2023,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   return (
     <div
       id={node.id}
+      data-node-id={node.id}
       className={`absolute cursor-move select-none transition-shadow flex flex-col ${
         isSelected ? 'ring-2 ring-[#A80036] ring-offset-2' : ''
       }`}

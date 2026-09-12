@@ -8,10 +8,6 @@ import {
   Edit3, 
   ArrowRight,
   Move,
-  ArrowDownUp,
-  ArrowLeftRight,
-  Palette,
-  PenTool,
   X,
   Scissors,
   Copy,
@@ -55,7 +51,10 @@ interface CanvasProps {
   onUpdateSettings?: (settings: Partial<GlobalCanvasSettings>) => void;
   selectedElementId?: string | null;
   onSelectElement?: (element: SelectedCanvasElement | null) => void;
+  onSelectElements?: (elements: SelectedCanvasElement[]) => void;
   onUpdateDiagram?: (updater: Partial<DiagramData> | ((prev: DiagramData) => Partial<DiagramData>), actionName?: string) => void;
+  isPlainWhite?: boolean;
+  onTogglePlainWhite?: () => void;
 }
 
 function getFriendlyRelationLabel(arrowType?: DiagramEdge['arrowType'], style?: DiagramEdge['style']): string {
@@ -174,7 +173,10 @@ export const Canvas: React.FC<CanvasProps> = ({
   onUpdateSettings,
   selectedElementId,
   onSelectElement,
-  onUpdateDiagram
+  onSelectElements,
+  onUpdateDiagram,
+  isPlainWhite: propIsPlainWhite,
+  onTogglePlainWhite: propOnTogglePlainWhite
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -259,6 +261,32 @@ export const Canvas: React.FC<CanvasProps> = ({
   const [edgeLabelText, setEdgeLabelText] = useState('');
   const [hoveredDropTargetId, setHoveredDropTargetId] = useState<string | null>(null);
 
+  // Plain White Background state & toggle
+  const [internalPlainWhite, setInternalPlainWhite] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('plantvis_canvas_plain_white') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const isPlainWhite = propIsPlainWhite !== undefined ? propIsPlainWhite : internalPlainWhite;
+  const handleTogglePlainWhite = useCallback(() => {
+    if (propOnTogglePlainWhite) {
+      propOnTogglePlainWhite();
+    } else {
+      setInternalPlainWhite(prev => {
+        const next = !prev;
+        try {
+          localStorage.setItem('plantvis_canvas_plain_white', String(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    }
+  }, [propOnTogglePlainWhite]);
+
   const selectedMessage = diagram.messages?.find(m => m.id === selectedEdgeId);
   const selectedEdge = selectedEdgeId ? (
     edges.find(e => e.id === selectedEdgeId) ||
@@ -338,13 +366,59 @@ export const Canvas: React.FC<CanvasProps> = ({
     onSelectElement?.(null);
   }, [onSelectElement]);
 
+  const lastReportedIdsRef = useRef<string>('');
+
+  // Notify parent of all selected elements for multi-element code sync
+  useEffect(() => {
+    const elements: SelectedCanvasElement[] = [];
+
+    if (selectedNodeIds.length > 0) {
+      for (const id of selectedNodeIds) {
+        const n = nodes.find(node => node.id === id);
+        elements.push({ type: 'node', id, label: n?.label || id });
+      }
+    } else if (selectedNodeId) {
+      const n = nodes.find(node => node.id === selectedNodeId);
+      elements.push({ type: 'node', id: selectedNodeId, label: n?.label || selectedNodeId });
+    }
+
+    if (selectedEdgeId) {
+      const e = edges.find(edge => edge.id === selectedEdgeId);
+      const msg = diagram.messages?.find(m => m.id === selectedEdgeId);
+      elements.push({
+        type: 'edge',
+        id: selectedEdgeId,
+        source: e?.source || msg?.from,
+        target: e?.target || msg?.to,
+        label: e?.label || msg?.label
+      });
+    }
+
+    if (selectedBlockId) {
+      const b = diagram.blocks?.find(block => block.id === selectedBlockId);
+      elements.push({
+        type: 'block',
+        id: selectedBlockId,
+        label: b ? `${b.type.toUpperCase()}${b.condition ? ` [${b.condition}]` : ''}` : selectedBlockId
+      });
+    }
+
+    const currentKey = elements.map(e => e.id).join(',');
+    if (currentKey !== lastReportedIdsRef.current) {
+      lastReportedIdsRef.current = currentKey;
+      onSelectElements?.(elements);
+    }
+  }, [selectedNodeIds, selectedNodeId, selectedEdgeId, selectedBlockId, nodes, edges, diagram.messages, diagram.blocks, onSelectElements]);
+
   // Sync external selectedElementId if changed
   useEffect(() => {
     if (selectedElementId === null) {
-      setSelectedNodeId(null);
-      setSelectedNodeIds([]);
-      setSelectedEdgeId(null);
-      setSelectedBlockId(null);
+      if (selectedNodeIds.length <= 1) {
+        setSelectedNodeId(null);
+        setSelectedNodeIds([]);
+        setSelectedEdgeId(null);
+        setSelectedBlockId(null);
+      }
     } else if (selectedElementId) {
       const isNode = nodes.some(n => n.id === selectedElementId);
       if (isNode) {
@@ -1185,6 +1259,38 @@ export const Canvas: React.FC<CanvasProps> = ({
     return () => window.removeEventListener('click', handleClickOutside);
   }, [contextMenu]);
 
+  // Intercept right clicks on the canvas to completely suppress native browser context menu
+  useEffect(() => {
+    const handleGlobalContextMenu = (e: MouseEvent) => {
+      const container = containerRef.current;
+      if (container && (container.contains(e.target as Node) || isRightDragging || isPanning)) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('contextmenu', handleGlobalContextMenu, { capture: true });
+    return () => {
+      window.removeEventListener('contextmenu', handleGlobalContextMenu, { capture: true });
+    };
+  }, [isRightDragging, isPanning]);
+
+  // Prevent browser page zoom on Ctrl+Wheel / Cmd+Wheel (non-passive listener required by browsers)
+  useEffect(() => {
+    const handleNativeWheel = (e: WheelEvent) => {
+      const container = containerRef.current;
+      if (container && container.contains(e.target as Node)) {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    window.addEventListener('wheel', handleNativeWheel, { passive: false });
+    return () => {
+      window.removeEventListener('wheel', handleNativeWheel);
+    };
+  }, []);
+
   // Window-level mouse tracking ensuring fast drags and out-of-bounds mouse releases always commit
   const handleMouseMoveRef = useRef(handleMouseMove);
   handleMouseMoveRef.current = handleMouseMove;
@@ -1213,8 +1319,8 @@ export const Canvas: React.FC<CanvasProps> = ({
     };
   }, [Boolean(draggingNode || resizingNode || isPanning || draggingBlock || draggingMessage || draggingEdgeLabel || connecting || marquee)]);
 
-  // Zoom & Pan with Wheel (Draw.io Scheme)
-  const handleWheel = (e: React.WheelEvent) => {
+  // Zoom & Pan with Wheel (Draw.io Scheme - non-passive native event listener)
+  const handleWheel = (e: WheelEvent | React.WheelEvent) => {
     // If the wheel event happened inside a scrollable menu, popover, drawer, or input, do NOT pan/zoom canvas
     const target = e.target as HTMLElement | null;
     if (target && (
@@ -1230,7 +1336,9 @@ export const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
-    e.preventDefault();
+    if (e.cancelable) {
+      e.preventDefault();
+    }
 
     // Draw.io Wheel Scheme:
     // 1. Ctrl / Cmd + Wheel: Zoom centered at mouse cursor
@@ -1268,6 +1376,23 @@ export const Canvas: React.FC<CanvasProps> = ({
       y: viewport.y - e.deltaY
     });
   };
+
+  const handleWheelRef = useRef(handleWheel);
+  handleWheelRef.current = handleWheel;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onNativeWheel = (e: WheelEvent) => {
+      handleWheelRef.current(e);
+    };
+
+    container.addEventListener('wheel', onNativeWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', onNativeWheel);
+    };
+  }, []);
 
   // Quick Action Handlers
   const selectedNode = diagram.nodes.find(n => n.id === selectedNodeId);
@@ -1666,6 +1791,12 @@ export const Canvas: React.FC<CanvasProps> = ({
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         handleDuplicateAllSelected();
+        return;
+      }
+
+      // Ctrl/Cmd + S: Prevent browser Save As dialog
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
         return;
       }
 
@@ -2362,9 +2493,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   const defaultArrowColor = diagram.settings?.arrowColor || (isDark ? '#e2e8f0' : '#A80036');
   const markerStroke = defaultArrowColor;
   const markerFill = defaultArrowColor;
-  const markerHollowFill = isDark ? '#181412' : '#faf5ee';
-  const canvasBg = isDark ? '#181412' : '#faf5ee';
-  const brickColor = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(194, 101, 42, 0.04)';
+  const markerHollowFill = isDark ? '#181412' : (isPlainWhite ? '#ffffff' : '#faf5ee');
+  const canvasBg = isDark ? '#181412' : (isPlainWhite ? '#ffffff' : '#faf5ee');
+  const brickColor = isDark ? 'rgba(255, 255, 255, 0.04)' : (isPlainWhite ? 'transparent' : 'rgba(194, 101, 42, 0.04)');
 
   const canvasCursor = isSpacePressed 
     ? (isPanning ? 'cursor-grabbing' : 'cursor-grab')
@@ -2381,7 +2512,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       className={`relative w-full h-full overflow-hidden canvas-bg ${canvasCursor}`}
       style={{
         backgroundColor: canvasBg,
-        backgroundImage: `
+        backgroundImage: isPlainWhite ? 'none' : `
           linear-gradient(335deg, ${brickColor} ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px),
           linear-gradient(155deg, ${brickColor} ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px),
           linear-gradient(335deg, ${brickColor} ${23 * viewport.zoom}px, transparent ${23 * viewport.zoom}px),
@@ -2395,7 +2526,6 @@ export const Canvas: React.FC<CanvasProps> = ({
       onMouseDown={handleCanvasMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onWheel={handleWheel}
       onContextMenu={handleContextMenu}
     >
       {/* Zoom / Pan Transformed Layer */}
@@ -3212,8 +3342,8 @@ export const Canvas: React.FC<CanvasProps> = ({
             </div>
           ))}
 
-          {/* Floating Quick Action Bar for selected node */}
-          {selectedNode && (
+          {/* Floating Quick Action Bar for selected node - hidden when multiple nodes are selected */}
+          {selectedNode && selectedNodeIds.length <= 1 && (
             <QuickActionBar
               x={selectedNode.x + selectedNode.width / 2}
               y={selectedNode.y - 8}
@@ -3537,64 +3667,22 @@ export const Canvas: React.FC<CanvasProps> = ({
           <Grid className="w-3.5 h-3.5" />
         </button>
 
-        {onUpdateSettings && (
-          <>
-            <div className="w-[1px] h-4 bg-[#d8d0c8]/60 mx-0.5" />
+        <div className="w-[1px] h-4 bg-[#d8d0c8]/60 mx-0.5" />
 
-            {/* Layout Direction Toggle: TB (Top to Bottom) vs LR (Left to Right) */}
-            <button
-              id="btn-diagram-direction"
-              onClick={() => {
-                const currentDir = diagram.settings?.direction || 'TB';
-                onUpdateSettings({ direction: currentDir === 'TB' ? 'LR' : 'TB' });
-              }}
-              className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-mono ${
-                diagram.settings?.direction === 'LR' ? 'bg-[#A80036]/10 text-[#A80036] font-bold' : 'text-[#78706a] hover:bg-[#faf5ee]'
-              }`}
-              title={diagram.settings?.direction === 'LR' ? 'Direction: Left-to-Right (click for Top-to-Bottom)' : 'Direction: Top-to-Bottom (click for Left-to-Right)'}
-            >
-              {diagram.settings?.direction === 'LR' ? (
-                <>
-                  <ArrowLeftRight className="w-3.5 h-3.5" />
-                  <span>LR</span>
-                </>
-              ) : (
-                <>
-                  <ArrowDownUp className="w-3.5 h-3.5" />
-                  <span>TB</span>
-                </>
-              )}
-            </button>
-
-            {/* Handwritten (PlantUML skinparam handwritten) */}
-            <button
-              id="btn-toggle-handwritten"
-              onClick={() => {
-                onUpdateSettings({ handwritten: !diagram.settings?.handwritten });
-              }}
-              className={`p-1.5 rounded-lg transition-colors ${
-                diagram.settings?.handwritten ? 'bg-[#A80036]/10 text-[#A80036]' : 'text-[#78706a] hover:bg-[#faf5ee]'
-              }`}
-              title={diagram.settings?.handwritten ? 'Handwritten Skin: ON' : 'Handwritten Skin: OFF'}
-            >
-              <PenTool className="w-3.5 h-3.5" />
-            </button>
-
-            {/* Monochrome mode */}
-            <button
-              id="btn-toggle-monochrome"
-              onClick={() => {
-                onUpdateSettings({ monochrome: !diagram.settings?.monochrome });
-              }}
-              className={`p-1.5 rounded-lg transition-colors ${
-                diagram.settings?.monochrome ? 'bg-[#A80036]/10 text-[#A80036]' : 'text-[#78706a] hover:bg-[#faf5ee]'
-              }`}
-              title={diagram.settings?.monochrome ? 'Monochrome: ON' : 'Monochrome: OFF'}
-            >
-              <Palette className="w-3.5 h-3.5" />
-            </button>
-          </>
-        )}
+        {/* Toggle Plain White Background */}
+        <button
+          id="btn-toggle-plain-white"
+          onClick={handleTogglePlainWhite}
+          className={`px-2 py-1 rounded-lg transition-colors flex items-center gap-1.5 text-xs ${
+            isPlainWhite 
+              ? 'bg-[#c2652a] text-white font-medium shadow-xs' 
+              : 'text-[#78706a] hover:bg-[#faf5ee] hover:text-[#2b2622]'
+          }`}
+          title={isPlainWhite ? 'Canvas Background: Plain White (Click to switch to Warm Grid)' : 'Canvas Background: Warm Grid (Click to switch to Plain White)'}
+        >
+          <div className={`w-3.5 h-3.5 rounded-xs border transition-colors ${isPlainWhite ? 'border-white bg-white shadow-xs' : 'border-[#8f8377] bg-[#faf5ee]'}`} />
+          <span className="font-mono text-[11px]">Plain White</span>
+        </button>
       </aside>
 
       {/* Draw.io Control Scheme hint indicator */}
@@ -3619,6 +3707,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             top: `${Math.max(8, Math.min(contextMenu.y, window.innerHeight - 340))}px`
           }}
           onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
         >
           {selectedNodeIds.length > 0 || selectedNodeId ? (
             <>
@@ -3831,6 +3920,21 @@ export const Canvas: React.FC<CanvasProps> = ({
                 </span>
                 <span className={`text-[10px] font-semibold ${snapToGrid ? 'text-[#c2652a]' : 'text-gray-400'}`}>
                   {snapToGrid ? 'ON' : 'OFF'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                id="context-menu-toggle-plain-white"
+                onClick={() => { handleTogglePlainWhite(); setContextMenu(null); }}
+                className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-[#faf5ee] dark:hover:bg-[#2a2622] text-left transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <div className={`w-3.5 h-3.5 rounded-xs border ${isPlainWhite ? 'border-[#c2652a] bg-white' : 'border-[#8f8377] bg-[#faf5ee]'}`} />
+                  <span>Plain White Background</span>
+                </span>
+                <span className={`text-[10px] font-semibold ${isPlainWhite ? 'text-[#c2652a]' : 'text-gray-400'}`}>
+                  {isPlainWhite ? 'ON' : 'OFF'}
                 </span>
               </button>
             </>

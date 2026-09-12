@@ -283,6 +283,7 @@ interface CodePanelProps {
   isSplitView?: boolean;
   onClose?: () => void;
   highlightedLine?: number | null;
+  highlightedLines?: number[];
   onCursorLineChange?: (lineNumber: number, lineText: string) => void;
 }
 
@@ -294,6 +295,7 @@ export const CodePanel: React.FC<CodePanelProps> = ({
   isSplitView = false,
   onClose,
   highlightedLine,
+  highlightedLines,
   onCursorLineChange
 }) => {
   const [editableCode, setEditableCode] = useState(code);
@@ -343,15 +345,40 @@ export const CodePanel: React.FC<CodePanelProps> = ({
     return () => clearTimeout(timer);
   }, [editableCode, code, onApplyCode]);
 
-  // Auto-scroll when external highlightedLine changes (e.g., clicking canvas element)
+  // Auto-scroll and text-selection when external highlightedLine or highlightedLines change
   useEffect(() => {
-    if (highlightedLine && textareaRef.current) {
+    const activeLines = (highlightedLines && highlightedLines.length > 0)
+      ? [...highlightedLines].sort((a, b) => a - b)
+      : (highlightedLine ? [highlightedLine] : []);
+
+    if (activeLines.length > 0 && textareaRef.current) {
       const textarea = textareaRef.current;
+      const minLine = activeLines[0];
+      const maxLine = activeLines[activeLines.length - 1];
+
+      // Calculate character offsets for text selection
+      const rawLines = editableCode.split('\n');
+      let charStart = 0;
+      for (let i = 0; i < minLine - 1 && i < rawLines.length; i++) {
+        charStart += rawLines[i].length + 1; // +1 for \n
+      }
+
+      let charEnd = charStart;
+      for (let i = minLine - 1; i < maxLine && i < rawLines.length; i++) {
+        charEnd += rawLines[i].length + (i < rawLines.length - 1 ? 1 : 0);
+      }
+
+      try {
+        textarea.setSelectionRange(charStart, charEnd);
+      } catch {
+        // ignore if not focused/supported
+      }
+
       const lineHeight = fontSize * 1.5;
-      const targetScroll = Math.max(0, (highlightedLine - 3) * lineHeight);
+      const targetScroll = Math.max(0, (minLine - 3) * lineHeight);
       textarea.scrollTo({ top: targetScroll, behavior: 'smooth' });
     }
-  }, [highlightedLine, fontSize]);
+  }, [highlightedLine, highlightedLines, editableCode, fontSize]);
 
   // Synchronized scrolling between textarea, highlight layer, and line number gutter
   const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
@@ -1093,7 +1120,7 @@ export const CodePanel: React.FC<CodePanelProps> = ({
           {Array.from({ length: Math.max(lineCount, 1) }, (_, i) => {
             const lineNum = i + 1;
             const isActive = lineNum === cursorLine;
-            const isHighlighted = highlightedLine !== undefined && highlightedLine !== null && lineNum === highlightedLine;
+            const isHighlighted = (highlightedLines && highlightedLines.includes(lineNum)) || (highlightedLine !== undefined && highlightedLine !== null && lineNum === highlightedLine);
             return (
               <div 
                 key={lineNum} 
@@ -1129,7 +1156,7 @@ export const CodePanel: React.FC<CodePanelProps> = ({
             {lines.map((lineText, lineIdx) => {
               const lineNum = lineIdx + 1;
               const isActive = lineNum === cursorLine;
-              const isHighlighted = highlightedLine !== undefined && highlightedLine !== null && lineNum === highlightedLine;
+              const isHighlighted = (highlightedLines && highlightedLines.includes(lineNum)) || (highlightedLine !== undefined && highlightedLine !== null && lineNum === highlightedLine);
               const tokens = tokenizePlantUMLLine(lineText);
 
               return (

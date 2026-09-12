@@ -25,6 +25,7 @@ import { debugLogger } from './utils/debugLogger';
 import { Upload, CheckCircle2, AlertCircle } from 'lucide-react';
 import { 
   findPlantUMLLinesForElement, 
+  findPlantUMLLinesForElements,
   findDiagramElementForCodeLine, 
   SelectedCanvasElement 
 } from './utils/codeHighlightSync';
@@ -563,24 +564,68 @@ export default function App() {
 
   // Synchronized Selection between Canvas and Code Editor
   const [selectedCanvasElement, setSelectedCanvasElement] = useState<SelectedCanvasElement | null>(null);
+  const [selectedCanvasElements, setSelectedCanvasElements] = useState<SelectedCanvasElement[]>([]);
 
-  // Compute line in PlantUML code corresponding to selected diagram element
+  // Compute line(s) in PlantUML code corresponding to selected diagram element(s)
+  const highlightedCodeLines = useMemo(() => {
+    if (selectedCanvasElements.length > 0) {
+      return findPlantUMLLinesForElements(activePlantUMLCode, selectedCanvasElements, diagram);
+    }
+    if (selectedCanvasElement) {
+      return findPlantUMLLinesForElements(activePlantUMLCode, [selectedCanvasElement], diagram);
+    }
+    return [];
+  }, [activePlantUMLCode, selectedCanvasElements, selectedCanvasElement, diagram]);
+
   const highlightedCodeLine = useMemo(() => {
-    if (!selectedCanvasElement) return null;
-    return findPlantUMLLinesForElement(activePlantUMLCode, selectedCanvasElement, diagram);
-  }, [activePlantUMLCode, selectedCanvasElement, diagram]);
+    if (highlightedCodeLines.length > 0) return highlightedCodeLines[0];
+    return null;
+  }, [highlightedCodeLines]);
+
+  // Software View Setting: Plain White Canvas Background (persistent across diagrams/views)
+  const [isPlainWhiteBg, setIsPlainWhiteBg] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('plantvis_canvas_plain_white') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleTogglePlainWhiteBg = useCallback(() => {
+    setIsPlainWhiteBg(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('plantvis_canvas_plain_white', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  // Global browser event suppression: prevent browser page zoom on Ctrl+Wheel and browser context menu
+  useEffect(() => {
+    const handleGlobalWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('wheel', handleGlobalWheel, { passive: false });
+    return () => window.removeEventListener('wheel', handleGlobalWheel);
+  }, []);
 
   // When cursor moves in code editor, select the matching diagram node or connector
   const handleCursorLineChange = useCallback((lineNumber: number, lineText: string) => {
     const matched = findDiagramElementForCodeLine(lineText, diagram);
     if (matched) {
       setSelectedCanvasElement(matched);
+      setSelectedCanvasElements([matched]);
     }
   }, [diagram]);
 
   return (
     <div 
-      className="flex flex-col w-screen h-screen overflow-hidden bg-[#faf5ee] relative"
+      className={`flex flex-col w-screen h-screen overflow-hidden ${isPlainWhiteBg ? 'bg-white' : 'bg-[#faf5ee]'} relative`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -629,6 +674,7 @@ export default function App() {
                 onApplyCode={handleApplyCode}
                 isSplitView={true}
                 highlightedLine={highlightedCodeLine}
+                highlightedLines={highlightedCodeLines}
                 onCursorLineChange={handleCursorLineChange}
               />
             </div>
@@ -651,6 +697,10 @@ export default function App() {
                   onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
                   selectedElementId={selectedCanvasElement?.id || null}
                   onSelectElement={setSelectedCanvasElement}
+                  onSelectElements={setSelectedCanvasElements}
+                  onUpdateDiagram={updateDiagram}
+                  isPlainWhite={isPlainWhiteBg}
+                  onTogglePlainWhite={handleTogglePlainWhiteBg}
                 />
               ) : (
                 <OfficialRenderView 
@@ -692,7 +742,10 @@ export default function App() {
                   onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
                   selectedElementId={selectedCanvasElement?.id || null}
                   onSelectElement={setSelectedCanvasElement}
+                  onSelectElements={setSelectedCanvasElements}
                   onUpdateDiagram={updateDiagram}
+                  isPlainWhite={isPlainWhiteBg}
+                  onTogglePlainWhite={handleTogglePlainWhiteBg}
                 />
               ) : (
                 <OfficialRenderView 
@@ -714,6 +767,7 @@ export default function App() {
               onApplyCode={handleApplyCode}
               isSplitView={true}
               highlightedLine={highlightedCodeLine}
+              highlightedLines={highlightedCodeLines}
               onCursorLineChange={handleCursorLineChange}
             />
           </div>

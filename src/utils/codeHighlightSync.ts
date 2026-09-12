@@ -24,6 +24,26 @@ export function findPlantUMLLinesForElement(
   return allLines.length > 0 ? allLines[0] : null;
 }
 
+/**
+ * Accurately finds all 1-based line numbers in the PlantUML code string that correspond
+ * to an array of selected visual canvas elements. Returns sorted, unique line numbers.
+ */
+export function findPlantUMLLinesForElements(
+  code: string,
+  elements: SelectedCanvasElement[],
+  diagram?: DiagramData
+): number[] {
+  if (!elements || elements.length === 0 || !code) return [];
+  const lineSet = new Set<number>();
+  for (const element of elements) {
+    const lines = findPlantUMLAllLinesForElement(code, element, diagram);
+    for (const line of lines) {
+      lineSet.add(line);
+    }
+  }
+  return Array.from(lineSet).sort((a, b) => a - b);
+}
+
 export function findPlantUMLAllLinesForElement(
   code: string,
   element: SelectedCanvasElement | null,
