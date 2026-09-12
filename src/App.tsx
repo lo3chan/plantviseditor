@@ -708,6 +708,9 @@ export default function App() {
                   settings={diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }}
                   onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
                   isSequenceDiagram={diagram.type === 'sequence'}
+                  isPlainWhite={isPlainWhiteBg}
+                  onTogglePlainWhite={handleTogglePlainWhiteBg}
+                  onUpdateCode={(newCode) => setLoadedPlantUMLCode(newCode)}
                 />
               )}
             </div>
@@ -753,6 +756,9 @@ export default function App() {
                   settings={diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }}
                   onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
                   isSequenceDiagram={diagram.type === 'sequence'}
+                  isPlainWhite={isPlainWhiteBg}
+                  onTogglePlainWhite={handleTogglePlainWhiteBg}
+                  onUpdateCode={(newCode) => setLoadedPlantUMLCode(newCode)}
                 />
               )}
             </div>

@@ -287,6 +287,7 @@ export interface SequenceMessage {
   order: number;
   noteText?: string;
   y?: number;
+  labelOffset?: { x: number; y: number };
 }
 
 export interface SequenceBlock {

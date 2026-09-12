@@ -264,7 +264,7 @@ const PLANTUML_AUTOCOMPLETE_ITEMS: AutocompleteItem[] = [
   { label: '!theme sketchy', insertText: '!theme sketchy\n', detail: 'Hand-drawn marker theme', type: 'skinparam' },
   { label: '!theme crt-amber', insertText: '!theme crt-amber\n', detail: 'CRT Amber terminal', type: 'skinparam' },
   { label: '!theme crt-green', insertText: '!theme crt-green\n', detail: 'CRT Green terminal', type: 'skinparam' },
-  { label: '!theme mint', insertText: '!theme mint\n', detail: 'Pastel mint UI', type: 'skinparam' },
+  { label: '!theme minty', insertText: '!theme minty\n', detail: 'Pastel mint UI', type: 'skinparam' },
   { label: '!theme sandstone', insertText: '!theme sandstone\n', detail: 'Warm sandstone tones', type: 'skinparam' },
 
   // Relationship Connectors & Arrows

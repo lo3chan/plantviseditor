@@ -514,13 +514,19 @@ export const Canvas: React.FC<CanvasProps> = ({
     initialOffsetY: number;
   } | null>(null);
 
-  // Sequence Message Dragging State (Vertical Reordering)
+  // Sequence Message Dragging State (Vertical Reordering & Horizontal Left/Right Shift)
   const [draggingMessage, setDraggingMessage] = useState<{
     id: string;
+    startX: number;
     startY: number;
     initialOrder: number;
     currentOrder: number;
+    dragX: number;
     dragY: number;
+    shiftFromId?: string;
+    shiftToId?: string;
+    endpoint?: 'from' | 'to';
+    initialLabelOffsetX: number;
   } | null>(null);
 
   // Sequence Block Dragging & Resizing State
@@ -846,7 +852,9 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingMessage && sequenceMetrics) {
+      const deltaX = (e.clientX - draggingMessage.startX) / viewport.zoom;
       const deltaY = (e.clientY - draggingMessage.startY) / viewport.zoom;
+
       const effectiveMsgY = sequenceMetrics.topY + draggingMessage.initialOrder * sequenceMetrics.stepSpacing + deltaY;
       const targetOrder = Math.max(
         1,
@@ -855,7 +863,64 @@ export const Canvas: React.FC<CanvasProps> = ({
           Math.round((effectiveMsgY - sequenceMetrics.topY) / sequenceMetrics.stepSpacing)
         )
       );
-      setDraggingMessage(prev => prev ? { ...prev, dragY: deltaY, currentOrder: targetOrder } : null);
+
+      // Horizontal shift & endpoint reconnection across lifelines
+      const curMsg = sequenceMessages.find(m => m.id === draggingMessage.id);
+      let shiftFrom: string | undefined = undefined;
+      let shiftTo: string | undefined = undefined;
+
+      if (curMsg && sequenceParticipants.length > 1) {
+        const sortedParts = [...sequenceParticipants].sort((a, b) => a.x - b.x);
+        const fromIdx = sortedParts.findIndex(p => p.id === curMsg.from);
+        const toIdx = sortedParts.findIndex(p => p.id === curMsg.to);
+
+        if (draggingMessage.endpoint === 'from') {
+          const fromNode = nodes.find(n => n.id === curMsg.from);
+          const curX = (fromNode ? fromNode.x + fromNode.width / 2 : 100) + deltaX;
+          let closest = sortedParts[0];
+          let minDist = Infinity;
+          sortedParts.forEach(p => {
+            const pCenterX = p.x + p.width / 2;
+            const dist = Math.abs(pCenterX - curX);
+            if (dist < minDist) { minDist = dist; closest = p; }
+          });
+          if (minDist < 120 && closest.id !== curMsg.to) shiftFrom = closest.id;
+        } else if (draggingMessage.endpoint === 'to') {
+          const toNode = nodes.find(n => n.id === curMsg.to);
+          const curX = (toNode ? toNode.x + toNode.width / 2 : 300) + deltaX;
+          let closest = sortedParts[0];
+          let minDist = Infinity;
+          sortedParts.forEach(p => {
+            const pCenterX = p.x + p.width / 2;
+            const dist = Math.abs(pCenterX - curX);
+            if (dist < minDist) { minDist = dist; closest = p; }
+          });
+          if (minDist < 120 && closest.id !== curMsg.from) shiftTo = closest.id;
+        } else {
+          // Dragging whole message: shift interaction columns left or right if dragged horizontally
+          const avgSpan = sortedParts.length > 1 
+            ? Math.abs(sortedParts[sortedParts.length - 1].x - sortedParts[0].x) / (sortedParts.length - 1)
+            : 220;
+          const colDelta = Math.round(deltaX / Math.max(90, avgSpan));
+          if (colDelta !== 0 && fromIdx >= 0 && toIdx >= 0) {
+            const candFrom = fromIdx + colDelta;
+            const candTo = toIdx + colDelta;
+            if (candFrom >= 0 && candFrom < sortedParts.length && candTo >= 0 && candTo < sortedParts.length && candFrom !== candTo) {
+              shiftFrom = sortedParts[candFrom].id;
+              shiftTo = sortedParts[candTo].id;
+            }
+          }
+        }
+      }
+
+      setDraggingMessage(prev => prev ? {
+        ...prev,
+        dragX: deltaX,
+        dragY: deltaY,
+        currentOrder: targetOrder,
+        shiftFromId: shiftFrom,
+        shiftToId: shiftTo
+      } : null);
       return;
     }
 
@@ -1025,15 +1090,39 @@ export const Canvas: React.FC<CanvasProps> = ({
     }
 
     if (draggingMessage) {
-      if (draggingMessage.currentOrder !== draggingMessage.initialOrder && onUpdateDiagram && sequenceMessages.length > 0) {
-        const sorted = [...sequenceMessages].sort((a, b) => (a.order || 0) - (b.order || 0));
+      if (onUpdateDiagram && sequenceMessages.length > 0) {
+        let sorted = [...sequenceMessages].sort((a, b) => (a.order || 0) - (b.order || 0));
         const movingIndex = sorted.findIndex(m => m.id === draggingMessage.id);
         if (movingIndex !== -1) {
-          const [moved] = sorted.splice(movingIndex, 1);
-          const targetIndex = Math.max(0, Math.min(sorted.length, draggingMessage.currentOrder - 1));
-          sorted.splice(targetIndex, 0, moved);
-          const updatedMsgs = sorted.map((m, idx) => ({ ...m, order: idx + 1 }));
-          onUpdateDiagram({ messages: updatedMsgs }, `Reordered sequence message ${moved.label || moved.id}`);
+          const orig = sorted[movingIndex];
+          const hasHorizontalShift = Boolean(
+            (draggingMessage.shiftFromId && draggingMessage.shiftFromId !== orig.from) ||
+            (draggingMessage.shiftToId && draggingMessage.shiftToId !== orig.to)
+          );
+          const hasOrderChange = draggingMessage.currentOrder !== draggingMessage.initialOrder;
+          const hasLabelMove = Math.abs(draggingMessage.dragX) > 6 && !draggingMessage.endpoint;
+
+          const updatedMsg = {
+            ...orig,
+            from: draggingMessage.shiftFromId || orig.from,
+            to: draggingMessage.shiftToId || orig.to,
+            labelOffset: hasLabelMove 
+              ? { x: Math.round(draggingMessage.initialLabelOffsetX + draggingMessage.dragX), y: 0 } 
+              : orig.labelOffset
+          };
+
+          sorted[movingIndex] = updatedMsg;
+
+          if (hasOrderChange) {
+            const [moved] = sorted.splice(movingIndex, 1);
+            const targetIndex = Math.max(0, Math.min(sorted.length, draggingMessage.currentOrder - 1));
+            sorted.splice(targetIndex, 0, moved);
+            sorted = sorted.map((m, idx) => ({ ...m, order: idx + 1 }));
+          }
+
+          if (hasHorizontalShift || hasOrderChange || hasLabelMove) {
+            onUpdateDiagram({ messages: sorted }, `Moved sequence message ${orig.label || orig.id}`);
+          }
         }
       }
       setDraggingMessage(null);
@@ -2984,6 +3073,28 @@ export const Canvas: React.FC<CanvasProps> = ({
                   opacity="0.75"
                   className="pointer-events-none"
                 />
+                {/* Interactive Lifeline Drag Handle: allows dragging lifeline left and right from anywhere along its height */}
+                <line
+                  x1={centerX}
+                  y1={topY}
+                  x2={centerX}
+                  y2={bottomY}
+                  stroke="transparent"
+                  strokeWidth="24"
+                  className="pointer-events-auto cursor-col-resize select-none"
+                  data-drag-handle="true"
+                  data-lifeline-id={part.id}
+                  title={`Drag lifeline '${part.label}' left or right`}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    handleNodeMouseDown(part, e);
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const isMulti = e.shiftKey || e.ctrlKey || e.metaKey;
+                    if (!isMulti) selectNode(part, false);
+                  }}
+                />
                 {/* Interactive bottom participant footer box */}
                 {!diagram.settings?.hideFootbox && (
                   <g 
@@ -3054,12 +3165,23 @@ export const Canvas: React.FC<CanvasProps> = ({
             const order = msg.order || (mIdx + 1);
             const isDraggingThis = draggingMessage?.id === msg.id;
             const msgY = sequenceMetrics.topY + order * sequenceMetrics.stepSpacing + (isDraggingThis ? draggingMessage.dragY : 0);
-            const srcNode = nodes.find(n => n.id === msg.from);
-            const tgtNode = nodes.find(n => n.id === msg.to);
+            
+            const currentFrom = isDraggingThis && draggingMessage.shiftFromId ? draggingMessage.shiftFromId : msg.from;
+            const currentTo = isDraggingThis && draggingMessage.shiftToId ? draggingMessage.shiftToId : msg.to;
+            const srcNode = nodes.find(n => n.id === currentFrom);
+            const tgtNode = nodes.find(n => n.id === currentTo);
 
-            const srcX = srcNode ? srcNode.x + srcNode.width / 2 : 100;
-            const tgtX = tgtNode ? tgtNode.x + tgtNode.width / 2 : 300;
-            const isSelf = msg.from === msg.to || Math.abs(srcX - tgtX) < 5;
+            let srcX = srcNode ? srcNode.x + srcNode.width / 2 : 100;
+            let tgtX = tgtNode ? tgtNode.x + tgtNode.width / 2 : 300;
+
+            if (isDraggingThis && draggingMessage.endpoint === 'from') {
+              srcX += draggingMessage.dragX;
+            }
+            if (isDraggingThis && draggingMessage.endpoint === 'to') {
+              tgtX += draggingMessage.dragX;
+            }
+
+            const isSelf = currentFrom === currentTo || Math.abs(srcX - tgtX) < 5;
             const isReply = msg.type === 'reply' || msg.isReturn;
             const isAsync = msg.type === 'async';
             const isSelected = selectedEdgeId === msg.id;
@@ -3068,23 +3190,27 @@ export const Canvas: React.FC<CanvasProps> = ({
             const strokeWidth = (isSelected || isDraggingThis) ? 2.5 : 1.8;
             const dashArray = isReply ? '5,4' : undefined;
 
+            const labelOffsetX = (isDraggingThis && !draggingMessage.endpoint)
+              ? ((msg.labelOffset?.x || 0) + draggingMessage.dragX)
+              : (msg.labelOffset?.x || 0);
+
             let pathD = '';
             let labelX = 0;
             let labelY = msgY - 7;
 
             if (isSelf) {
               pathD = `M ${srcX} ${msgY} H ${srcX + 42} V ${msgY + 24} H ${srcX}`;
-              labelX = srcX + 48;
+              labelX = srcX + 48 + labelOffsetX;
               labelY = msgY + 16;
             } else {
               pathD = `M ${srcX} ${msgY} L ${tgtX} ${msgY}`;
-              labelX = (srcX + tgtX) / 2;
+              labelX = (srcX + tgtX) / 2 + labelOffsetX;
               labelY = msgY - 7;
             }
 
             const markerEnd = (isSelected || isDraggingThis) ? 'url(#arrow-head-selected)' : 'url(#arrow-head)';
 
-            const handleMsgMouseDown = (e: React.MouseEvent) => {
+            const handleMsgMouseDown = (e: React.MouseEvent, endpoint?: 'from' | 'to') => {
               e.stopPropagation();
               selectEdge({
                 id: msg.id,
@@ -3096,10 +3222,14 @@ export const Canvas: React.FC<CanvasProps> = ({
               });
               setDraggingMessage({
                 id: msg.id,
+                startX: e.clientX,
                 startY: e.clientY,
                 initialOrder: order,
                 currentOrder: order,
-                dragY: 0
+                dragX: 0,
+                dragY: 0,
+                initialLabelOffsetX: msg.labelOffset?.x || 0,
+                endpoint
               });
             };
 
@@ -3112,7 +3242,8 @@ export const Canvas: React.FC<CanvasProps> = ({
                   stroke="transparent"
                   strokeWidth="24"
                   data-drag-handle="true"
-                  onMouseDown={handleMsgMouseDown}
+                  title="Drag arrow to reorder vertically or shift left/right across lifelines"
+                  onMouseDown={(e) => handleMsgMouseDown(e)}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
                     setEdgeLabelText(msg.label || '');
@@ -3140,15 +3271,44 @@ export const Canvas: React.FC<CanvasProps> = ({
                     rx="1"
                     className="pointer-events-auto cursor-grab active:cursor-grabbing"
                     data-drag-handle="true"
-                    onMouseDown={handleMsgMouseDown}
+                    title="Activation Box"
+                    onMouseDown={(e) => handleMsgMouseDown(e)}
                   />
                 )}
-                {/* Message Label with background badge */}
+
+                {/* Left/Right Reconnection Endpoint Handles */}
+                <circle
+                  cx={srcX}
+                  cy={msgY}
+                  r="5"
+                  fill={isDraggingThis && draggingMessage.endpoint === 'from' ? "#c2652a" : "#ffffff"}
+                  stroke={strokeColor}
+                  strokeWidth="2"
+                  className="pointer-events-auto cursor-ew-resize hover:fill-amber-400 transition-colors shadow-xs"
+                  data-drag-handle="true"
+                  title="Drag endpoint left/right to reconnect source lifeline"
+                  onMouseDown={(e) => handleMsgMouseDown(e, 'from')}
+                />
+                <circle
+                  cx={tgtX}
+                  cy={msgY}
+                  r="5"
+                  fill={isDraggingThis && draggingMessage.endpoint === 'to' ? "#c2652a" : "#ffffff"}
+                  stroke={strokeColor}
+                  strokeWidth="2"
+                  className="pointer-events-auto cursor-ew-resize hover:fill-amber-400 transition-colors shadow-xs"
+                  data-drag-handle="true"
+                  title="Drag endpoint left/right to reconnect target lifeline"
+                  onMouseDown={(e) => handleMsgMouseDown(e, 'to')}
+                />
+
+                {/* Message Label with background badge (draggable left/right & up/down) */}
                 <g
                   transform={`translate(${labelX}, ${labelY})`}
                   className="cursor-grab active:cursor-grabbing select-none"
                   data-drag-handle="true"
-                  onMouseDown={handleMsgMouseDown}
+                  title="Drag label left/right to reposition, or up/down to reorder step"
+                  onMouseDown={(e) => handleMsgMouseDown(e)}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
                     setEdgeLabelText(msg.label || '');
