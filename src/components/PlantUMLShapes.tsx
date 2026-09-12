@@ -694,31 +694,33 @@ export const RectangleContainerShape: React.FC<{
   stroke?: string;
   strokeWidth?: number;
   isSelected?: boolean;
+  isDashed?: boolean;
 }> = ({
   width,
   height,
-  fill = 'rgba(250,250,248,0.5)',
-  stroke = '#78706A',
+  fill = '#FEFECE',
+  stroke = '#A80036',
   strokeWidth = 1.5,
-  isSelected = false
+  isSelected = false,
+  isDashed = false
 }) => {
   return (
     <svg
       width={width}
       height={height}
       className="absolute top-0 left-0 pointer-events-none overflow-visible"
-      style={{ filter: isSelected ? 'drop-shadow(0 0 6px rgba(194, 101, 42, 0.4))' : undefined }}
+      style={{ filter: isSelected ? 'drop-shadow(0 0 6px rgba(194, 101, 42, 0.4))' : 'drop-shadow(1px 2px 2px rgba(0,0,0,0.12))' }}
     >
       <rect
-        x="0"
-        y="0"
-        width={width}
-        height={height}
-        rx="4"
+        x="0.75"
+        y="0.75"
+        width={Math.max(0, width - 1.5)}
+        height={Math.max(0, height - 1.5)}
+        rx="6"
         fill={fill}
         stroke={stroke}
-        strokeWidth={strokeWidth}
-        strokeDasharray="4 2"
+        strokeWidth={isSelected ? 2 : strokeWidth}
+        strokeDasharray={isDashed ? "4 2" : undefined}
       />
     </svg>
   );

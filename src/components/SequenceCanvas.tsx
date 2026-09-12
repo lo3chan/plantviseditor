@@ -882,16 +882,13 @@ export const SequenceCanvas: React.FC<SequenceCanvasProps> = ({
 
   // Zoom with Wheel
   const handleWheel = (e: React.WheelEvent) => {
-    // If the wheel event happened inside a scrollable menu, popover, drawer, or input, do NOT zoom canvas
     const target = e.target as HTMLElement | null;
-    if (target && (
-      target.closest('.overflow-y-auto') || 
-      target.closest('.overflow-x-auto') || 
-      target.closest('.overflow-auto') || 
-      target.closest('[data-scrollable]') ||
-      target.closest('.scrollbar-thin')
-    )) {
-      return;
+    if (target) {
+      const isFloatingOverlay = target.closest('[role="dialog"]') ||
+        target.closest('[role="menu"]') ||
+        target.closest('[data-popover]');
+      if (isFloatingOverlay) return;
+      if (target.tagName === 'TEXTAREA' && target.scrollHeight > target.clientHeight) return;
     }
 
     e.preventDefault();

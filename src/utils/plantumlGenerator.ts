@@ -3082,6 +3082,9 @@ function finishBlock(
     const isFrame = type === 'frame' || isFragment;
     const isFolder = type === 'folder';
     const isRect = type === 'rectangle';
+    const isPkg = type === 'package' || type === 'namespace';
+    const resolvedContainerType = isFrame ? 'frame' : (isFolder ? 'folder' : (isRect ? 'rectangle' : (isPkg ? 'package' : type)));
+    const resolvedShape = isFrame ? 'frame' : (isFolder ? 'folder' : (isRect ? 'rectangle' : 'package'));
     const node: DiagramNode = {
       id,
       type: isFragment ? 'frame' : type as any,
@@ -3093,12 +3096,12 @@ function finishBlock(
       width: isFrame ? 360 : 340,
       height: isFrame ? 260 : 240,
       color: isFrame ? 'slate' : 'sand',
-      shape: (isFrame ? 'frame' : isFolder ? 'folder' : (isRect ? 'rectangle' : 'package')) as any,
+      shape: resolvedShape as any,
       data: {
         isContainer: true,
-        containerType: 'frame',
-        frameKind: isFragment ? type : undefined,
-        shape: (isFrame ? 'frame' : isFolder ? 'folder' : (isRect ? 'rectangle' : 'package')) as any,
+        containerType: resolvedContainerType as any,
+        frameKind: isFragment ? type : (isFrame ? (stereotype || 'frame') : undefined),
+        shape: resolvedShape as any,
         parentId
       }
     };

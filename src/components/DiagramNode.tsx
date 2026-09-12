@@ -252,9 +252,9 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const isDataTree = node.type === 'data-json' || node.type === 'data-yaml' || node.type === 'json' || node.type === 'yaml';
   const isEmbedded = ['embedded-salt', 'embedded-ditaa', 'embedded-math'].includes(node.type) || Boolean(node.data?.embeddedType);
   const isNote = node.type === 'note' || node.data?.shape === 'note';
-  const isFrame = node.type === 'frame' || node.data?.shape === 'frame' || node.data?.containerType === 'frame';
-  const isFolder = (node.type === 'folder' || node.data?.shape === 'folder' || node.data?.containerType === 'folder') && !isFrame;
-  const isRectangleContainer = node.type === 'rectangle' && (node.category === 'container' || Boolean(node.data?.isContainer));
+  const isFrame = (node.type === 'frame' || node.shape === 'frame' || node.data?.shape === 'frame' || node.data?.containerType === 'frame') && node.type !== 'rectangle' && node.shape !== 'rectangle' && node.data?.shape !== 'rectangle' && node.data?.containerType !== 'rectangle';
+  const isFolder = (node.type === 'folder' || node.data?.shape === 'folder' || node.data?.shape === 'folder' || node.data?.containerType === 'folder') && !isFrame;
+  const isRectangleContainer = (node.type === 'rectangle' || node.shape === 'rectangle' || node.data?.shape === 'rectangle' || node.data?.containerType === 'rectangle') && !isFrame;
   const isPackage = ((node.type === 'package' || node.type === 'namespace' || node.category === 'container' || Boolean(node.data?.isContainer) || node.shape === 'package' || node.data?.shape === 'package') && !isFrame && !isFolder && !isRectangleContainer);
 
   const isContainerNode = isPackage || isFrame || isFolder || isRectangleContainer || Boolean(node.data?.isContainer) || node.category === 'container' || node.type === 'package' || node.type === 'frame' || node.type === 'folder' || node.type === 'namespace' || node.type === 'c4-boundary' || node.type === 'rectangle';
@@ -2339,8 +2339,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   // 4. PLANTUML SHAPES (Package, Database, Queue, 3D Node, Folder, Frame, Note, UseCase, Collections, State, etc.)
   // =========================================================================
   if (isPackage || isCylinder || isQueue || isStack || isCard || isRectangleContainer || isNode3d || isFolder || isFrame || isComponentTab || isFileDoc || isHexagon || isCloud || isActor || isNote || isUseCase || isCollections || isState || isParticipant || isAgent) {
-    const strokeColor = colorConfig.borderHex || (isRectangleContainer ? '#78706A' : '#A80036');
-    const fillColor = colorConfig.bgHex || (isNote ? '#FEFFDD' : isRectangleContainer ? 'rgba(250,250,248,0.5)' : '#FEFECE');
+    const strokeColor = colorConfig.borderHex || '#A80036';
+    const fillColor = colorConfig.bgHex || (isNote ? '#FEFFDD' : isFrame ? 'rgba(250,250,248,0.2)' : '#FEFECE');
 
 
     return (
@@ -2434,29 +2434,68 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </div>
         )}
 
-        {/* 4A3. Specific PlantUML Rectangle Container Tab Labeling */}
+        {/* 4A3. PlantUML Rectangle Node / Card / Container Content */}
         {isRectangleContainer && (
-          <div className="absolute top-0 left-2.5 h-[22px] max-w-[200px] flex items-center pr-2 z-20 overflow-hidden select-none">
-            <span className="text-[9px] font-mono text-[#78706A] font-semibold mr-1">rectangle</span>
-            {isEditing ? (
-              <input
-                ref={inputRef}
-                value={editLabel}
-                onChange={(e) => setEditLabel(e.target.value)}
-                onBlur={handleCommitEdit}
-                onKeyDown={handleKeyDown}
-                className="text-xs font-bold text-gray-900 bg-white border border-[#78706A] rounded px-1 py-0 outline-none w-full shadow-xs"
-              />
-            ) : (
-              <span
-                className="text-xs font-bold text-[#3a302a] font-sans truncate cursor-text"
-                onDoubleClick={() => setIsEditing(true)}
-                title="Double click to rename container"
-              >
-                {node.label}
-              </span>
-            )}
-          </div>
+          isMultiLineFrame ? (
+            <div className="relative z-10 w-full h-full p-3 flex flex-col text-left overflow-auto select-text font-sans pointer-events-auto">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="text-xs font-bold text-[#181818] tracking-tight">
+                  {frameTitle}
+                </div>
+                {node.sublabel && (
+                  <span className="text-[9.5px] font-mono text-gray-600 italic bg-black/5 px-1 py-0.2 rounded shrink-0">
+                    {node.sublabel.startsWith('<<') ? node.sublabel : `<<${node.sublabel}>>`}
+                  </span>
+                )}
+              </div>
+              {frameSubtitle && (
+                <div className="text-[10.5px] italic text-gray-600 mt-0.5">
+                  {frameSubtitle}
+                </div>
+              )}
+              {bodyLines.length > 0 && (
+                <div className="mt-1 text-[11px] leading-relaxed text-[#2c2420] whitespace-pre-wrap flex-1">
+                  {bodyLines.map((bLine, bIdx) => {
+                    const trimmed = bLine.trim();
+                    if (!trimmed) {
+                      return <div key={bIdx} className="h-1.5" />;
+                    }
+                    return (
+                      <div key={bIdx} className="my-0.5">
+                        {renderFormattedInlineText(bLine)}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="relative z-10 w-full h-full p-2.5 flex flex-col items-center justify-start text-center overflow-hidden">
+              {node.sublabel && (
+                <div className="text-[10px] font-sans italic text-gray-700 leading-none mb-1">
+                  {node.sublabel}
+                </div>
+              )}
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  onBlur={handleCommitEdit}
+                  onKeyDown={handleKeyDown}
+                  className="text-xs font-bold text-gray-900 bg-white border border-[#A80036] rounded px-1 py-0.5 outline-none w-full shadow-xs text-center"
+                />
+              ) : (
+                <div
+                  className="text-xs font-bold text-[#181818] font-sans cursor-text truncate max-w-full"
+                  onDoubleClick={() => setIsEditing(true)}
+                  title="Double click to edit title"
+                >
+                  {frameTitle || node.label}
+                </div>
+              )}
+            </div>
+          )
         )}
 
         {/* 4A2. Specific PlantUML Frame Header Cut-out Tab Labeling & Body */}

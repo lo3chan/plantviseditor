@@ -699,13 +699,25 @@ export const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
-    // Right-click on node: select node for Draw.io context menu
+    // Right-click (button 2) on node: track right-click drag for canvas panning
+    // If dragged > 4px, pans canvas and suppresses context menu; if clicked in place, opens context menu
     if (e.button === 2) {
+      rightMouseDownPos.current = { x: e.clientX, y: e.clientY };
+      setIsRightDragging(false);
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
       if (!selectedNodeIds.includes(node.id)) {
         setSelectedNodeId(node.id);
         setSelectedNodeIds([node.id]);
         onSelectElement?.({ type: 'node', id: node.id, label: node.label });
       }
+      return;
+    }
+
+    // Middle click (button 1) always pans
+    if (e.button === 1) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
       return;
     }
 
@@ -1082,6 +1094,18 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   const handleStartDragLabel = (edge: DiagramEdge, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (e.button === 2) {
+      rightMouseDownPos.current = { x: e.clientX, y: e.clientY };
+      setIsRightDragging(false);
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
+      return;
+    }
+    if (e.button === 1) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
+      return;
+    }
     setSelectedEdgeId(edge.id);
     setSelectedNodeId(null);
     const computed = computedEdges.find(ce => ce.edge.id === edge.id);
@@ -1493,28 +1517,9 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Zoom & Pan with Wheel (Draw.io Scheme - non-passive native event listener)
   const handleWheel = (e: WheelEvent | React.WheelEvent) => {
-    // If the wheel event happened inside a scrollable menu, popover, drawer, or input, do NOT pan/zoom canvas
-    const target = e.target as HTMLElement | null;
-    if (target && (
-      target.closest('.overflow-y-auto') || 
-      target.closest('.overflow-x-auto') || 
-      target.closest('.overflow-auto') || 
-      target.closest('[data-scrollable]') ||
-      target.closest('#quick-action-bar-container') ||
-      target.closest('#edge-toolbar-container') ||
-      target.closest('.scrollbar-thin') ||
-      target.closest('#drawio-context-menu')
-    )) {
-      return;
-    }
-
-    if (e.cancelable) {
-      e.preventDefault();
-    }
-
-    // Draw.io Wheel Scheme:
-    // 1. Ctrl / Cmd + Wheel: Zoom centered at mouse cursor
+    // 1. Ctrl / Cmd + Wheel: Zoom centered at mouse cursor ALWAYS works across the entire canvas & elements
     if (e.ctrlKey || e.metaKey) {
+      if (e.cancelable) e.preventDefault();
       const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
       const newZoom = Math.min(Math.max(viewport.zoom * zoomFactor, 0.25), 2.5);
 
@@ -1529,6 +1534,32 @@ export const Canvas: React.FC<CanvasProps> = ({
         onUpdateViewport({ x: newX, y: newY, zoom: newZoom });
       }
       return;
+    }
+
+    // 2. Normal Wheel / Shift+Wheel (Panning):
+    // Only yield to external floating menus/popovers or active textarea that can scroll vertically.
+    // Diagram nodes on the canvas should NEVER block canvas scrolling/panning!
+    const target = e.target as HTMLElement | null;
+    if (target) {
+      const isFloatingOverlay = target.closest('#quick-action-bar-container') ||
+        target.closest('#edge-toolbar-container') ||
+        target.closest('#drawio-context-menu') ||
+        target.closest('[role="dialog"]') ||
+        target.closest('[role="menu"]') ||
+        target.closest('[data-popover]');
+
+      if (isFloatingOverlay) {
+        return;
+      }
+
+      // If actively focused inside a textarea that has vertical overflow, allow internal text scrolling
+      if (target.tagName === 'TEXTAREA' && target.scrollHeight > target.clientHeight) {
+        return;
+      }
+    }
+
+    if (e.cancelable) {
+      e.preventDefault();
     }
 
     // 2. Shift + Wheel: Horizontal pan
@@ -3700,6 +3731,18 @@ export const Canvas: React.FC<CanvasProps> = ({
                   title="Drag connection line to bend or reposition, double click to edit label"
                   onMouseDown={(e) => {
                     e.stopPropagation();
+                    if (e.button === 2) {
+                      rightMouseDownPos.current = { x: e.clientX, y: e.clientY };
+                      setIsRightDragging(false);
+                      setIsPanning(true);
+                      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
+                      return;
+                    }
+                    if (e.button === 1) {
+                      setIsPanning(true);
+                      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
+                      return;
+                    }
                     selectEdge(edge);
                     setDraggingEdgeRoute({
                       edgeId: edge.id,
@@ -3770,25 +3813,38 @@ export const Canvas: React.FC<CanvasProps> = ({
                   </g>
                 )}
 
-                {/* Hover Connection Tooltip Badge */}
-                {isHovered && !isDraggingThis && (
-                  <g transform={`translate(${midPoint.x}, ${midPoint.y - 18})`} className="pointer-events-none select-none">
-                    <rect
-                      x={-(Math.max(68, ((srcNode?.label?.length || 0) + (tgtNode?.label?.length || 0)) * 6.5 + 28) / 2)}
-                      y={-11}
-                      width={Math.max(68, ((srcNode?.label?.length || 0) + (tgtNode?.label?.length || 0)) * 6.5 + 28)}
-                      height={18}
-                      rx={9}
-                      fill="#18181b"
-                      fillOpacity={0.92}
-                      stroke={strokeColor}
-                      strokeWidth={1}
-                    />
-                    <text x={0} y={2} textAnchor="middle" fill="#ffffff" fontSize="9.5" fontWeight="600" className="font-sans">
-                      {srcNode?.label || edge.source} ➔ {tgtNode?.label || edge.target}
-                    </text>
-                  </g>
-                )}
+                {/* Hover Connection Tooltip Badge (sanitized and strictly clamped) */}
+                {isHovered && !isDraggingThis && (() => {
+                  const getCleanTitle = (n?: DiagramNode, fallbackId = '') => {
+                    if (!n) return fallbackId;
+                    const raw = (n.label || fallbackId).replace(/\\n/g, '\n');
+                    const firstLine = raw.split('\n')[0].replace(/^\*\*|\*\*$/g, '').replace(/^\/\/|\/\/$/g, '').trim();
+                    const name = firstLine || n.id || fallbackId;
+                    return name.length > 22 ? name.slice(0, 20) + '…' : name;
+                  };
+                  const srcTitle = getCleanTitle(srcNode, edge.source);
+                  const tgtTitle = getCleanTitle(tgtNode, edge.target);
+                  const tooltipText = `${srcTitle} ➔ ${tgtTitle}`;
+                  const badgeW = Math.min(260, Math.max(72, tooltipText.length * 6.5 + 24));
+                  return (
+                    <g transform={`translate(${midPoint.x}, ${midPoint.y - 18})`} className="pointer-events-none select-none">
+                      <rect
+                        x={-badgeW / 2}
+                        y={-10}
+                        width={badgeW}
+                        height={20}
+                        rx={10}
+                        fill="#18181b"
+                        fillOpacity={0.92}
+                        stroke={strokeColor}
+                        strokeWidth={1}
+                      />
+                      <text x={0} y={3.5} textAnchor="middle" fill="#ffffff" fontSize="9.5" fontWeight="600" className="font-sans">
+                        {tooltipText}
+                      </text>
+                    </g>
+                  );
+                })()}
               </g>
             );
           })}
