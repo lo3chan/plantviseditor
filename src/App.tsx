@@ -683,6 +683,101 @@ export default function App() {
     }
   }, [diagram]);
 
+  // User element bookmarks (persisted in localStorage, NOT autopopulated)
+  const [bookmarkedNodeIds, setBookmarkedNodeIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('twoballoons_user_bookmarks');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleToggleBookmark = useCallback((nodeId: string) => {
+    setBookmarkedNodeIds(prev => {
+      const exists = prev.some(id => id.toLowerCase() === nodeId.toLowerCase());
+      const next = exists 
+        ? prev.filter(id => id.toLowerCase() !== nodeId.toLowerCase())
+        : [...prev, nodeId];
+      try {
+        localStorage.setItem('twoballoons_user_bookmarks', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      
+      const matchedNode = diagram.nodes?.find(n => n.id.toLowerCase() === nodeId.toLowerCase() || sanitizeId(n.id).toLowerCase() === sanitizeId(nodeId).toLowerCase());
+      const label = matchedNode?.label || nodeId;
+      if (exists) {
+        setToastMessage({ text: `Bookmark removed: ${label}`, type: 'info' });
+      } else {
+        setToastMessage({ text: `Bookmarked: ${label}`, type: 'success' });
+      }
+      setTimeout(() => setToastMessage(null), 1800);
+      return next;
+    });
+  }, [diagram.nodes]);
+
+  // Element bookmark jump handler: synchronizes code editor line and centers canvas on element
+  const handleBookmarkJump = useCallback((bookmark: { id: string; label: string; line: number; type: string }) => {
+    // 1. Check in 2D canvas nodes
+    const node = diagram.nodes?.find(n => 
+      n.id.toLowerCase() === bookmark.id.toLowerCase() || 
+      n.label.toLowerCase() === bookmark.label.toLowerCase() ||
+      sanitizeId(n.id).toLowerCase() === sanitizeId(bookmark.id).toLowerCase()
+    );
+
+    if (node) {
+      const canvasEl: SelectedCanvasElement = {
+        type: 'node',
+        id: node.id,
+        label: node.label
+      };
+      setSelectedCanvasElement(canvasEl);
+      setSelectedCanvasElements([canvasEl]);
+
+      // Center viewport smoothly on this node
+      if (splitContainerRef.current) {
+        const containerW = splitContainerRef.current.clientWidth;
+        const containerH = splitContainerRef.current.clientHeight;
+        const canvasW = viewMode === 'split' ? (containerW * (100 - splitRatio) / 100) : containerW;
+        const canvasH = containerH;
+        const zoom = viewport.zoom;
+        const nodeW = node.width || 140;
+        const nodeH = node.height || 80;
+
+        const targetX = (canvasW / 2) - (node.x + nodeW / 2) * zoom;
+        const targetY = (canvasH / 2) - (node.y + nodeH / 2) * zoom;
+
+        setViewport(prev => ({
+          ...prev,
+          x: Math.round(targetX),
+          y: Math.round(targetY)
+        }));
+      }
+
+      setToastMessage({ text: `Jumped to: ${node.label}`, type: 'success' });
+      setTimeout(() => setToastMessage(null), 2000);
+      return;
+    }
+
+    // 2. Check in sequence participants
+    const part = diagram.participants?.find(p => 
+      p.id.toLowerCase() === bookmark.id.toLowerCase() || 
+      p.name.toLowerCase() === bookmark.label.toLowerCase()
+    );
+    if (part) {
+      const canvasEl: SelectedCanvasElement = {
+        type: 'participant',
+        id: part.id,
+        label: part.name
+      };
+      setSelectedCanvasElement(canvasEl);
+      setSelectedCanvasElements([canvasEl]);
+      setToastMessage({ text: `Jumped to: ${part.name}`, type: 'success' });
+      setTimeout(() => setToastMessage(null), 2000);
+    }
+  }, [diagram.nodes, diagram.participants, viewMode, splitRatio, viewport.zoom]);
+
   return (
     <div 
       className={`flex flex-col w-screen h-screen overflow-hidden ${isPlainWhiteBg ? 'bg-white' : 'bg-[#faf5ee]'} relative`}
@@ -739,6 +834,10 @@ export default function App() {
                 highlightedLine={highlightedCodeLine}
                 highlightedLines={highlightedCodeLines}
                 onCursorLineChange={handleCursorLineChange}
+                onBookmarkJump={handleBookmarkJump}
+                activeElementId={selectedCanvasElement?.id}
+                bookmarkedIds={bookmarkedNodeIds}
+                onToggleBookmark={handleToggleBookmark}
               />
             </div>
 
@@ -793,6 +892,8 @@ export default function App() {
                   onUpdateDiagram={updateDiagram}
                   isPlainWhite={isPlainWhiteBg}
                   onTogglePlainWhite={handleTogglePlainWhiteBg}
+                  bookmarkedNodeIds={bookmarkedNodeIds}
+                  onToggleBookmark={handleToggleBookmark}
                 />
               ) : (
                 <OfficialRenderView 
@@ -844,6 +945,8 @@ export default function App() {
                   onUpdateDiagram={updateDiagram}
                   isPlainWhite={isPlainWhiteBg}
                   onTogglePlainWhite={handleTogglePlainWhiteBg}
+                  bookmarkedNodeIds={bookmarkedNodeIds}
+                  onToggleBookmark={handleToggleBookmark}
                 />
               ) : (
                 <OfficialRenderView 
@@ -871,6 +974,10 @@ export default function App() {
               highlightedLine={highlightedCodeLine}
               highlightedLines={highlightedCodeLines}
               onCursorLineChange={handleCursorLineChange}
+              onBookmarkJump={handleBookmarkJump}
+              activeElementId={selectedCanvasElement?.id}
+              bookmarkedIds={bookmarkedNodeIds}
+              onToggleBookmark={handleToggleBookmark}
             />
           </div>
         )}

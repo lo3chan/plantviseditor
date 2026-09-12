@@ -55,6 +55,8 @@ interface CanvasProps {
   onUpdateDiagram?: (updater: Partial<DiagramData> | ((prev: DiagramData) => Partial<DiagramData>), actionName?: string) => void;
   isPlainWhite?: boolean;
   onTogglePlainWhite?: () => void;
+  bookmarkedNodeIds?: string[];
+  onToggleBookmark?: (nodeId: string) => void;
 }
 
 export const HARMONIC_EDGE_PALETTE = [
@@ -189,7 +191,9 @@ export const Canvas: React.FC<CanvasProps> = ({
   onSelectElements,
   onUpdateDiagram,
   isPlainWhite: propIsPlainWhite,
-  onTogglePlainWhite: propOnTogglePlainWhite
+  onTogglePlainWhite: propOnTogglePlainWhite,
+  bookmarkedNodeIds,
+  onToggleBookmark
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -4002,6 +4006,8 @@ export const Canvas: React.FC<CanvasProps> = ({
               onWrapInFrame={handleWrapInFrame}
               onDelete={handleDeleteSelected}
               onOpenInspector={() => setIsInspectorOpen(true)}
+              isBookmarked={bookmarkedNodeIds?.includes(selectedNode.id) || false}
+              onToggleBookmark={onToggleBookmark}
             />
           )}
 

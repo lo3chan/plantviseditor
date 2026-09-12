@@ -15,7 +15,12 @@ import {
   CheckCircle2,
   Bookmark,
   Layers,
-  HelpCircle
+  HelpCircle,
+  Plus,
+  Trash2,
+  RotateCcw,
+  Sliders,
+  Tag
 } from 'lucide-react';
 import { fetchPlantUMLAscii } from '../utils/plantumlEncoder';
 import { tokenizePlantUMLLine, getTokenClass } from '../utils/plantumlHighlighter';
@@ -274,6 +279,175 @@ const PLANTUML_AUTOCOMPLETE_ITEMS: AutocompleteItem[] = [
   { label: '<->', insertText: '<-> ', detail: 'Bidirectional link', type: 'arrow' }
 ];
 
+export interface ElementBookmark {
+  line: number;
+  label: string;
+  type: string;
+  id: string;
+  colorClass: string;
+  typeBadge: string;
+}
+
+export function extractElementBookmarks(code: string): ElementBookmark[] {
+  if (!code) return [];
+  const lines = code.split('\n');
+  const bookmarks: ElementBookmark[] = [];
+  const seenIds = new Set<string>();
+
+  lines.forEach((rawLine, idx) => {
+    const lineNum = idx + 1;
+    const trimmed = rawLine.replace(/'.*$/, '').trim();
+    if (!trimmed || trimmed.startsWith('@') || trimmed.startsWith('!') || /^[=\-_.*#]{2,}$/.test(trimmed)) return;
+
+    // 1. UML Structural: class, interface, enum, entity, struct, abstract class
+    const structMatch = trimmed.match(/^(abstract\s+class|class|interface|enum|entity|struct)\s+(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_][a-zA-Z0-9_.-]*))(?:\s+as\s+(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_][a-zA-Z0-9_.-]*)))?/i);
+    if (structMatch) {
+      const kind = structMatch[1].toLowerCase().replace(/\s+/, ' ');
+      const rawName = structMatch[2] || structMatch[3] || structMatch[4];
+      const alias = structMatch[5] || structMatch[6] || structMatch[7];
+      const id = alias || rawName;
+      const label = rawName || alias;
+      if (id && !seenIds.has(id.toLowerCase())) {
+        seenIds.add(id.toLowerCase());
+        bookmarks.push({
+          line: lineNum,
+          label,
+          type: kind,
+          id,
+          typeBadge: kind === 'interface' ? 'I' : kind === 'entity' ? 'E' : kind === 'enum' ? 'Enum' : 'C',
+          colorClass: kind === 'interface' ? 'bg-purple-900/60 text-purple-200 border-purple-700/50' :
+                      kind === 'entity' ? 'bg-amber-900/60 text-amber-200 border-amber-700/50' :
+                      kind === 'enum' ? 'bg-emerald-900/60 text-emerald-200 border-emerald-700/50' :
+                      'bg-blue-900/60 text-blue-200 border-blue-700/50'
+        });
+      }
+      return;
+    }
+
+    // 2. Behavioral & Containers: database, cloud, queue, stack, node, component, artifact, package, rectangle, frame
+    const containerMatch = trimmed.match(/^(database|storage|cloud|queue|stack|node|component|artifact|folder|frame|card|rectangle|package|namespace)\s+(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_][a-zA-Z0-9_.-]*))(?:\s+as\s+(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_][a-zA-Z0-9_.-]*)))?/i);
+    if (containerMatch) {
+      const kind = containerMatch[1].toLowerCase();
+      const rawName = containerMatch[2] || containerMatch[3] || containerMatch[4];
+      const alias = containerMatch[5] || containerMatch[6] || containerMatch[7];
+      const id = alias || rawName;
+      const label = rawName || alias;
+      if (id && !seenIds.has(id.toLowerCase())) {
+        seenIds.add(id.toLowerCase());
+        bookmarks.push({
+          line: lineNum,
+          label,
+          type: kind,
+          id,
+          typeBadge: kind === 'database' ? 'DB' : kind === 'cloud' ? '☁' : kind === 'queue' ? 'Q' : kind.slice(0, 3).toUpperCase(),
+          colorClass: kind === 'database' ? 'bg-emerald-900/60 text-emerald-200 border-emerald-700/50' :
+                      kind === 'cloud' ? 'bg-sky-900/60 text-sky-200 border-sky-700/50' :
+                      kind === 'queue' ? 'bg-teal-900/60 text-teal-200 border-teal-700/50' :
+                      'bg-stone-800 text-stone-300 border-stone-600/50'
+        });
+      }
+      return;
+    }
+
+    // 3. Sequence lifelines: participant, actor, boundary, control, collections
+    const seqMatch = trimmed.match(/^(participant|actor|boundary|control|collections)\s+(?:"([^"]+)"|'([^']+)'|:([^:]+):|([a-zA-Z0-9_][a-zA-Z0-9_.-]*))(?:\s+as\s+(?:"([^"]+)"|'([^']+)'|([a-zA-Z0-9_][a-zA-Z0-9_.-]*)))?/i);
+    if (seqMatch) {
+      const kind = seqMatch[1].toLowerCase();
+      const rawName = seqMatch[2] || seqMatch[3] || seqMatch[4] || seqMatch[5];
+      const alias = seqMatch[6] || seqMatch[7] || seqMatch[8];
+      const id = alias || rawName;
+      const label = rawName || alias;
+      if (id && !seenIds.has(id.toLowerCase())) {
+        seenIds.add(id.toLowerCase());
+        bookmarks.push({
+          line: lineNum,
+          label,
+          type: kind,
+          id,
+          typeBadge: kind === 'actor' ? '👤' : 'P',
+          colorClass: kind === 'actor' ? 'bg-rose-900/60 text-rose-200 border-rose-700/50' : 'bg-indigo-900/60 text-indigo-200 border-indigo-700/50'
+        });
+      }
+      return;
+    }
+
+    // 4. Bracket notation: [Component Name] as comp
+    const bracketMatch = trimmed.match(/^\[([^\]]+)\](?:\s+as\s+([a-zA-Z0-9_][a-zA-Z0-9_.-]*))?/i);
+    if (bracketMatch) {
+      const label = bracketMatch[1];
+      const id = bracketMatch[2] || label;
+      if (id && !seenIds.has(id.toLowerCase())) {
+        seenIds.add(id.toLowerCase());
+        bookmarks.push({
+          line: lineNum,
+          label,
+          type: 'component',
+          id,
+          typeBadge: 'CMP',
+          colorClass: 'bg-teal-900/60 text-teal-200 border-teal-700/50'
+        });
+      }
+      return;
+    }
+
+    // 5. C4 macro notation: Person(id, "Label", ...)
+    const c4Match = trimmed.match(/^(Person|Person_Ext|System|System_Ext|SystemDb|Container|ContainerDb|Component)\s*\(\s*([a-zA-Z0-9_]+)\s*,\s*["']([^"']+)["']/i);
+    if (c4Match) {
+      const kind = c4Match[1];
+      const id = c4Match[2];
+      const label = c4Match[3];
+      if (id && !seenIds.has(id.toLowerCase())) {
+        seenIds.add(id.toLowerCase());
+        bookmarks.push({
+          line: lineNum,
+          label,
+          type: kind.toLowerCase(),
+          id,
+          typeBadge: kind.startsWith('Person') ? '👤' : kind.includes('Db') ? 'DB' : 'C4',
+          colorClass: 'bg-orange-900/60 text-orange-200 border-orange-700/50'
+        });
+      }
+    }
+  });
+
+  return bookmarks;
+}
+
+export interface CodeSnippet {
+  id: string;
+  label: string;
+  category: string;
+  code: string;
+  isCustom?: boolean;
+}
+
+export const DEFAULT_SNIPPETS: CodeSnippet[] = [
+  // uml
+  { id: 's_class', label: '+ class', category: 'uml', code: '\nclass OrderService {\n  +id: Long\n  +status: String\n  --\n  +processOrder(): void\n}\n' },
+  { id: 's_interface', label: '+ interface', category: 'uml', code: '\ninterface IRepository<T> {\n  +findById(id: Long): T\n  +save(entity: T): void\n}\n' },
+  { id: 's_entity', label: '+ entity (ER)', category: 'uml', code: '\nentity Customer {\n  *id : Long <<PK>>\n  --\n  #user_id : Long <<FK>>\n  name : String\n  email : String\n}\n' },
+  { id: 's_rel_inherit', label: '<|--', category: 'uml', code: '\nParent <|-- Child : inherits\n' },
+  { id: 's_rel_arrow', label: '-->', category: 'uml', code: '\nService --> Database : calls\n' },
+  { id: 's_rel_er', label: '||--|{', category: 'uml', code: '\nTableA ||--|{ TableB : contains\n' },
+  
+  // sequence
+  { id: 's_seq_part', label: '+ participants', category: 'sequence', code: '\nactor "User" as user\nparticipant "API Gateway" as gw\nparticipant "Order Service" as svc\n' },
+  { id: 's_seq_call', label: '+ interaction call', category: 'sequence', code: '\nuser -> gw: POST /checkout\nactivate gw\ngw -> svc: ProcessPayment()\nactivate svc\nsvc --> gw: 200 OK (receipt)\ndeactivate svc\ngw --> user: Success confirmation\ndeactivate gw\n' },
+  { id: 's_seq_alt', label: '+ alt block', category: 'sequence', code: '\nalt status == 200\n  svc --> gw: Success\nelse error\n  svc --> gw: Payment Failed\nend\n' },
+  { id: 's_seq_loop', label: '+ loop block', category: 'sequence', code: '\nloop for each item in cart\n  svc -> db: checkStock(item.id)\nend\n' },
+
+  // styling
+  { id: 's_style_ortho', label: '+ ortho lines', category: 'styling', code: '\nskinparam linetype ortho\n' },
+  { id: 's_style_round', label: '+ roundcorner', category: 'styling', code: '\nskinparam roundcorner 10\n' },
+  { id: 's_style_arrow', label: '+ arrow style', category: 'styling', code: '\nskinparam ArrowColor #c2652a\nskinparam ArrowThickness 2\n' },
+  { id: 's_style_font', label: '+ typography', category: 'styling', code: '\nskinparam defaultFontName "EB Garamond"\n' },
+
+  // data
+  { id: 's_data_json', label: '+ json block', category: 'data', code: '\n@startjson\n{\n  "name": "Service",\n  "port": 8080,\n  "tags": ["api", "auth"]\n}\n@endjson\n' },
+  { id: 's_data_yaml', label: '+ yaml block', category: 'data', code: '\n@startyaml\nserver:\n  port: 8080\nenvironment: production\n@endyaml\n' },
+  { id: 's_data_map', label: '+ map table', category: 'data', code: '\nmap "Config" as cfg {\n  Host => "100.69.132.124"\n  Port => 8095\n}\n' }
+];
+
 interface CodePanelProps {
   code: string;
   onApplyCode: (newCode: string) => void;
@@ -282,9 +456,11 @@ interface CodePanelProps {
   highlightedLine?: number | null;
   highlightedLines?: number[];
   onCursorLineChange?: (lineNumber: number, lineText: string) => void;
+  onBookmarkJump?: (bookmark: ElementBookmark) => void;
+  activeElementId?: string | null;
+  bookmarkedIds?: string[];
+  onToggleBookmark?: (id: string) => void;
 }
-
-type SnippetCategory = 'uml' | 'sequence' | 'styling' | 'data';
 
 export const CodePanel: React.FC<CodePanelProps> = ({
   code,
@@ -293,7 +469,11 @@ export const CodePanel: React.FC<CodePanelProps> = ({
   onClose,
   highlightedLine,
   highlightedLines,
-  onCursorLineChange
+  onCursorLineChange,
+  onBookmarkJump,
+  activeElementId,
+  bookmarkedIds,
+  onToggleBookmark
 }) => {
   const [editableCode, setEditableCode] = useState(code);
   const [copied, setCopied] = useState(false);
@@ -308,8 +488,29 @@ export const CodePanel: React.FC<CodePanelProps> = ({
   const [activeSearchIndex, setActiveSearchIndex] = useState<number>(0);
   const [cursorLine, setCursorLine] = useState<number>(1);
   const [cursorCol, setCursorCol] = useState<number>(1);
-  const [snippetCategory, setSnippetCategory] = useState<SnippetCategory>('uml');
+  
+  // Customizable Snippets State
+  const [snippets, setSnippets] = useState<CodeSnippet[]>(() => {
+    try {
+      const saved = localStorage.getItem('twoballoons_custom_snippets');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_SNIPPETS;
+  });
+
+  const [activeSnippetCategory, setActiveSnippetCategory] = useState<string>('uml');
+  const [isCustomizingSnippets, setIsCustomizingSnippets] = useState<boolean>(false);
+  const [newSnippetLabel, setNewSnippetLabel] = useState<string>('');
+  const [newSnippetCategory, setNewSnippetCategory] = useState<string>('uml');
+  const [newSnippetCode, setNewSnippetCode] = useState<string>('');
   const [showDiagnostics, setShowDiagnostics] = useState<boolean>(false);
+  const [showBookmarkList, setShowBookmarkList] = useState<boolean>(false);
+  const [bookmarkFilter, setBookmarkFilter] = useState<string>('');
 
   // Tab Autocomplete State
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState<boolean>(false);
@@ -493,35 +694,113 @@ export const CodePanel: React.FC<CodePanelProps> = ({
     return validatePlantUML(editableCode);
   }, [editableCode]);
 
-  // Code outline items (classes, interfaces, lifelines, packages)
-  const outlineItems = useMemo(() => {
-    const lines = editableCode.split('\n');
-    const items: Array<{ line: number; label: string; type: string }> = [];
-
-    lines.forEach((line, idx) => {
-      const trimmed = line.trim();
-      const lineNum = idx + 1;
-
-      const classMatch = trimmed.match(/^(class|interface|enum|abstract\s+class|entity)\s+([a-zA-Z0-9_]+)/i);
-      if (classMatch) {
-        items.push({ line: lineNum, label: classMatch[2], type: classMatch[1] });
-        return;
-      }
-
-      const participantMatch = trimmed.match(/^(participant|actor|database|queue|boundary|control)\s+([^\s{]+)/i);
-      if (participantMatch) {
-        items.push({ line: lineNum, label: participantMatch[2].replace(/"/g, ''), type: participantMatch[1] });
-        return;
-      }
-
-      const packageMatch = trimmed.match(/^(package|namespace)\s+([^\s{]+)/i);
-      if (packageMatch) {
-        items.push({ line: lineNum, label: packageMatch[2], type: 'package' });
-      }
-    });
-
-    return items;
+  // All elements parsed from code (for lookups and jumping)
+  const allParsedElements = useMemo(() => {
+    return extractElementBookmarks(editableCode);
   }, [editableCode]);
+
+  // Bookmarks: ONLY include user-bookmarked elements (NOT autopopulated)
+  const elementBookmarks = useMemo(() => {
+    if (!bookmarkedIds || bookmarkedIds.length === 0) return [];
+    const idSet = new Set(bookmarkedIds.map(id => id.toLowerCase()));
+    return allParsedElements.filter(bm => 
+      idSet.has(bm.id.toLowerCase()) || 
+      idSet.has(bm.label.toLowerCase())
+    );
+  }, [allParsedElements, bookmarkedIds]);
+
+  // Currently focused element at cursor line or active from canvas
+  const currentElementAtCursor = useMemo(() => {
+    if (activeElementId) {
+      const byId = allParsedElements.find(el => 
+        el.id.toLowerCase() === activeElementId.toLowerCase() || 
+        el.label.toLowerCase() === activeElementId.toLowerCase()
+      );
+      if (byId) return byId;
+    }
+    return allParsedElements.find(el => el.line === cursorLine);
+  }, [allParsedElements, activeElementId, cursorLine]);
+
+  const isCurrentElementBookmarked = useMemo(() => {
+    if (!currentElementAtCursor || !bookmarkedIds) return false;
+    return bookmarkedIds.some(id => 
+      id.toLowerCase() === currentElementAtCursor.id.toLowerCase() || 
+      id.toLowerCase() === currentElementAtCursor.label.toLowerCase()
+    );
+  }, [currentElementAtCursor, bookmarkedIds]);
+
+  // Filtered bookmarks for search drawer
+  const filteredBookmarks = useMemo(() => {
+    if (!bookmarkFilter.trim()) return elementBookmarks;
+    const q = bookmarkFilter.toLowerCase();
+    return elementBookmarks.filter(bm => 
+      bm.label.toLowerCase().includes(q) || 
+      bm.type.toLowerCase().includes(q) ||
+      bm.id.toLowerCase().includes(q)
+    );
+  }, [elementBookmarks, bookmarkFilter]);
+
+  // Extract unique categories from current snippets
+  const availableCategories = useMemo(() => {
+    const defaultOrder = ['uml', 'sequence', 'styling', 'data'];
+    const cats = new Set<string>();
+    defaultOrder.forEach(c => cats.add(c));
+    snippets.forEach(s => cats.add(s.category.toLowerCase()));
+    return Array.from(cats);
+  }, [snippets]);
+
+  // Current category snippets
+  const currentCategorySnippets = useMemo(() => {
+    return snippets.filter(s => s.category.toLowerCase() === activeSnippetCategory.toLowerCase());
+  }, [snippets, activeSnippetCategory]);
+
+  const handleAddCustomSnippet = () => {
+    if (!newSnippetLabel.trim() || !newSnippetCode.trim()) return;
+    const cat = (newSnippetCategory.trim() || activeSnippetCategory || 'custom').toLowerCase();
+    const item: CodeSnippet = {
+      id: `custom_${Date.now()}`,
+      label: newSnippetLabel.trim(),
+      category: cat,
+      code: newSnippetCode,
+      isCustom: true
+    };
+    const next = [...snippets, item];
+    setSnippets(next);
+    try {
+      localStorage.setItem('twoballoons_custom_snippets', JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+    setActiveSnippetCategory(cat);
+    setNewSnippetLabel('');
+    setNewSnippetCode('');
+    setStatusMessage('Snippet saved');
+    setTimeout(() => setStatusMessage('Synced'), 1500);
+  };
+
+  const handleDeleteSnippet = (id: string) => {
+    const next = snippets.filter(s => s.id !== id);
+    setSnippets(next);
+    try {
+      localStorage.setItem('twoballoons_custom_snippets', JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+    setStatusMessage('Snippet removed');
+    setTimeout(() => setStatusMessage('Synced'), 1500);
+  };
+
+  const handleResetSnippets = () => {
+    setSnippets(DEFAULT_SNIPPETS);
+    try {
+      localStorage.setItem('twoballoons_custom_snippets', JSON.stringify(DEFAULT_SNIPPETS));
+    } catch {
+      // ignore
+    }
+    setActiveSnippetCategory('uml');
+    setStatusMessage('Reset to defaults');
+    setTimeout(() => setStatusMessage('Synced'), 1500);
+  };
 
   // Search matches
   const searchMatches = useMemo(() => {
@@ -885,184 +1164,313 @@ export const CodePanel: React.FC<CodePanelProps> = ({
         </div>
       )}
 
-      {/* Quick Outline Jump Bar (if elements exist) */}
-      {outlineItems.length > 0 && (
-        <div className="px-2.5 py-1 bg-[#201b17] border-b border-[#3d342c] flex items-center gap-1.5 overflow-x-auto scrollbar-none text-[10px]">
-          <span className="font-semibold text-[#8a7f75] uppercase tracking-wider shrink-0 flex items-center gap-1">
-            <Bookmark className="w-2.5 h-2.5 text-[#c2652a]" />
-            Jump:
+      {/* Element Bookmarks Bar (NOT autopopulated, populated only by user bookmarking) */}
+      <div className="px-2.5 py-1 bg-[#1f1a16] border-b border-[#3d342c] flex items-center justify-between gap-1.5 text-[11px] select-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 flex-1 min-w-0">
+          <span className="font-bold text-[#e0a96d] uppercase tracking-wider shrink-0 flex items-center gap-1 text-[10px] pr-1">
+            <Bookmark className={`w-3 h-3 ${elementBookmarks.length > 0 ? 'text-[#c2652a] fill-[#c2652a]' : 'text-[#8a7f75]'}`} />
+            Bookmarks
+            <span className="text-[9px] font-mono text-[#8a7f75] ml-0.5">({elementBookmarks.length})</span>
           </span>
-          {outlineItems.slice(0, 8).map((item, idx) => (
-            <button
-              key={`outline_${idx}`}
-              onClick={() => jumpToLine(item.line)}
-              className="px-1.5 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer border border-[#3d342c]"
-              title={`Jump to line ${item.line}: ${item.type} ${item.label}`}
-            >
-              <span className="text-[#a09489] text-[9px] mr-1">{item.type}</span>
-              {item.label}
-            </button>
-          ))}
-          {outlineItems.length > 8 && (
-            <span className="text-[#70655c] text-[9px]">+{outlineItems.length - 8} more</span>
+
+          {elementBookmarks.length === 0 && (
+            <span className="text-[10px] text-[#70655c] italic truncate">
+              No bookmarks yet — select an element on canvas and click 🔖 to bookmark
+            </span>
           )}
+
+          {elementBookmarks.slice(0, 8).map((bm, idx) => {
+            const isActive = (activeElementId && (bm.id.toLowerCase() === activeElementId.toLowerCase() || bm.label.toLowerCase() === activeElementId.toLowerCase())) ||
+                             (cursorLine === bm.line);
+
+            return (
+              <div
+                key={`bm_${bm.id}_${idx}`}
+                className="flex items-center shrink-0 group/bm"
+              >
+                <button
+                  onClick={() => {
+                    jumpToLine(bm.line);
+                    onBookmarkJump?.(bm);
+                    setStatusMessage(`Jumped: ${bm.label}`);
+                    setTimeout(() => setStatusMessage('Synced'), 1500);
+                  }}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-l-md font-mono text-[10px] transition-all cursor-pointer border-y border-l ${
+                    isActive
+                      ? 'bg-[#c2652a] text-white border-[#e0864a] shadow-xs font-semibold scale-[1.01]'
+                      : 'bg-[#2b231d] hover:bg-[#3d322a] text-[#d8d0c8] hover:text-white border-[#3d342c]'
+                  }`}
+                  title={`Bookmark: [${bm.type}] ${bm.label} (Line ${bm.line}) — Click to jump & focus`}
+                >
+                  <span className={`text-[8px] px-1 py-0.2 rounded font-bold uppercase border ${bm.colorClass}`}>
+                    {bm.typeBadge}
+                  </span>
+                  <span className="truncate max-w-[120px]">{bm.label}</span>
+                </button>
+                {onToggleBookmark && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleBookmark(bm.id);
+                    }}
+                    className={`px-1 py-0.5 rounded-r-md border-y border-r border-[#3d342c] transition-colors cursor-pointer text-[#8a7f75] hover:text-red-400 hover:bg-[#3d322a] ${
+                      isActive ? 'bg-[#c2652a] text-white border-[#e0864a]' : 'bg-[#2b231d]'
+                    }`}
+                    title={`Remove bookmark: ${bm.label}`}
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          {elementBookmarks.length > 8 && (
+            <button
+              onClick={() => setShowBookmarkList(!showBookmarkList)}
+              className="px-1.5 py-0.5 rounded bg-[#2e2620] hover:bg-[#3d322a] text-[#c2652a] hover:text-white text-[9px] shrink-0 font-mono border border-[#3d342c] cursor-pointer"
+              title="View all bookmarks"
+            >
+              +{elementBookmarks.length - 8} more
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Quick bookmark current element button */}
+          {currentElementAtCursor && onToggleBookmark && (
+            <button
+              onClick={() => onToggleBookmark(currentElementAtCursor.id)}
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] shrink-0 font-medium transition-colors cursor-pointer border ${
+                isCurrentElementBookmarked
+                  ? 'bg-[#c2652a]/20 text-[#e0864a] border-[#c2652a]/40 hover:bg-[#c2652a]/30'
+                  : 'bg-[#2a221b] text-[#a09489] hover:text-[#faf5ee] border-[#3d342c] hover:bg-[#3d322a]'
+              }`}
+              title={isCurrentElementBookmarked ? `Remove bookmark for ${currentElementAtCursor.label}` : `Bookmark ${currentElementAtCursor.label}`}
+            >
+              <Bookmark className={`w-3 h-3 ${isCurrentElementBookmarked ? 'fill-[#c2652a] text-[#c2652a]' : ''}`} />
+              <span className="hidden sm:inline">
+                {isCurrentElementBookmarked ? 'Bookmarked' : `+ Bookmark ${currentElementAtCursor.label}`}
+              </span>
+            </button>
+          )}
+
+          {elementBookmarks.length > 3 && (
+            <button
+              onClick={() => setShowBookmarkList(!showBookmarkList)}
+              className="p-1 rounded bg-[#2a221b] hover:bg-[#3d322a] text-[#a09489] hover:text-[#e0a96d] shrink-0 border border-[#3d342c] transition-colors cursor-pointer ml-1"
+              title="Toggle all element bookmarks browser"
+            >
+              <ChevronDown className={`w-3 h-3 transition-transform ${showBookmarkList ? 'rotate-180 text-[#c2652a]' : ''}`} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded Bookmarks Browser / Filter Drawer */}
+      {showBookmarkList && (
+        <div className="px-3 py-2 bg-[#1c1713] border-b border-[#3d342c] flex flex-col gap-1.5 shadow-inner select-none animate-in fade-in duration-150">
+          <div className="flex items-center justify-between text-[11px] text-[#a09489]">
+            <span className="font-semibold text-[#faf5ee] flex items-center gap-1">
+              <Bookmark className="w-3 h-3 text-[#c2652a] fill-[#c2652a]" /> All Element Bookmarks ({elementBookmarks.length})
+            </span>
+            <input
+              type="text"
+              value={bookmarkFilter}
+              onChange={(e) => setBookmarkFilter(e.target.value)}
+              placeholder="Search bookmarks..."
+              className="px-2 py-0.5 text-[10px] bg-[#29221b] border border-[#3d342c] rounded text-[#faf5ee] outline-none focus:border-[#c2652a] w-36 font-sans"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1">
+            {filteredBookmarks.map((bm, idx) => (
+              <button
+                key={`bm_list_${idx}`}
+                onClick={() => {
+                  jumpToLine(bm.line);
+                  onBookmarkJump?.(bm);
+                  setShowBookmarkList(false);
+                  setStatusMessage(`Jumped: ${bm.label}`);
+                  setTimeout(() => setStatusMessage('Synced'), 1500);
+                }}
+                className="flex items-center justify-between px-2 py-1 rounded bg-[#26201a] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] text-[10px] font-mono border border-[#3d342c] transition-colors cursor-pointer text-left"
+              >
+                <div className="flex items-center gap-1.5 truncate">
+                  <span className={`text-[8px] px-1 py-0.2 rounded font-bold uppercase border ${bm.colorClass}`}>
+                    {bm.typeBadge}
+                  </span>
+                  <span className="truncate">{bm.label}</span>
+                </div>
+                <span className="text-[9px] text-[#8a7f75] shrink-0 ml-1">Ln {bm.line}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Snippet Insert Categories */}
-      <div className="px-2.5 py-1 bg-[#1a1613] border-b border-[#352d26] flex items-center gap-1 text-[11px] overflow-x-auto scrollbar-none">
-        <span className="text-[10px] uppercase font-bold text-[#8a7f75] mr-1 shrink-0">Snippets:</span>
+      <div className="px-2.5 py-1 bg-[#1a1613] border-b border-[#352d26] flex items-center justify-between gap-1 text-[11px] overflow-x-auto scrollbar-none">
+        <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+          <span className="text-[10px] uppercase font-bold text-[#8a7f75] mr-1 shrink-0">Snippets:</span>
+          {availableCategories.map(cat => {
+            const catLabel = cat === 'uml' ? 'Classes & UML' :
+                             cat === 'sequence' ? 'Sequence' :
+                             cat === 'styling' ? 'Skinparam' :
+                             cat === 'data' ? 'JSON & Map' :
+                             cat.charAt(0).toUpperCase() + cat.slice(1);
+
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveSnippetCategory(cat)}
+                className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer shrink-0 ${
+                  activeSnippetCategory.toLowerCase() === cat.toLowerCase()
+                    ? 'bg-[#c2652a] text-white font-bold'
+                    : 'text-[#a09489] hover:text-[#d8d0c8]'
+                }`}
+              >
+                {catLabel}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Customize button */}
         <button
-          onClick={() => setSnippetCategory('uml')}
-          className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-            snippetCategory === 'uml' ? 'bg-[#c2652a] text-white font-bold' : 'text-[#a09489] hover:text-[#d8d0c8]'
+          onClick={() => setIsCustomizingSnippets(!isCustomizingSnippets)}
+          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] shrink-0 font-medium transition-colors cursor-pointer border ${
+            isCustomizingSnippets
+              ? 'bg-[#c2652a] text-white border-[#e0864a]'
+              : 'bg-[#261f19] hover:bg-[#382e26] text-[#c2652a] border-[#3d342c]'
           }`}
+          title="Customize snippets (Add, remove, or edit custom snippets)"
         >
-          Classes & UML
-        </button>
-        <button
-          onClick={() => setSnippetCategory('sequence')}
-          className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-            snippetCategory === 'sequence' ? 'bg-[#c2652a] text-white font-bold' : 'text-[#a09489] hover:text-[#d8d0c8]'
-          }`}
-        >
-          Sequence
-        </button>
-        <button
-          onClick={() => setSnippetCategory('styling')}
-          className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-            snippetCategory === 'styling' ? 'bg-[#c2652a] text-white font-bold' : 'text-[#a09489] hover:text-[#d8d0c8]'
-          }`}
-        >
-          Skinparam
-        </button>
-        <button
-          onClick={() => setSnippetCategory('data')}
-          className={`px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer ${
-            snippetCategory === 'data' ? 'bg-[#c2652a] text-white font-bold' : 'text-[#a09489] hover:text-[#d8d0c8]'
-          }`}
-        >
-          JSON & Map
+          <Sliders className="w-3 h-3" />
+          <span>Customize</span>
         </button>
       </div>
 
+      {/* Snippets Customization Drawer */}
+      {isCustomizingSnippets && (
+        <div className="px-3 py-2.5 bg-[#171310] border-b border-[#3d342c] flex flex-col gap-2 shadow-inner select-none animate-in fade-in duration-150">
+          <div className="flex items-center justify-between border-b border-[#352d26] pb-1.5">
+            <span className="font-bold text-[#faf5ee] text-xs flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5 text-[#c2652a]" />
+              Customize Snippets Bar
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleResetSnippets}
+                className="flex items-center gap-1 text-[10px] text-[#8a7f75] hover:text-[#c2652a] transition-colors cursor-pointer"
+                title="Reset all snippets to defaults"
+              >
+                <RotateCcw className="w-3 h-3" /> Reset Defaults
+              </button>
+              <button
+                onClick={() => setIsCustomizingSnippets(false)}
+                className="text-[#8a7f75] hover:text-white p-0.5 rounded hover:bg-[#2e2620]"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Add New Snippet Form */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-[#201a15] p-2 rounded-lg border border-[#352d26]">
+            <div>
+              <label className="text-[10px] text-[#8a7f75] uppercase font-semibold block mb-0.5">Label / Name</label>
+              <input
+                type="text"
+                value={newSnippetLabel}
+                onChange={(e) => setNewSnippetLabel(e.target.value)}
+                placeholder="+ state machine"
+                className="w-full text-[11px] px-2 py-1 bg-[#2a221b] border border-[#3d342c] rounded text-[#faf5ee] outline-none focus:border-[#c2652a]"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-[#8a7f75] uppercase font-semibold block mb-0.5">Category</label>
+              <input
+                type="text"
+                value={newSnippetCategory}
+                onChange={(e) => setNewSnippetCategory(e.target.value)}
+                placeholder="uml, sequence, styling, data..."
+                className="w-full text-[11px] px-2 py-1 bg-[#2a221b] border border-[#3d342c] rounded text-[#faf5ee] outline-none focus:border-[#c2652a]"
+              />
+            </div>
+            <div className="md:col-span-1 flex items-end">
+              <button
+                onClick={handleAddCustomSnippet}
+                disabled={!newSnippetLabel.trim() || !newSnippetCode.trim()}
+                className="w-full py-1 px-3 bg-[#c2652a] hover:bg-[#d57335] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Snippet
+              </button>
+            </div>
+            <div className="md:col-span-3">
+              <label className="text-[10px] text-[#8a7f75] uppercase font-semibold block mb-0.5">PlantUML Snippet Template</label>
+              <textarea
+                value={newSnippetCode}
+                onChange={(e) => setNewSnippetCode(e.target.value)}
+                placeholder="[*] --> State1&#10;State1 --> [*]"
+                rows={3}
+                className="w-full text-[11px] font-mono px-2 py-1.5 bg-[#2a221b] border border-[#3d342c] rounded text-[#faf5ee] outline-none focus:border-[#c2652a] resize-y"
+              />
+            </div>
+          </div>
+
+          {/* Current Snippets in Active Category */}
+          <div className="flex flex-col gap-1 max-h-36 overflow-y-auto pr-1">
+            <span className="text-[10px] text-[#8a7f75] font-semibold uppercase">Active Category Snippets ({currentCategorySnippets.length})</span>
+            <div className="grid grid-cols-2 gap-1.5">
+              {currentCategorySnippets.map(snip => (
+                <div
+                  key={snip.id}
+                  className="flex items-center justify-between px-2 py-1 bg-[#221c17] rounded border border-[#352d26] text-[10px] font-mono text-[#d8d0c8]"
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="font-semibold text-white truncate">{snip.label}</span>
+                    {snip.isCustom && (
+                      <span className="text-[8px] px-1 py-0.2 rounded bg-[#c2652a]/20 text-[#e0864a] border border-[#c2652a]/30">custom</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleDeleteSnippet(snip.id)}
+                    className="p-0.5 text-[#8a7f75] hover:text-red-400 transition-colors cursor-pointer shrink-0 ml-1"
+                    title={`Delete snippet "${snip.label}"`}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Snippets Toolbar Items */}
       <div className="px-2.5 py-1 bg-[#201b17] border-b border-[#352d26] flex items-center gap-1 overflow-x-auto scrollbar-none text-[11px]">
-        {snippetCategory === 'uml' && (
-          <>
-            <button
-              onClick={() => insertSnippet('\nclass OrderService {\n  +id: Long\n  +status: String\n  --\n  +processOrder(): void\n}\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + class
-            </button>
-            <button
-              onClick={() => insertSnippet('\ninterface IRepository<T> {\n  +findById(id: Long): T\n  +save(entity: T): void\n}\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + interface
-            </button>
-            <button
-              onClick={() => insertSnippet('\nentity Customer {\n  *id : Long <<PK>>\n  --\n  #user_id : Long <<FK>>\n  name : String\n  email : String\n}\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + entity (ER)
-            </button>
-            <button
-              onClick={() => insertSnippet('\nParent <|-- Child : inherits\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              &lt;|--
-            </button>
-            <button
-              onClick={() => insertSnippet('\nService --> Database : calls\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              --&gt;
-            </button>
-            <button
-              onClick={() => insertSnippet('\nTableA ||--|{ TableB : contains\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              ||--|&#123;
-            </button>
-          </>
-        )}
+        {currentCategorySnippets.map(snip => (
+          <button
+            key={snip.id}
+            onClick={() => insertSnippet(snip.code)}
+            className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer border border-[#3a3028]"
+            title={`Click to insert snippet: ${snip.label}`}
+          >
+            {snip.label}
+          </button>
+        ))}
 
-        {snippetCategory === 'sequence' && (
-          <>
-            <button
-              onClick={() => insertSnippet('\nactor "User" as user\nparticipant "API Gateway" as gw\nparticipant "Order Service" as svc\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + participants
-            </button>
-            <button
-              onClick={() => insertSnippet('\nuser -> gw: POST /checkout\nactivate gw\ngw -> svc: ProcessPayment()\nactivate svc\nsvc --> gw: 200 OK (receipt)\ndeactivate svc\ngw --> user: Success confirmation\ndeactivate gw\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + interaction call
-            </button>
-            <button
-              onClick={() => insertSnippet('\nalt status == 200\n  svc --> gw: Success\nelse error\n  svc --> gw: Payment Failed\nend\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + alt block
-            </button>
-            <button
-              onClick={() => insertSnippet('\nloop for each item in cart\n  svc -> db: checkStock(item.id)\nend\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + loop block
-            </button>
-          </>
-        )}
-
-        {snippetCategory === 'styling' && (
-          <>
-            <button
-              onClick={() => insertSnippet('\nskinparam linetype ortho\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + ortho lines
-            </button>
-            <button
-              onClick={() => insertSnippet('\nskinparam roundcorner 10\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + roundcorner
-            </button>
-            <button
-              onClick={() => insertSnippet('\nskinparam ArrowColor #c2652a\nskinparam ArrowThickness 2\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + arrow style
-            </button>
-            <button
-              onClick={() => insertSnippet('\nskinparam defaultFontName "EB Garamond"\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + typography
-            </button>
-          </>
-        )}
-
-        {snippetCategory === 'data' && (
-          <>
-            <button
-              onClick={() => insertSnippet('\nmap AppConfig {\n  host => "127.0.0.1"\n  port => 8080\n  env => "production"\n  ssl => true\n}\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + map table
-            </button>
-            <button
-              onClick={() => insertSnippet('\njson Payload {\n  "service": "billing",\n  "status": "healthy",\n  "replicas": 3,\n  "regions": ["us-central", "eu-west"]\n}\n')}
-              className="px-2 py-0.5 rounded bg-[#2e2620] hover:bg-[#c2652a] hover:text-white text-[#d8d0c8] shrink-0 font-mono transition-colors cursor-pointer"
-            >
-              + json tree
-            </button>
-          </>
-        )}
+        {/* Quick Add Snippet pill */}
+        <button
+          onClick={() => {
+            setNewSnippetCategory(activeSnippetCategory);
+            setIsCustomizingSnippets(true);
+          }}
+          className="px-1.5 py-0.5 rounded bg-[#251e18] hover:bg-[#352a22] text-[#8a7f75] hover:text-[#c2652a] shrink-0 font-mono text-[10px] transition-colors cursor-pointer border border-dashed border-[#42372e] flex items-center gap-0.5"
+          title="Add a custom snippet to this category"
+        >
+          <Plus className="w-2.5 h-2.5" /> New
+        </button>
       </div>
 
       {/* Editor Body: Gutter + Syntax Highlight Layer + Native Transparent Textarea */}

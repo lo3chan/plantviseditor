@@ -149,7 +149,7 @@ export const QuickBranchPopup: React.FC<QuickBranchPopupProps> = ({
     <div
       ref={popupRef}
       style={{ left: x, top: y }}
-      className="absolute z-50 w-72 bg-white rounded-2xl shadow-2xl border border-[#d8d0c8] p-3 text-xs text-[#2c2420] animate-in fade-in zoom-in-95 duration-150 select-none"
+      className="absolute z-[100] w-72 bg-white rounded-2xl shadow-2xl border border-[#d8d0c8] p-3 text-xs text-[#2c2420] animate-in fade-in zoom-in-95 duration-150 select-none"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}

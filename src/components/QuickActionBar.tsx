@@ -7,7 +7,8 @@ import {
   Check, 
   Boxes, 
   Tag, 
-  Sliders
+  Sliders,
+  Bookmark
 } from 'lucide-react';
 import { DiagramNode, DiagramEdge, EdgeArrowType, AssetItem } from '../types';
 import { UNIFIED_ASSETS } from '../utils/assetsData';
@@ -27,6 +28,8 @@ interface QuickActionBarProps {
   onWrapInFrame?: (kind?: 'frame' | 'alt' | 'loop' | 'opt' | 'par' | 'group', condition?: string) => void;
   onDelete: () => void;
   onOpenInspector?: () => void;
+  isBookmarked?: boolean;
+  onToggleBookmark?: (nodeId: string) => void;
 }
 
 // Verbal stereotypes for quick assignment
@@ -136,7 +139,9 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
   onWrapInPackage,
   onWrapInFrame,
   onDelete,
-  onOpenInspector
+  onOpenInspector,
+  isBookmarked,
+  onToggleBookmark
 }) => {
   const [activeMenu, setActiveMenu] = useState<'none' | 'type' | 'tone' | 'nature' | 'connect'>('none');
   const [typeSearch, setTypeSearch] = useState('');
@@ -147,15 +152,24 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
 
   const barRef = useRef<HTMLDivElement>(null);
 
-  // Close menus when clicking outside
+  // Close menus when clicking outside or pressing Escape
   useEffect(() => {
     const handleGlobalClick = (e: MouseEvent) => {
       if (barRef.current && !barRef.current.contains(e.target as Node)) {
         setActiveMenu('none');
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveMenu('none');
+      }
+    };
     document.addEventListener('mousedown', handleGlobalClick);
-    return () => document.removeEventListener('mousedown', handleGlobalClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   const currentTypeName = getFriendlyNodeTypeName(node.type, node.shape);
@@ -172,7 +186,7 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
     <div 
       ref={barRef}
       id="quick-action-bar-container"
-      className="absolute z-40 -translate-x-1/2 -translate-y-full mb-3 pointer-events-auto select-none"
+      className="absolute z-[100] -translate-x-1/2 -translate-y-full mb-3 pointer-events-auto select-none"
       style={{ left: x, top: y }}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
@@ -281,6 +295,7 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
         {/* SEGMENT 2: VERBAL STEREOTYPE / NATURE DROPDOWN */}
         <div className="relative">
           <button
+            id="btn-node-stereotype"
             onClick={() => setActiveMenu(activeMenu === 'nature' ? 'none' : 'nature')}
             className={`h-7 flex items-center gap-1 rounded-full transition-all cursor-pointer ${
               currentStereotype
@@ -396,6 +411,25 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
             title="Attach UML Note"
           >
             <StickyNote className="w-3.5 h-3.5 text-amber-600" />
+          </button>
+        )}
+
+        {/* Toggle Bookmark button */}
+        {onToggleBookmark && (
+          <button
+            id="btn-node-bookmark"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleBookmark(node.id);
+            }}
+            className={`h-7 w-7 flex items-center justify-center rounded-full transition-all cursor-pointer ${
+              isBookmarked
+                ? 'text-[#c2652a] bg-[#c2652a]/15 hover:bg-[#c2652a]/25 shadow-xs'
+                : 'text-[#605850] hover:text-[#c2652a] hover:bg-[#faf5ee]'
+            }`}
+            title={isBookmarked ? `Bookmarked: ${node.label} (Click to remove)` : `Bookmark "${node.label}"`}
+          >
+            <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-[#c2652a] text-[#c2652a]' : ''}`} />
           </button>
         )}
 
