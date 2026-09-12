@@ -1693,6 +1693,24 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         {isUseCase && <UseCaseShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
         {isCollections && <CollectionsShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
         {isState && <StateBoxShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isParticipant && !isActor && !isCylinder && (
+          <svg
+            className="absolute top-0 left-0 w-full h-full pointer-events-none"
+            viewBox={`0 0 ${effectiveWidth} ${effectiveHeight}`}
+          >
+            <rect
+              x="1"
+              y="1"
+              width={Math.max(0, effectiveWidth - 2)}
+              height={Math.max(0, effectiveHeight - 2)}
+              rx="4"
+              fill={fillColor}
+              stroke={strokeColor}
+              strokeWidth={isSelected ? "2" : "1.5"}
+              filter="drop-shadow(1px 2px 2px rgba(0,0,0,0.12))"
+            />
+          </svg>
+        )}
 
         {/* 4A. Specific PlantUML Package Tab Labeling */}
         {isPackage && (

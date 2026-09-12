@@ -688,6 +688,7 @@ export default function App() {
                   onUpdateSettings={(settings) => updateDiagram({ settings: { ...(diagram.settings || { direction: 'TB', linetype: 'ortho', monochrome: false, handwritten: false, shadowing: false }), ...settings } })}
                   selectedElementId={selectedCanvasElement?.id || null}
                   onSelectElement={setSelectedCanvasElement}
+                  onUpdateDiagram={updateDiagram}
                 />
               ) : (
                 <OfficialRenderView 

@@ -11,7 +11,8 @@ import {
   ArrowDownUp,
   ArrowLeftRight,
   Palette,
-  PenTool
+  PenTool,
+  X
 } from 'lucide-react';
 import { 
   DiagramData, 
@@ -21,7 +22,8 @@ import {
   Viewport, 
   AssetItem,
   GlobalCanvasSettings,
-  NodeShape
+  NodeShape,
+  SequenceBlock
 } from '../types';
 import { SelectedCanvasElement } from '../utils/codeHighlightSync';
 import { DiagramNodeView } from './DiagramNode';
@@ -44,6 +46,7 @@ interface CanvasProps {
   onUpdateSettings?: (settings: Partial<GlobalCanvasSettings>) => void;
   selectedElementId?: string | null;
   onSelectElement?: (element: SelectedCanvasElement | null) => void;
+  onUpdateDiagram?: (updater: Partial<DiagramData> | ((prev: DiagramData) => Partial<DiagramData>), actionName?: string) => void;
 }
 
 export function getFriendlyRelationLabel(arrowType?: DiagramEdge['arrowType'], style?: DiagramEdge['style']): string {
@@ -161,7 +164,8 @@ export const Canvas: React.FC<CanvasProps> = ({
   onToggleSnap,
   onUpdateSettings,
   selectedElementId,
-  onSelectElement
+  onSelectElement,
+  onUpdateDiagram
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -239,38 +243,87 @@ export const Canvas: React.FC<CanvasProps> = ({
   const edges = diagram.edges || [];
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null);
   const [edgeLabelText, setEdgeLabelText] = useState('');
   const [hoveredDropTargetId, setHoveredDropTargetId] = useState<string | null>(null);
-  const selectedEdge = selectedEdgeId ? edges.find(e => e.id === selectedEdgeId) : null;
+
+  const selectedMessage = diagram.messages?.find(m => m.id === selectedEdgeId);
+  const selectedEdge = selectedEdgeId ? (
+    edges.find(e => e.id === selectedEdgeId) ||
+    (selectedMessage ? {
+      id: selectedMessage.id,
+      source: selectedMessage.from,
+      target: selectedMessage.to,
+      label: selectedMessage.label,
+      style: (selectedMessage.type === 'reply' ? 'dashed' : 'solid') as any,
+      arrowType: 'arrow' as any,
+      data: { isSequenceMessage: true, order: selectedMessage.order }
+    } : null)
+  ) : null;
+
+  const selectedBlock = diagram.blocks?.find(b => b.id === selectedBlockId);
 
   // Selection handlers notifying onSelectElement
-  const selectNode = useCallback((node: DiagramNode | null) => {
+  const selectNode = useCallback((node: DiagramNode | null, isMulti = false) => {
     if (node) {
-      setSelectedNodeId(node.id);
-      setSelectedEdgeId(null);
-      onSelectElement?.({ type: 'node', id: node.id, label: node.label });
+      if (isMulti) {
+        setSelectedNodeIds(prev => {
+          const next = prev.includes(node.id) ? prev.filter(id => id !== node.id) : [...prev, node.id];
+          setSelectedNodeId(next[next.length - 1] || null);
+          return next;
+        });
+      } else {
+        setSelectedNodeId(node.id);
+        setSelectedNodeIds([node.id]);
+        setSelectedEdgeId(null);
+        setSelectedBlockId(null);
+        onSelectElement?.({ type: 'node', id: node.id, label: node.label });
+      }
     } else {
       setSelectedNodeId(null);
-      if (!selectedEdgeId) onSelectElement?.(null);
+      setSelectedNodeIds([]);
+      if (!selectedEdgeId && !selectedBlockId) onSelectElement?.(null);
     }
-  }, [onSelectElement, selectedEdgeId]);
+  }, [onSelectElement, selectedEdgeId, selectedBlockId]);
 
   const selectEdge = useCallback((edge: DiagramEdge | null) => {
     if (edge) {
       setSelectedEdgeId(edge.id);
       setSelectedNodeId(null);
+      setSelectedNodeIds([]);
+      setSelectedBlockId(null);
       onSelectElement?.({ type: 'edge', id: edge.id, source: edge.source, target: edge.target, label: edge.label });
     } else {
       setSelectedEdgeId(null);
-      if (!selectedNodeId) onSelectElement?.(null);
+      if (!selectedNodeId && !selectedBlockId) onSelectElement?.(null);
     }
-  }, [onSelectElement, selectedNodeId]);
+  }, [onSelectElement, selectedNodeId, selectedBlockId]);
+
+  const selectBlock = useCallback((block: SequenceBlock | null) => {
+    if (block) {
+      setSelectedBlockId(block.id);
+      setSelectedNodeId(null);
+      setSelectedNodeIds([]);
+      setSelectedEdgeId(null);
+      onSelectElement?.({
+        type: 'block' as any,
+        id: block.id,
+        label: `${block.type.toUpperCase()}${block.condition ? ` [${block.condition}]` : ''}`
+      });
+    } else {
+      setSelectedBlockId(null);
+      if (!selectedNodeId && !selectedEdgeId) onSelectElement?.(null);
+    }
+  }, [onSelectElement, selectedNodeId, selectedEdgeId]);
 
   const clearSelection = useCallback(() => {
     setSelectedNodeId(null);
+    setSelectedNodeIds([]);
     setSelectedEdgeId(null);
+    setSelectedBlockId(null);
     setEditingEdgeId(null);
     setQuickBranchPopup(null);
     onSelectElement?.(null);
@@ -280,21 +333,35 @@ export const Canvas: React.FC<CanvasProps> = ({
   useEffect(() => {
     if (selectedElementId === null) {
       setSelectedNodeId(null);
+      setSelectedNodeIds([]);
       setSelectedEdgeId(null);
+      setSelectedBlockId(null);
     } else if (selectedElementId) {
       const isNode = nodes.some(n => n.id === selectedElementId);
       if (isNode) {
         setSelectedNodeId(selectedElementId);
+        setSelectedNodeIds(prev => prev.includes(selectedElementId) ? prev : [selectedElementId]);
         setSelectedEdgeId(null);
+        setSelectedBlockId(null);
       } else {
-        const isEdge = edges.some(e => e.id === selectedElementId);
+        const isEdge = edges.some(e => e.id === selectedElementId) || diagram.messages?.some(m => m.id === selectedElementId);
         if (isEdge) {
           setSelectedEdgeId(selectedElementId);
           setSelectedNodeId(null);
+          setSelectedNodeIds([]);
+          setSelectedBlockId(null);
+        } else {
+          const isBlock = diagram.blocks?.some(b => b.id === selectedElementId);
+          if (isBlock) {
+            setSelectedBlockId(selectedElementId);
+            setSelectedNodeId(null);
+            setSelectedNodeIds([]);
+            setSelectedEdgeId(null);
+          }
         }
       }
     }
-  }, [selectedElementId, nodes, edges]);
+  }, [selectedElementId, nodes, edges, diagram.messages, diagram.blocks]);
 
   // Node Dragging State
   const [draggingNode, setDraggingNode] = useState<{
@@ -304,6 +371,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     initialNodeX: number;
     initialNodeY: number;
     childOffsets?: Array<{ id: string; initialX: number; initialY: number }>;
+    multiOffsets?: Array<{ id: string; initialX: number; initialY: number }>;
   } | null>(null);
 
   // Node Resizing State
@@ -407,20 +475,45 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Start Canvas Pan or Deselect
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || e.altKey || e.shiftKey || (e.target === containerRef.current)) {
+    const target = e.target as HTMLElement | SVGElement | null;
+    const isInteractive = target?.closest?.(
+      '[data-node-id], [data-port], button, input, textarea, [data-interactive], .cursor-pointer'
+    );
+    if (isInteractive) return;
+
+    if (e.button === 0 || e.button === 1 || e.altKey) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
-    }
-    if (e.target === containerRef.current) {
-      clearSelection();
+      if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        clearSelection();
+      }
     }
   };
 
   // Start Node Dragging
   const handleNodeMouseDown = (node: DiagramNode, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedNodeId(node.id);
+
+    const isMulti = e.shiftKey || e.ctrlKey || e.metaKey;
+    let nextSelected = selectedNodeIds;
+
+    if (isMulti) {
+      nextSelected = selectedNodeIds.includes(node.id)
+        ? selectedNodeIds.filter(id => id !== node.id)
+        : [...selectedNodeIds, node.id];
+      setSelectedNodeIds(nextSelected);
+      setSelectedNodeId(nextSelected[nextSelected.length - 1] || null);
+    } else {
+      if (!selectedNodeIds.includes(node.id)) {
+        nextSelected = [node.id];
+        setSelectedNodeIds([node.id]);
+        setSelectedNodeId(node.id);
+      }
+    }
+
     setSelectedEdgeId(null);
+    setSelectedBlockId(null);
+    onSelectElement?.({ type: 'node', id: node.id, label: node.label });
 
     const isContainer = node.type === 'package' || 
       node.type === 'frame' || 
@@ -451,13 +544,20 @@ export const Canvas: React.FC<CanvasProps> = ({
       }
     }
 
+    // Multi-selected nodes offsets
+    const multiNodes = diagram.nodes.filter(n => nextSelected.includes(n.id));
+    const multiOffsets = multiNodes.length > 1
+      ? multiNodes.map(n => ({ id: n.id, initialX: n.x, initialY: n.y }))
+      : undefined;
+
     setDraggingNode({
       id: node.id,
       startX: e.clientX,
       startY: e.clientY,
       initialNodeX: node.x,
       initialNodeY: node.y,
-      childOffsets
+      childOffsets,
+      multiOffsets
     });
   };
 
@@ -524,13 +624,20 @@ export const Canvas: React.FC<CanvasProps> = ({
       const deltaX = (e.clientX - draggingNode.startX) / viewport.zoom;
       const deltaY = (e.clientY - draggingNode.startY) / viewport.zoom;
 
+      const target = diagram.nodes.find(n => n.id === draggingNode.id);
+      const isSeqParticipant = target && (
+        target.category === 'sequence' ||
+        target.type === 'participant' ||
+        target.type === 'seq-participant' ||
+        diagram.messages?.some(m => m.from === target.id || m.to === target.id)
+      );
+
       const newX = snap(draggingNode.initialNodeX + deltaX);
-      const newY = snap(draggingNode.initialNodeY + deltaY);
+      const newY = isSeqParticipant ? draggingNode.initialNodeY : snap(draggingNode.initialNodeY + deltaY);
       const effectiveDeltaX = newX - draggingNode.initialNodeX;
       const effectiveDeltaY = newY - draggingNode.initialNodeY;
 
       // Detect hover over enclosing container for live magnetic drop-target feedback
-      const target = diagram.nodes.find(n => n.id === draggingNode.id);
       const isTargetContainer = target && (
         target.type === 'package' || 
         target.type === 'frame' || 
@@ -558,6 +665,21 @@ export const Canvas: React.FC<CanvasProps> = ({
         }
       } else {
         setHoveredDropTargetId(null);
+      }
+
+      if (draggingNode.multiOffsets && draggingNode.multiOffsets.length > 1) {
+        const offsetMap = new Map(draggingNode.multiOffsets.map(o => [o.id, o]));
+        onUpdateNodes(diagram.nodes.map(n => {
+          const off = offsetMap.get(n.id);
+          if (!off) return n;
+          const isThisSeq = n.category === 'sequence' || n.type === 'participant' || n.type === 'seq-participant';
+          return {
+            ...n,
+            x: snap(off.initialX + effectiveDeltaX),
+            y: isThisSeq ? off.initialY : snap(off.initialY + effectiveDeltaY)
+          };
+        }), { skipHistory: true });
+        return;
       }
 
       onUpdateNodes(diagram.nodes.map(n => {
@@ -866,14 +988,34 @@ export const Canvas: React.FC<CanvasProps> = ({
   };
 
   const handleDeleteSelected = () => {
-    if (selectedNodeId) {
-      onUpdateNodes(diagram.nodes.filter(n => n.id !== selectedNodeId));
-      onUpdateEdges(diagram.edges.filter(e => e.source !== selectedNodeId && e.target !== selectedNodeId));
+    if (selectedNodeIds.length > 0 || selectedNodeId) {
+      const idsToDelete = new Set(selectedNodeIds.length > 0 ? selectedNodeIds : [selectedNodeId!]);
+      onUpdateNodes(diagram.nodes.filter(n => !idsToDelete.has(n.id)));
+      onUpdateEdges(diagram.edges.filter(e => !idsToDelete.has(e.source) && !idsToDelete.has(e.target)));
+      if (diagram.messages) {
+        onUpdateDiagram?.({
+          messages: diagram.messages.filter(m => !idsToDelete.has(m.from) && !idsToDelete.has(m.to))
+        });
+      }
       setSelectedNodeId(null);
+      setSelectedNodeIds([]);
     } else if (selectedEdgeId) {
-      onUpdateEdges(diagram.edges.filter(e => e.id !== selectedEdgeId));
+      if (diagram.messages?.some(m => m.id === selectedEdgeId)) {
+        onUpdateDiagram?.({
+          messages: diagram.messages.filter(m => m.id !== selectedEdgeId)
+        });
+      } else {
+        onUpdateEdges(diagram.edges.filter(e => e.id !== selectedEdgeId));
+      }
       setSelectedEdgeId(null);
       setEditingEdgeId(null);
+    } else if (selectedBlockId) {
+      if (diagram.blocks) {
+        onUpdateDiagram?.({
+          blocks: diagram.blocks.filter(b => b.id !== selectedBlockId)
+        });
+      }
+      setSelectedBlockId(null);
     }
   };
 
@@ -1079,7 +1221,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, selectedEdgeId, diagram]);
+  }, [selectedNodeId, selectedNodeIds, selectedEdgeId, selectedBlockId, diagram]);
 
   // Edge Calculations helper
   const getNodeCenter = (nodeId: string) => {
@@ -2025,8 +2167,10 @@ export const Canvas: React.FC<CanvasProps> = ({
             const maxX = Math.max(...targetParts.map(p => p.x + p.width)) + 30;
             const bWidth = Math.max(220, maxX - minX);
 
+            const isBlockSelected = selectedBlockId === block.id;
+
             return (
-              <g key={block.id || `seq-block-${bIdx}`} className="pointer-events-none">
+              <g key={block.id || `seq-block-${bIdx}`}>
                 <rect
                   x={minX}
                   y={bTop}
@@ -2035,38 +2179,48 @@ export const Canvas: React.FC<CanvasProps> = ({
                   fill="#ffffff"
                   fillOpacity="0.5"
                   stroke="#c2652a"
-                  strokeWidth="1.2"
+                  strokeWidth={isBlockSelected ? "2.5" : "1.2"}
                   strokeDasharray={block.type === 'par' ? '4,4' : undefined}
                   rx="6"
+                  style={{ pointerEvents: 'none' }}
                 />
-                <path
-                  d={`M ${minX} ${bTop} H ${minX + 75} L ${minX + 85} ${bTop + 22} H ${minX} Z`}
-                  fill="#f4ebe1"
-                  stroke="#c2652a"
-                  strokeWidth="1.2"
-                />
-                <text
-                  x={minX + 8}
-                  y={bTop + 15}
-                  fontSize="11"
-                  fontWeight="bold"
-                  fill="#92400e"
-                  className="select-none font-mono"
+                {/* Clickable tab header */}
+                <g
+                  className="pointer-events-auto cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectBlock(block);
+                  }}
                 >
-                  {block.type.toUpperCase()}
-                </text>
-                {block.condition && (
+                  <path
+                    d={`M ${minX} ${bTop} H ${minX + 75} L ${minX + 85} ${bTop + 22} H ${minX} Z`}
+                    fill={isBlockSelected ? '#fbeee2' : '#f4ebe1'}
+                    stroke="#c2652a"
+                    strokeWidth={isBlockSelected ? "2" : "1.2"}
+                  />
                   <text
-                    x={minX + 92}
+                    x={minX + 8}
                     y={bTop + 15}
                     fontSize="11"
-                    fontWeight="500"
-                    fill="#5a4e44"
+                    fontWeight="bold"
+                    fill={isBlockSelected ? '#c2652a' : '#92400e'}
                     className="select-none font-mono"
                   >
-                    [{block.condition}]
+                    {block.type.toUpperCase()}
                   </text>
-                )}
+                  {block.condition && (
+                    <text
+                      x={minX + 92}
+                      y={bTop + 15}
+                      fontSize="11"
+                      fontWeight="500"
+                      fill={isBlockSelected ? '#c2652a' : '#5a4e44'}
+                      className="select-none font-mono"
+                    >
+                      [{block.condition}]
+                    </text>
+                  )}
+                </g>
               </g>
             );
           })}
@@ -2330,11 +2484,14 @@ export const Canvas: React.FC<CanvasProps> = ({
             >
               <DiagramNodeView
                 node={node}
-                isSelected={selectedNodeId === node.id}
+                isSelected={selectedNodeId === node.id || selectedNodeIds.includes(node.id)}
                 isDropTarget={hoveredDropTargetId === node.id}
                 onSelect={(e) => {
                   e.stopPropagation();
-                  selectNode(node);
+                  const isMulti = e.shiftKey || e.ctrlKey || e.metaKey;
+                  if (!isMulti) {
+                    selectNode(node, false);
+                  }
                 }}
                 onUpdate={(patch) => {
                   onUpdateNodes(nodes.map(n => n.id === node.id ? { ...n, ...patch } : n));
@@ -2418,6 +2575,9 @@ export const Canvas: React.FC<CanvasProps> = ({
 
           {/* Floating Relationship Toolbar for selected edge */}
           {selectedEdge && (() => {
+            const isSeqMsg = Boolean((selectedEdge as any).data?.isSequenceMessage) || diagram.messages?.some(m => m.id === selectedEdge.id);
+            const msgObj = diagram.messages?.find(m => m.id === selectedEdge.id);
+
             const srcNode = nodes.find(n => n.id === selectedEdge.source);
             const tgtNode = nodes.find(n => n.id === selectedEdge.target);
             const { srcPort, tgtPort } = srcNode && tgtNode 
@@ -2425,8 +2585,17 @@ export const Canvas: React.FC<CanvasProps> = ({
               : { srcPort: selectedEdge.sourceHandle || 'right', tgtPort: selectedEdge.targetHandle || 'left' };
             const src = getPortCoord(selectedEdge.source, srcPort);
             const tgt = getPortCoord(selectedEdge.target, tgtPort);
-            const midX = (src.x + tgt.x) / 2;
-            const midY = (src.y + tgt.y) / 2;
+            let midX = (src.x + tgt.x) / 2;
+            let midY = (src.y + tgt.y) / 2;
+
+            if (isSeqMsg && msgObj && sequenceMetrics) {
+              const order = msgObj.order || 1;
+              const msgY = sequenceMetrics.topY + order * sequenceMetrics.stepSpacing;
+              const sX = srcNode ? srcNode.x + srcNode.width / 2 : 100;
+              const tX = tgtNode ? tgtNode.x + tgtNode.width / 2 : 300;
+              midX = (sX + tX) / 2;
+              midY = msgY - 28;
+            }
 
             return (
               <EdgeToolbar
@@ -2436,14 +2605,87 @@ export const Canvas: React.FC<CanvasProps> = ({
                 targetNodeLabel={tgtNode?.label}
                 position={{ x: midX, y: midY }}
                 onUpdateEdge={(updated) => {
-                  onUpdateEdges(diagram.edges.map(e => e.id === selectedEdge.id ? { ...e, ...updated } : e));
+                  if (isSeqMsg && diagram.messages) {
+                    const nextMsgs = diagram.messages.map(m => {
+                      if (m.id !== selectedEdge.id) return m;
+                      const nextType = updated.style === 'dashed' ? 'reply' : m.type;
+                      return {
+                        ...m,
+                        label: updated.label !== undefined ? updated.label : m.label,
+                        type: nextType
+                      };
+                    });
+                    onUpdateDiagram?.({ messages: nextMsgs });
+                  } else {
+                    onUpdateEdges(diagram.edges.map(e => e.id === selectedEdge.id ? { ...e, ...updated } : e));
+                  }
                 }}
                 onDeleteEdge={() => {
-                  onUpdateEdges(diagram.edges.filter(e => e.id !== selectedEdge.id));
-                  setSelectedEdgeId(null);
+                  if (isSeqMsg && diagram.messages) {
+                    const nextMsgs = diagram.messages.filter(m => m.id !== selectedEdge.id);
+                    onUpdateDiagram?.({ messages: nextMsgs });
+                    setSelectedEdgeId(null);
+                  } else {
+                    onUpdateEdges(diagram.edges.filter(e => e.id !== selectedEdge.id));
+                    setSelectedEdgeId(null);
+                  }
                 }}
                 onClose={() => setSelectedEdgeId(null)}
               />
+            );
+          })()}
+
+          {/* Floating Toolbar for selected Sequence Block */}
+          {selectedBlock && sequenceMetrics && (() => {
+            const bTop = sequenceMetrics.topY + (selectedBlock.startOrder - 0.7) * sequenceMetrics.stepSpacing;
+            const blockMsgs = sequenceMessages.filter(m => (m.order || 0) >= selectedBlock.startOrder && (m.order || 0) <= selectedBlock.endOrder);
+            const involvedIds = new Set<string>();
+            blockMsgs.forEach(m => { involvedIds.add(m.from); involvedIds.add(m.to); });
+            const involvedParts = sequenceParticipants.filter(p => involvedIds.has(p.id));
+            const targetParts = involvedParts.length > 0 ? involvedParts : sequenceParticipants;
+            const minX = Math.min(...targetParts.map(p => p.x)) - 30;
+
+            return (
+              <div
+                className="absolute z-30 flex items-center gap-2 px-2.5 py-1.5 bg-white dark:bg-[#1f1d1a] border border-[#c2652a] rounded-lg shadow-lg pointer-events-auto"
+                style={{
+                  left: `${minX}px`,
+                  top: `${bTop - 36}px`
+                }}
+              >
+                <span className="text-xs font-mono font-bold text-[#c2652a] uppercase">
+                  {selectedBlock.type}
+                </span>
+                {selectedBlock.condition && (
+                  <span className="text-xs text-gray-700 dark:text-gray-300 font-mono font-medium">
+                    [{selectedBlock.condition}]
+                  </span>
+                )}
+                <div className="w-px h-3.5 bg-gray-200 dark:bg-gray-700 mx-0.5" />
+                <button
+                  type="button"
+                  title="Delete Block"
+                  onClick={() => {
+                    if (diagram.blocks) {
+                      onUpdateDiagram?.({
+                        blocks: diagram.blocks.filter(b => b.id !== selectedBlock.id)
+                      });
+                    }
+                    setSelectedBlockId(null);
+                  }}
+                  className="p-1 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 rounded transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  title="Deselect"
+                  onClick={() => setSelectedBlockId(null)}
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 rounded transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             );
           })()}
 
