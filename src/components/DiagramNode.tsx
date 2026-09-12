@@ -98,10 +98,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const colorConfig = getColorConfig(node.color);
 
   // Content-aware optimal dimensions ensuring everything starts out visible
-  // and serves as the floor during interactive resizing
+  // while allowing the user full freedom to resize smaller or larger
   const optimal = getOptimalNodeDimensions(node);
-  const effectiveWidth = Math.max(node.width || optimal.width, optimal.width);
-  const effectiveHeight = Math.max(node.height || optimal.height, optimal.height);
+  const effectiveWidth = node.width ?? optimal.width;
+  const effectiveHeight = node.height ?? optimal.height;
 
   useEffect(() => {
     setEditLabel(node.label);
@@ -520,9 +520,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -609,6 +610,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
 
         {/* Ports */}
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-amber-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -644,9 +654,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -698,6 +709,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
 
         {/* Ports */}
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-amber-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -731,9 +751,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -781,6 +802,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
 
         {/* Ports */}
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-amber-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -802,9 +832,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -850,6 +881,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </div>
         </div>
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-sky-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -870,9 +910,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -918,6 +959,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </div>
         </div>
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-blue-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -938,9 +988,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -981,6 +1032,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </div>
         </div>
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-indigo-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -1000,9 +1060,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1043,6 +1104,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </div>
         </div>
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-slate-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -1112,9 +1182,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1159,6 +1230,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         </div>
 
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-amber-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -1182,9 +1262,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width,
-          height: node.height,
-          minHeight: node.height,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1229,6 +1310,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         </div>
 
         {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-emerald-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
       </div>
     );
   }
@@ -1418,8 +1508,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: effectiveWidth,
           height: effectiveHeight,
-          minWidth: optimal.width,
-          minHeight: optimal.height,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1461,8 +1551,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: effectiveWidth,
           height: effectiveHeight,
-          minWidth: optimal.width,
-          minHeight: optimal.height,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1504,8 +1594,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: effectiveWidth,
           height: effectiveHeight,
-          minWidth: optimal.width,
-          minHeight: optimal.height,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1547,8 +1637,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: effectiveWidth,
           height: effectiveHeight,
-          minWidth: optimal.width,
-          minHeight: optimal.height,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1594,8 +1684,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: effectiveWidth,
           height: effectiveHeight,
-          minWidth: optimal.width,
-          minHeight: optimal.height,
+          minWidth: 60,
+          minHeight: 40,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1661,8 +1751,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: effectiveWidth,
           height: effectiveHeight,
-          minWidth: optimal.width,
-          minHeight: optimal.height,
+          minWidth: isContainerNode ? 140 : 60,
+          minHeight: isContainerNode ? 100 : 40,
           zIndex: isContainerNode 
             ? (isSelected ? 4 : (isDropTarget ? 5 : 2)) 
             : (isSelected ? 30 : 10)
@@ -1941,8 +2031,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         top: node.y,
         width: effectiveWidth,
         height: effectiveHeight,
-        minWidth: optimal.width,
-        minHeight: optimal.height,
+        minWidth: 60,
+        minHeight: 40,
         zIndex: isSelected ? 30 : 10,
         filter: 'drop-shadow(2px 2px 2px rgba(0,0,0,0.15))'
       }}

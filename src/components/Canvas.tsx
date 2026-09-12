@@ -49,7 +49,7 @@ interface CanvasProps {
   onUpdateDiagram?: (updater: Partial<DiagramData> | ((prev: DiagramData) => Partial<DiagramData>), actionName?: string) => void;
 }
 
-export function getFriendlyRelationLabel(arrowType?: DiagramEdge['arrowType'], style?: DiagramEdge['style']): string {
+function getFriendlyRelationLabel(arrowType?: DiagramEdge['arrowType'], style?: DiagramEdge['style']): string {
   switch (arrowType) {
     case 'inheritance':
       return 'Inheritance';
@@ -413,6 +413,25 @@ export const Canvas: React.FC<CanvasProps> = ({
     initialOffsetY: number;
   } | null>(null);
 
+  // Sequence Message Dragging State (Vertical Reordering)
+  const [draggingMessage, setDraggingMessage] = useState<{
+    id: string;
+    startY: number;
+    initialOrder: number;
+    currentOrder: number;
+    dragY: number;
+  } | null>(null);
+
+  // Sequence Block Dragging & Resizing State
+  const [draggingBlock, setDraggingBlock] = useState<{
+    id: string;
+    startY: number;
+    initialStartOrder: number;
+    initialEndOrder: number;
+    mode: 'move' | 'resize-bottom';
+    dragSteps: number;
+  } | null>(null);
+
   // Inspector Drawer State
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
@@ -475,13 +494,20 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   // Start Canvas Pan or Deselect
   const handleCanvasMouseDown = (e: React.MouseEvent) => {
+    // Middle click or Alt+click always pans anywhere
+    if (e.button === 1 || e.altKey) {
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
+      return;
+    }
+
     const target = e.target as HTMLElement | SVGElement | null;
     const isInteractive = target?.closest?.(
-      '[data-node-id], [data-port], button, input, textarea, [data-interactive], .cursor-pointer'
+      '[data-node-id], [data-port], button, input, textarea, [data-interactive], [data-drag-handle]'
     );
     if (isInteractive) return;
 
-    if (e.button === 0 || e.button === 1 || e.altKey) {
+    if (e.button === 0) {
       setIsPanning(true);
       setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
       if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
@@ -566,12 +592,15 @@ export const Canvas: React.FC<CanvasProps> = ({
     e.stopPropagation();
     const node = diagram.nodes.find(n => n.id === nodeId);
     if (!node) return;
+    const optimal = getOptimalNodeDimensions(node);
+    const initialW = node.width ?? optimal.width;
+    const initialH = node.height ?? optimal.height;
     setResizingNode({
       id: nodeId,
       startX: e.clientX,
       startY: e.clientY,
-      initialWidth: node.width,
-      initialHeight: node.height,
+      initialWidth: initialW,
+      initialHeight: initialH,
       direction
     });
   };
@@ -604,19 +633,46 @@ export const Canvas: React.FC<CanvasProps> = ({
       const deltaY = (e.clientY - resizingNode.startY) / viewport.zoom;
 
       const target = diagram.nodes.find(n => n.id === resizingNode.id);
-      const minDims = target ? getOptimalNodeDimensions(target) : { width: 80, height: 50 };
+      const isContainer = target && (
+        target.type === 'package' || target.type === 'frame' || target.type === 'folder' ||
+        target.type === 'namespace' || target.type === 'c4-boundary' ||
+        target.category === 'container' || Boolean(target.data?.isContainer)
+      );
+      const minW = isContainer ? 140 : 60;
+      const minH = isContainer ? 100 : 40;
 
       const newWidth = ['se', 'e'].includes(resizingNode.direction)
-        ? Math.max(minDims.width, snap(resizingNode.initialWidth + deltaX))
+        ? Math.max(minW, snap(resizingNode.initialWidth + deltaX))
         : resizingNode.initialWidth;
 
       const newHeight = ['se', 's'].includes(resizingNode.direction)
-        ? Math.max(minDims.height, snap(resizingNode.initialHeight + deltaY))
+        ? Math.max(minH, snap(resizingNode.initialHeight + deltaY))
         : resizingNode.initialHeight;
 
       onUpdateNodes(diagram.nodes.map(n => 
         n.id === resizingNode.id ? { ...n, width: newWidth, height: newHeight } : n
       ), { skipHistory: true });
+      return;
+    }
+
+    if (draggingMessage && sequenceMetrics) {
+      const deltaY = (e.clientY - draggingMessage.startY) / viewport.zoom;
+      const effectiveMsgY = sequenceMetrics.topY + draggingMessage.initialOrder * sequenceMetrics.stepSpacing + deltaY;
+      const targetOrder = Math.max(
+        1,
+        Math.min(
+          sequenceMessages.length,
+          Math.round((effectiveMsgY - sequenceMetrics.topY) / sequenceMetrics.stepSpacing)
+        )
+      );
+      setDraggingMessage(prev => prev ? { ...prev, dragY: deltaY, currentOrder: targetOrder } : null);
+      return;
+    }
+
+    if (draggingBlock && sequenceMetrics) {
+      const deltaY = (e.clientY - draggingBlock.startY) / viewport.zoom;
+      const deltaSteps = Math.round(deltaY / sequenceMetrics.stepSpacing);
+      setDraggingBlock(prev => prev ? { ...prev, dragSteps: deltaSteps } : null);
       return;
     }
 
@@ -752,6 +808,41 @@ export const Canvas: React.FC<CanvasProps> = ({
         });
       }
       setResizingNode(null);
+    }
+
+    if (draggingMessage) {
+      if (draggingMessage.currentOrder !== draggingMessage.initialOrder && onUpdateDiagram && sequenceMessages.length > 0) {
+        const sorted = [...sequenceMessages].sort((a, b) => (a.order || 0) - (b.order || 0));
+        const movingIndex = sorted.findIndex(m => m.id === draggingMessage.id);
+        if (movingIndex !== -1) {
+          const [moved] = sorted.splice(movingIndex, 1);
+          const targetIndex = Math.max(0, Math.min(sorted.length, draggingMessage.currentOrder - 1));
+          sorted.splice(targetIndex, 0, moved);
+          const updatedMsgs = sorted.map((m, idx) => ({ ...m, order: idx + 1 }));
+          onUpdateDiagram({ messages: updatedMsgs }, `Reordered sequence message ${moved.label || moved.id}`);
+        }
+      }
+      setDraggingMessage(null);
+    }
+
+    if (draggingBlock) {
+      if (draggingBlock.dragSteps !== 0 && onUpdateDiagram && diagram.blocks) {
+        const nextBlocks = diagram.blocks.map(b => {
+          if (b.id !== draggingBlock.id) return b;
+          if (draggingBlock.mode === 'move') {
+            const span = draggingBlock.initialEndOrder - draggingBlock.initialStartOrder;
+            const newStart = Math.max(1, Math.min(sequenceMessages.length - span, draggingBlock.initialStartOrder + draggingBlock.dragSteps));
+            const newEnd = Math.max(newStart, newStart + span);
+            return { ...b, startOrder: newStart, endOrder: newEnd };
+          } else if (draggingBlock.mode === 'resize-bottom') {
+            const newEnd = Math.max(b.startOrder, draggingBlock.initialEndOrder + draggingBlock.dragSteps);
+            return { ...b, endOrder: newEnd };
+          }
+          return b;
+        });
+        onUpdateDiagram({ blocks: nextBlocks }, `Updated sequence block bounds`);
+      }
+      setDraggingBlock(null);
     }
 
     if (draggingNode) {
@@ -1279,10 +1370,10 @@ export const Canvas: React.FC<CanvasProps> = ({
 
     const srcOptimal = getOptimalNodeDimensions(srcNode);
     const tgtOptimal = getOptimalNodeDimensions(tgtNode);
-    const srcW = Math.max(srcNode.width || srcOptimal.width, srcOptimal.width);
-    const srcH = Math.max(srcNode.height || srcOptimal.height, srcOptimal.height);
-    const tgtW = Math.max(tgtNode.width || tgtOptimal.width, tgtOptimal.width);
-    const tgtH = Math.max(tgtNode.height || tgtOptimal.height, tgtOptimal.height);
+    const srcW = srcNode.width ?? srcOptimal.width;
+    const srcH = srcNode.height ?? srcOptimal.height;
+    const tgtW = tgtNode.width ?? tgtOptimal.width;
+    const tgtH = tgtNode.height ?? tgtOptimal.height;
 
     const srcCenter = { x: srcNode.x + srcW / 2, y: srcNode.y + srcH / 2 };
     const tgtCenter = { x: tgtNode.x + tgtW / 2, y: tgtNode.y + tgtH / 2 };
@@ -1324,8 +1415,8 @@ export const Canvas: React.FC<CanvasProps> = ({
     const node = typeof nodeOrId === 'string' ? (nodes.find(n => n.id === nodeOrId) || diagram.nodes?.find(n => n.id === nodeOrId)) : nodeOrId;
     if (!node) return { x: 0, y: 0 };
     const optimal = getOptimalNodeDimensions(node);
-    const w = Math.max(node.width || optimal.width, optimal.width);
-    const h = Math.max(node.height || optimal.height, optimal.height);
+    const w = node.width ?? optimal.width;
+    const h = node.height ?? optimal.height;
     switch (port) {
       case 'top':
         return { x: node.x + w / 2, y: node.y };
@@ -1435,24 +1526,40 @@ export const Canvas: React.FC<CanvasProps> = ({
         return;
       }
 
+      const optimal = getOptimalNodeDimensions(node);
+      const nodeW = node.width ?? optimal.width;
+      const nodeH = node.height ?? optimal.height;
+
       // Distribute multiple connections evenly across the face
       if (port === 'top' || port === 'bottom') {
-        conns.sort((a, b) => (a.otherNode.x + a.otherNode.width / 2) - (b.otherNode.x + b.otherNode.width / 2));
-        const margin = Math.min(24, node.width * 0.15);
-        const usableW = Math.max(10, node.width - 2 * margin);
+        conns.sort((a, b) => {
+          const aOpt = getOptimalNodeDimensions(a.otherNode);
+          const bOpt = getOptimalNodeDimensions(b.otherNode);
+          const aW = a.otherNode.width ?? aOpt.width;
+          const bW = b.otherNode.width ?? bOpt.width;
+          return (a.otherNode.x + aW / 2) - (b.otherNode.x + bW / 2);
+        });
+        const margin = Math.min(24, nodeW * 0.15);
+        const usableW = Math.max(10, nodeW - 2 * margin);
         conns.forEach((c, idx) => {
           const frac = (idx + 0.5) / conns.length;
           const x = node.x + margin + frac * usableW;
-          const y = port === 'top' ? node.y : node.y + node.height;
+          const y = port === 'top' ? node.y : node.y + nodeH;
           connectionCoordMap.set(`${c.edgeId}_${c.isSource ? 'src' : 'tgt'}`, { x, y });
         });
       } else {
-        conns.sort((a, b) => (a.otherNode.y + a.otherNode.height / 2) - (b.otherNode.y + b.otherNode.height / 2));
-        const margin = Math.min(24, node.height * 0.15);
-        const usableH = Math.max(10, node.height - 2 * margin);
+        conns.sort((a, b) => {
+          const aOpt = getOptimalNodeDimensions(a.otherNode);
+          const bOpt = getOptimalNodeDimensions(b.otherNode);
+          const aH = a.otherNode.height ?? aOpt.height;
+          const bH = b.otherNode.height ?? bOpt.height;
+          return (a.otherNode.y + aH / 2) - (b.otherNode.y + bH / 2);
+        });
+        const margin = Math.min(24, nodeH * 0.15);
+        const usableH = Math.max(10, nodeH - 2 * margin);
         conns.forEach((c, idx) => {
           const frac = (idx + 0.5) / conns.length;
-          const x = port === 'left' ? node.x : node.x + node.width;
+          const x = port === 'left' ? node.x : node.x + nodeW;
           const y = node.y + margin + frac * usableH;
           connectionCoordMap.set(`${c.edgeId}_${c.isSource ? 'src' : 'tgt'}`, { x, y });
         });
@@ -2153,11 +2260,25 @@ export const Canvas: React.FC<CanvasProps> = ({
 
           {/* Render Sequence Blocks (alt, opt, loop, par) */}
           {sequenceMetrics && sequenceBlocks.map((block, bIdx) => {
-            const bTop = sequenceMetrics.topY + (block.startOrder - 0.7) * sequenceMetrics.stepSpacing;
-            const bBottom = sequenceMetrics.topY + (block.endOrder + 0.4) * sequenceMetrics.stepSpacing;
+            const isDraggingThis = draggingBlock?.id === block.id;
+            let effectiveStart = block.startOrder;
+            let effectiveEnd = block.endOrder;
+
+            if (isDraggingThis && draggingBlock) {
+              if (draggingBlock.mode === 'move') {
+                const span = draggingBlock.initialEndOrder - draggingBlock.initialStartOrder;
+                effectiveStart = Math.max(1, Math.min(sequenceMessages.length - span, draggingBlock.initialStartOrder + draggingBlock.dragSteps));
+                effectiveEnd = Math.max(effectiveStart, effectiveStart + span);
+              } else if (draggingBlock.mode === 'resize-bottom') {
+                effectiveEnd = Math.max(block.startOrder, draggingBlock.initialEndOrder + draggingBlock.dragSteps);
+              }
+            }
+
+            const bTop = sequenceMetrics.topY + (effectiveStart - 0.7) * sequenceMetrics.stepSpacing;
+            const bBottom = sequenceMetrics.topY + (effectiveEnd + 0.4) * sequenceMetrics.stepSpacing;
             const bHeight = Math.max(50, bBottom - bTop);
 
-            const blockMsgs = sequenceMessages.filter(m => (m.order || 0) >= block.startOrder && (m.order || 0) <= block.endOrder);
+            const blockMsgs = sequenceMessages.filter(m => (m.order || 0) >= effectiveStart && (m.order || 0) <= effectiveEnd);
             const involvedIds = new Set<string>();
             blockMsgs.forEach(m => { involvedIds.add(m.from); involvedIds.add(m.to); });
             const involvedParts = sequenceParticipants.filter(p => involvedIds.has(p.id));
@@ -2179,14 +2300,27 @@ export const Canvas: React.FC<CanvasProps> = ({
                   fill="#ffffff"
                   fillOpacity="0.5"
                   stroke="#c2652a"
-                  strokeWidth={isBlockSelected ? "2.5" : "1.2"}
+                  strokeWidth={isBlockSelected || isDraggingThis ? "2.5" : "1.2"}
                   strokeDasharray={block.type === 'par' ? '4,4' : undefined}
                   rx="6"
                   style={{ pointerEvents: 'none' }}
                 />
-                {/* Clickable tab header */}
+                {/* Drag Handle Tab Header */}
                 <g
-                  className="pointer-events-auto cursor-pointer"
+                  className="pointer-events-auto cursor-grab active:cursor-grabbing select-none"
+                  data-drag-handle="true"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    selectBlock(block);
+                    setDraggingBlock({
+                      id: block.id,
+                      startY: e.clientY,
+                      initialStartOrder: block.startOrder,
+                      initialEndOrder: block.endOrder,
+                      mode: 'move',
+                      dragSteps: 0
+                    });
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     selectBlock(block);
@@ -2194,16 +2328,16 @@ export const Canvas: React.FC<CanvasProps> = ({
                 >
                   <path
                     d={`M ${minX} ${bTop} H ${minX + 75} L ${minX + 85} ${bTop + 22} H ${minX} Z`}
-                    fill={isBlockSelected ? '#fbeee2' : '#f4ebe1'}
+                    fill={isBlockSelected || isDraggingThis ? '#fbeee2' : '#f4ebe1'}
                     stroke="#c2652a"
-                    strokeWidth={isBlockSelected ? "2" : "1.2"}
+                    strokeWidth={isBlockSelected || isDraggingThis ? "2" : "1.2"}
                   />
                   <text
                     x={minX + 8}
                     y={bTop + 15}
                     fontSize="11"
                     fontWeight="bold"
-                    fill={isBlockSelected ? '#c2652a' : '#92400e'}
+                    fill={isBlockSelected || isDraggingThis ? '#c2652a' : '#92400e'}
                     className="select-none font-mono"
                   >
                     {block.type.toUpperCase()}
@@ -2214,13 +2348,37 @@ export const Canvas: React.FC<CanvasProps> = ({
                       y={bTop + 15}
                       fontSize="11"
                       fontWeight="500"
-                      fill={isBlockSelected ? '#c2652a' : '#5a4e44'}
+                      fill={isBlockSelected || isDraggingThis ? '#c2652a' : '#5a4e44'}
                       className="select-none font-mono"
                     >
                       [{block.condition}]
                     </text>
                   )}
                 </g>
+
+                {/* Bottom Resize Handle for Sequence Block */}
+                <line
+                  x1={minX + 8}
+                  y1={bTop + bHeight}
+                  x2={minX + bWidth - 8}
+                  y2={bTop + bHeight}
+                  stroke="transparent"
+                  strokeWidth="12"
+                  className="pointer-events-auto cursor-ns-resize"
+                  data-drag-handle="true"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    selectBlock(block);
+                    setDraggingBlock({
+                      id: block.id,
+                      startY: e.clientY,
+                      initialStartOrder: block.startOrder,
+                      initialEndOrder: block.endOrder,
+                      mode: 'resize-bottom',
+                      dragSteps: 0
+                    });
+                  }}
+                />
               </g>
             );
           })}
@@ -2230,9 +2388,10 @@ export const Canvas: React.FC<CanvasProps> = ({
             const centerX = part.x + part.width / 2;
             const topY = part.y + part.height;
             const bottomY = sequenceMetrics.lifelineBottom;
+            const isPartSelected = selectedNodeIds.includes(part.id) || selectedNodeId === part.id;
 
             return (
-              <g key={`seq-lifeline-${part.id}`} className="pointer-events-none">
+              <g key={`seq-lifeline-${part.id}`}>
                 {/* Dashed lifeline */}
                 <line
                   x1={centerX}
@@ -2243,17 +2402,31 @@ export const Canvas: React.FC<CanvasProps> = ({
                   strokeWidth="1.6"
                   strokeDasharray="5,5"
                   opacity="0.75"
+                  className="pointer-events-none"
                 />
-                {/* Optional bottom participant footer box if not hidden */}
+                {/* Interactive bottom participant footer box */}
                 {!diagram.settings?.hideFootbox && (
-                  <g transform={`translate(${part.x}, ${bottomY})`}>
+                  <g 
+                    transform={`translate(${part.x}, ${bottomY})`}
+                    className="pointer-events-auto cursor-move select-none"
+                    data-drag-handle="true"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      handleNodeMouseDown(part, e);
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const isMulti = e.shiftKey || e.ctrlKey || e.metaKey;
+                      if (!isMulti) selectNode(part, false);
+                    }}
+                  >
                     <rect
                       width={part.width}
                       height={36}
                       rx={6}
-                      fill="#ffffff"
-                      stroke={diagram.settings?.arrowColor || '#A80036'}
-                      strokeWidth="1.5"
+                      fill={isPartSelected ? "#fef7ee" : "#ffffff"}
+                      stroke={isPartSelected ? '#c2652a' : (diagram.settings?.arrowColor || '#A80036')}
+                      strokeWidth={isPartSelected ? 2.5 : 1.5}
                       className="shadow-xs"
                     />
                     <text
@@ -2262,7 +2435,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                       textAnchor="middle"
                       fontSize="12"
                       fontWeight="600"
-                      fill="#2b2622"
+                      fill={isPartSelected ? '#c2652a' : '#2b2622'}
                       className="select-none font-sans"
                     >
                       {part.label}
@@ -2273,10 +2446,34 @@ export const Canvas: React.FC<CanvasProps> = ({
             );
           })}
 
+          {/* Target insertion guide line when reordering sequence message */}
+          {draggingMessage && sequenceMetrics && (() => {
+            const guideY = sequenceMetrics.topY + draggingMessage.currentOrder * sequenceMetrics.stepSpacing;
+            const minX = Math.min(...sequenceParticipants.map(p => p.x)) - 30;
+            const maxX = Math.max(...sequenceParticipants.map(p => p.x + p.width)) + 30;
+            return (
+              <g className="pointer-events-none z-30">
+                <line
+                  x1={minX}
+                  y1={guideY}
+                  x2={maxX}
+                  y2={guideY}
+                  stroke="#c2652a"
+                  strokeWidth="2.5"
+                  strokeDasharray="6,4"
+                  opacity="0.9"
+                />
+                <circle cx={minX} cy={guideY} r="5" fill="#c2652a" />
+                <circle cx={maxX} cy={guideY} r="5" fill="#c2652a" />
+              </g>
+            );
+          })()}
+
           {/* Render Sequence Timeline Messages */}
           {sequenceMetrics && sequenceMessages.map((msg, mIdx) => {
             const order = msg.order || (mIdx + 1);
-            const msgY = sequenceMetrics.topY + order * sequenceMetrics.stepSpacing;
+            const isDraggingThis = draggingMessage?.id === msg.id;
+            const msgY = sequenceMetrics.topY + order * sequenceMetrics.stepSpacing + (isDraggingThis ? draggingMessage.dragY : 0);
             const srcNode = nodes.find(n => n.id === msg.from);
             const tgtNode = nodes.find(n => n.id === msg.to);
 
@@ -2287,8 +2484,8 @@ export const Canvas: React.FC<CanvasProps> = ({
             const isAsync = msg.type === 'async';
             const isSelected = selectedEdgeId === msg.id;
 
-            const strokeColor = isSelected ? '#c2652a' : (isReply ? '#64748b' : (isAsync ? '#d97706' : '#A80036'));
-            const strokeWidth = isSelected ? 2.5 : 1.8;
+            const strokeColor = (isSelected || isDraggingThis) ? '#c2652a' : (isReply ? '#64748b' : (isAsync ? '#d97706' : '#A80036'));
+            const strokeWidth = (isSelected || isDraggingThis) ? 2.5 : 1.8;
             const dashArray = isReply ? '5,4' : undefined;
 
             let pathD = '';
@@ -2305,26 +2502,37 @@ export const Canvas: React.FC<CanvasProps> = ({
               labelY = msgY - 7;
             }
 
-            const markerEnd = isSelected ? 'url(#arrow-head-selected)' : 'url(#arrow-head)';
+            const markerEnd = (isSelected || isDraggingThis) ? 'url(#arrow-head-selected)' : 'url(#arrow-head)';
+
+            const handleMsgMouseDown = (e: React.MouseEvent) => {
+              e.stopPropagation();
+              selectEdge({
+                id: msg.id,
+                source: msg.from,
+                target: msg.to,
+                label: msg.label,
+                style: isReply ? 'dashed' : 'solid',
+                arrowType: 'arrow'
+              });
+              setDraggingMessage({
+                id: msg.id,
+                startY: e.clientY,
+                initialOrder: order,
+                currentOrder: order,
+                dragY: 0
+              });
+            };
 
             return (
-              <g key={msg.id || `seq-msg-${mIdx}`} className="pointer-events-auto cursor-pointer group">
+              <g key={msg.id || `seq-msg-${mIdx}`} className="pointer-events-auto cursor-grab active:cursor-grabbing group">
+                {/* Thick invisible path for easy clicking & dragging */}
                 <path
                   d={pathD}
                   fill="none"
                   stroke="transparent"
-                  strokeWidth="16"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectEdge({
-                      id: msg.id,
-                      source: msg.from,
-                      target: msg.to,
-                      label: msg.label,
-                      style: isReply ? 'dashed' : 'solid',
-                      arrowType: 'arrow'
-                    });
-                  }}
+                  strokeWidth="24"
+                  data-drag-handle="true"
+                  onMouseDown={handleMsgMouseDown}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
                     setEdgeLabelText(msg.label || '');
@@ -2338,6 +2546,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                   strokeWidth={strokeWidth}
                   strokeDasharray={dashArray}
                   markerEnd={markerEnd}
+                  opacity={isDraggingThis ? 0.85 : 1}
                 />
                 {!isSelf && (
                   <rect
@@ -2349,23 +2558,17 @@ export const Canvas: React.FC<CanvasProps> = ({
                     stroke={strokeColor}
                     strokeWidth="1.2"
                     rx="1"
-                    className="pointer-events-none"
+                    className="pointer-events-auto cursor-grab active:cursor-grabbing"
+                    data-drag-handle="true"
+                    onMouseDown={handleMsgMouseDown}
                   />
                 )}
                 {/* Message Label with background badge */}
                 <g
                   transform={`translate(${labelX}, ${labelY})`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectEdge({
-                      id: msg.id,
-                      source: msg.from,
-                      target: msg.to,
-                      label: msg.label,
-                      style: isReply ? 'dashed' : 'solid',
-                      arrowType: 'arrow'
-                    });
-                  }}
+                  className="cursor-grab active:cursor-grabbing select-none"
+                  data-drag-handle="true"
+                  onMouseDown={handleMsgMouseDown}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
                     setEdgeLabelText(msg.label || '');
@@ -2380,8 +2583,8 @@ export const Canvas: React.FC<CanvasProps> = ({
                     rx={4}
                     fill="#faf5ee"
                     fillOpacity="0.95"
-                    stroke={isSelected ? '#c2652a' : '#d8d0c8'}
-                    strokeWidth={isSelected ? 1.5 : 0.8}
+                    stroke={isSelected || isDraggingThis ? '#c2652a' : '#d8d0c8'}
+                    strokeWidth={isSelected || isDraggingThis ? 1.5 : 0.8}
                     className="shadow-xs"
                   />
                   <text
@@ -2390,7 +2593,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                     textAnchor={isSelf ? 'start' : 'middle'}
                     fontSize="11"
                     fontWeight="500"
-                    fill={isSelected ? '#c2652a' : '#2b2622'}
+                    fill={isSelected || isDraggingThis ? '#c2652a' : '#2b2622'}
                     className="select-none font-sans"
                   >
                     {diagram.settings?.autonumberFormat !== 'disabled' ? `${order}. ` : ''}{msg.label}

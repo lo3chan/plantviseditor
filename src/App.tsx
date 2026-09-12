@@ -31,7 +31,9 @@ import {
 
 export default function App() {
   const [diagram, setDiagram] = useState<DiagramData>(() => {
-    return JSON.parse(JSON.stringify(DEFAULT_DIAGRAM));
+    const starter = JSON.parse(JSON.stringify(DEFAULT_DIAGRAM));
+    starter.nodes = starter.nodes.map(ensureNodeDimensions);
+    return starter;
   });
 
   const [viewport, setViewport] = useState<Viewport>({ x: 40, y: 30, zoom: 1 });
@@ -221,6 +223,7 @@ export default function App() {
   // Reset to default starter template
   const handleResetStarter = () => {
     const starter = JSON.parse(JSON.stringify(DEFAULT_DIAGRAM));
+    starter.nodes = starter.nodes.map(ensureNodeDimensions);
     setLoadedPlantUMLCode('');
     setViewport({ x: 40, y: 30, zoom: 1 });
     pushHistory(starter, 'Reset to Starter Template');
@@ -230,6 +233,7 @@ export default function App() {
   const handleSelectTemplate = (templateKey: string) => {
     const tpl = (UNIFIED_STARTER_PRESETS as any)[templateKey] || DEFAULT_DIAGRAM;
     const cloned = JSON.parse(JSON.stringify(tpl));
+    cloned.nodes = cloned.nodes.map(ensureNodeDimensions);
     setLoadedPlantUMLCode('');
     setViewport({ x: 40, y: 30, zoom: 1 });
     pushHistory(cloned, `Preset: ${templateKey}`);
