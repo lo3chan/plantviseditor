@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   ChevronDown, 
   Search, 
-  Palette, 
   ArrowRight, 
   Trash2, 
   Copy, 
@@ -17,7 +16,6 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { SequenceParticipant, SequenceMessage, AssetItem } from '../types';
-import { COLOR_THEMES } from '../utils/assetsData';
 
 interface SequenceParticipantBarProps {
   participant: SequenceParticipant;
@@ -104,7 +102,6 @@ export const SequenceParticipantBar: React.FC<SequenceParticipantBarProps> = ({
   const isLast = currentIndex === allParticipants.length - 1;
 
   const currentTypeConfig = PARTICIPANT_TYPES.find(t => t.id === participant.type) || PARTICIPANT_TYPES[0];
-  const currentColorConfig = COLOR_THEMES.find(c => c.id === participant.color) || COLOR_THEMES[0];
 
   const handleDispatchCall = () => {
     onAddMessage(targetParticipantId, callVerb.trim() || 'execute()', callType);
@@ -183,56 +180,6 @@ export const SequenceParticipantBar: React.FC<SequenceParticipantBarProps> = ({
                   </button>
                 );
               })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="w-[1px] h-4 bg-[#4a4036]" />
-
-      {/* 2. COLOR THEME / PALETTE PILL */}
-      <div className="relative">
-        <button
-          onClick={() => setActiveMenu(activeMenu === 'tone' ? 'none' : 'tone')}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all ${
-            activeMenu === 'tone'
-              ? 'bg-[#c2652a] text-white'
-              : 'hover:bg-[#3d342c] text-[#e8dfd5]'
-          }`}
-          title="Change lifeline color tone"
-        >
-          <div
-            className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-xs"
-            style={{ backgroundColor: currentColorConfig.hex }}
-          />
-          <span className="font-medium text-[11px] capitalize">{currentColorConfig.name.split(' ')[0]}</span>
-          <ChevronDown className="w-3 h-3 text-[#b0a498]" />
-        </button>
-
-        {activeMenu === 'tone' && (
-          <div className="absolute top-full left-0 mt-1.5 w-48 bg-[#1f1b18] border border-[#4a4036] rounded-xl shadow-2xl p-2 z-50">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[#b0a498] px-1 py-0.5 mb-1">
-              Color Palette
-            </div>
-            <div className="flex flex-col gap-1">
-              {COLOR_THEMES.map((theme) => (
-                <button
-                  key={theme.id}
-                  onClick={() => {
-                    onUpdateParticipant({ color: theme.id });
-                    setActiveMenu('none');
-                  }}
-                  className={`flex items-center justify-between px-2 py-1 rounded-lg text-left transition-colors ${
-                    participant.color === theme.id ? 'bg-[#c2652a] text-white' : 'hover:bg-[#2e2823] text-[#e8dfd5]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full border border-white/20" style={{ backgroundColor: theme.hex }} />
-                    <span className="text-xs">{theme.name}</span>
-                  </div>
-                  {participant.color === theme.id && <Check className="w-3.5 h-3.5" />}
-                </button>
-              ))}
             </div>
           </div>
         )}

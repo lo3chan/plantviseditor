@@ -119,9 +119,18 @@ export function autoFixPlantUMLSyntax(pumlText: string): string {
   const cleaned: string[] = [];
   let foundStart = false;
   let startTag = '@startuml';
+  let inSubBlock = false;
 
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
+    if (l.includes('{{')) inSubBlock = true;
+
+    if (inSubBlock) {
+      cleaned.push(l);
+      if (l.includes('}}')) inSubBlock = false;
+      continue;
+    }
+
     if (/^\s*@start([a-z0-9_-]*)/i.test(l)) {
       if (!foundStart) {
         foundStart = true;
@@ -224,9 +233,9 @@ export function plumbSettingsIntoPlantUMLCode(
     }
 
     // 5. Handwritten & Shadowing
-    bodyLines = bodyLines.filter(l => !/^\s*skinparam\s+(handwritten|shadowing)\b/i.test(l));
+    bodyLines = bodyLines.filter(l => !/^\s*(skinparam\s+(handwritten|shadowing)|!option\s+handwritten)\b/i.test(l));
     if (settings.handwritten) {
-      bodyLines.push('skinparam handwritten true');
+      bodyLines.push('!option handwritten true');
     }
     if (settings.shadowing !== undefined) {
       bodyLines.push(`skinparam shadowing ${settings.shadowing}`);
@@ -286,10 +295,8 @@ export function plumbSettingsIntoPlantUMLCode(
       bodyLines = bodyLines.filter(l => !/^\s*skinparam\s+ranksep\b/i.test(l));
       bodyLines.push(`skinparam ranksep ${settings.ranksep}`);
     }
-    if (settings.padding) {
-      bodyLines = bodyLines.filter(l => !/^\s*skinparam\s+padding\b/i.test(l));
-      bodyLines.push(`skinparam padding ${settings.padding}`);
-    }
+    // Always strip skinparam padding to prevent PlantUML "Please use CSS style instead of skinparam padding" warning
+    bodyLines = bodyLines.filter(l => !/^\s*skinparam\s+padding\b/i.test(l));
     if (settings.margin) {
       bodyLines = bodyLines.filter(l => !/^\s*skinparam\s+margin\b/i.test(l));
       bodyLines.push(`skinparam margin ${settings.margin}`);

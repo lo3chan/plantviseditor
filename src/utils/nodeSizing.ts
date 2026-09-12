@@ -1,4 +1,4 @@
-﻿import { DiagramNode } from '../types';
+import { DiagramNode } from '../types';
 
 export interface NodeDimensions {
   width: number;
@@ -15,6 +15,32 @@ export function getOptimalNodeDimensions(node: DiagramNode): NodeDimensions {
   const type = node.type || 'class';
   const category = node.category || '';
   const data = node.data || {};
+
+  // 0. Specialized Activity & State Shapes (Circular & Compact)
+  if (type === 'activity-start') {
+    return { width: (node.width && node.width <= 60) ? node.width : 30, height: (node.height && node.height <= 60) ? node.height : 30 };
+  }
+  if (type === 'activity-stop') {
+    return { width: (node.width && node.width <= 60) ? node.width : 34, height: (node.height && node.height <= 60) ? node.height : 34 };
+  }
+  if (type === 'activity-flow-final') {
+    return { width: (node.width && node.width <= 60) ? node.width : 32, height: (node.height && node.height <= 60) ? node.height : 32 };
+  }
+  if (type === 'state-history' || data.shape === 'history') {
+    return { width: (node.width && node.width <= 60) ? node.width : 34, height: (node.height && node.height <= 60) ? node.height : 34 };
+  }
+  if (type === 'activity-fork' || type === 'sync-bar' || data.shape === 'sync-bar') {
+    return { width: node.width || 120, height: (node.height && node.height <= 30) ? node.height : 8 };
+  }
+  if (type === 'activity-decision' || data.shape === 'diamond') {
+    return { width: (node.width && node.width <= 160) ? node.width : 110, height: (node.height && node.height <= 100) ? node.height : 64 };
+  }
+  if (type === 'interface-lollipop' || data.shape === 'lollipop') {
+    return { width: (node.width && node.width <= 60) ? node.width : 32, height: (node.height && node.height <= 60) ? node.height : 32 };
+  }
+  if (type === 'entity-circle') {
+    return { width: (node.width && node.width <= 60) ? node.width : 36, height: (node.height && node.height <= 60) ? node.height : 36 };
+  }
 
   // 1. ER Database Table / Entity
   const isErTable = type === 'entity' || type === 'er-table' || category === 'data-schema' || Boolean(data.columns);
@@ -49,6 +75,15 @@ export function getOptimalNodeDimensions(node: DiagramNode): NodeDimensions {
   if (isClassOrOO && !isErTable) {
     const attrs = data.attributes || [];
     const methods = data.methods || [];
+
+    // Compact Spot Badge for Empty Classifiers (e.g. Kernel, N1..N5)
+    if (attrs.length === 0 && methods.length === 0 && !data.generics) {
+      const nameLen = (node.label || '').length;
+      return {
+        width: Math.max(52, Math.min(120, Math.round(nameLen * 8.5 + 32))),
+        height: 28
+      };
+    }
 
     // Header: stereotype, generics tag, spot circle, name
     const headerH = (node.sublabel ? 20 : 0) + (data.generics ? 10 : 0) + 48;
@@ -139,6 +174,29 @@ export function getOptimalNodeDimensions(node: DiagramNode): NodeDimensions {
 
   // 7. Containers (Package, Frame, Folder, Boundary)
   if (type === 'package' || type === 'frame' || type === 'folder' || type === 'namespace' || category === 'container' || Boolean(data.isContainer)) {
+    const rawText = (node.label || '') + '\n' + (data.description || '');
+    const cleanText = rawText.replace(/\\n/g, '\n').trim();
+    const textLines = cleanText.split('\n').filter(Boolean);
+
+    if (textLines.length > 1) {
+      let maxLineLen = 0;
+      textLines.forEach(l => {
+        const stripped = l.replace(/\*\*|\/\//g, '').trim();
+        if (stripped.length > maxLineLen) maxLineLen = stripped.length;
+      });
+      const optimalW = Math.max(250, Math.min(390, Math.round(maxLineLen * 7.4 + 44)));
+      let totalVisualLines = 0;
+      textLines.forEach(l => {
+        const stripped = l.replace(/\*\*|\/\//g, '').trim();
+        totalVisualLines += Math.max(1, Math.ceil((stripped.length * 7.4) / (optimalW - 36)));
+      });
+      const optimalH = Math.max(160, Math.round(52 + totalVisualLines * 19 + 24));
+      return {
+        width: Math.max(optimalW, node.width || 0),
+        height: Math.max(optimalH, node.height || 0)
+      };
+    }
+
     return {
       width: Math.max(340, node.width || 340),
       height: Math.max(240, node.height || 240)
@@ -171,6 +229,31 @@ export function getOptimalNodeDimensions(node: DiagramNode): NodeDimensions {
  */
 export function ensureNodeDimensions(node: DiagramNode): DiagramNode {
   const optimal = getOptimalNodeDimensions(node);
+  const isSmallShape = [
+    'activity-start',
+    'activity-stop',
+    'activity-flow-final',
+    'state-history',
+    'activity-fork',
+    'sync-bar',
+    'activity-decision',
+    'interface-lollipop',
+    'entity-circle'
+  ].includes(node.type) || ['sync-bar', 'diamond', 'lollipop', 'history', 'stop'].includes(node.data?.shape || '');
+
+  const isClassOrOO = [
+    'class', 'interface', 'abstract-class', 'enum', 'struct', 'protocol', 'exception', 'annotation', 'metaclass'
+  ].includes(node.type) || node.category === 'code';
+  const isEmptyClassifier = isClassOrOO && (!node.data?.attributes || node.data.attributes.length === 0) && (!node.data?.methods || node.data.methods.length === 0) && !node.data?.generics;
+
+  if (isSmallShape || isEmptyClassifier) {
+    return {
+      ...node,
+      width: optimal.width,
+      height: optimal.height
+    };
+  }
+
   return {
     ...node,
     width: Math.max(node.width || optimal.width, optimal.width),

@@ -69,7 +69,7 @@ export function resolveOverlaps(
   cloned.forEach(c => {
     if (containerIds.has(c.id)) {
       const children = cloned.filter(
-        n => !containerIds.has(n.id) && isInsideContainer(n, c)
+        n => n.id !== c.id && (n.data?.parentId === c.id || (!n.data?.parentId && isInsideContainer(n, c) && !containerIds.has(n.id)))
       );
       containerChildrenMap.set(c.id, children);
     }
@@ -104,8 +104,15 @@ export function resolveOverlaps(
   });
 
   // 2. Resolve overlaps among top-level nodes (containers + loose nodes not inside any container)
+  const isAnchorNode = (n: DiagramNode) =>
+    (n.type === 'class' || n.category === 'code') &&
+    (!n.data?.attributes || n.data.attributes.length === 0) &&
+    (!n.data?.methods || n.data.methods.length === 0) &&
+    /^N\d+$/i.test(n.label || n.id);
+
   const topLevelNodes = cloned.filter(n => {
-    if (containerIds.has(n.id)) return true;
+    if (isAnchorNode(n)) return false;
+    if (n.data?.parentId && containerIds.has(n.data.parentId)) return false;
     for (const [, children] of containerChildrenMap) {
       if (children.some(ch => ch.id === n.id)) return false;
     }

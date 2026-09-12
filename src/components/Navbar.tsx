@@ -18,16 +18,37 @@ import {
   LayoutTemplate,
   ChevronDown,
   History,
-  ShieldCheck,
   FolderOpen,
   Upload,
   GitBranch,
-  Bug
+  Bug,
+  Palette
 } from 'lucide-react';
 import { HistorySnapshot } from '../types';
 
 export type WorkspaceViewMode = 'split' | 'canvas' | 'code';
 export type RenderEngineMode = 'interactive' | 'official-svg';
+
+export interface OfficialRenderControls {
+  zoom: number;
+  setZoom: (z: number | ((prev: number) => number)) => void;
+  fitToWindow: () => void;
+  refresh: () => void;
+  copySvg: () => void;
+  copyUrl: () => void;
+  downloadSvg: () => void;
+  downloadPng: () => void;
+  copyPngImage: () => void;
+  isCopyingPng: boolean;
+  copiedSvg: boolean;
+  copiedUrl: boolean;
+  copiedPng: boolean;
+  svgUrl: string | null;
+  pngUrl: string | null;
+  hasSvg: boolean;
+  isStylePanelOpen: boolean;
+  setIsStylePanelOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+}
 
 interface NavbarProps {
   title: string;
@@ -39,7 +60,7 @@ interface NavbarProps {
   onAutoLayout: () => void;
   onResolveOverlaps?: () => void;
   onNewDiagram: () => void;
-  onResetStarter: () => void;
+  onResetStarter?: () => void;
   onSelectTemplate?: (templateKey: string) => void;
   onImportFile?: (file: File) => void;
   canUndo: boolean;
@@ -50,11 +71,12 @@ interface NavbarProps {
   historyIndex?: number;
   onJumpToHistory?: (index: number) => void;
   onOpenExport: () => void;
-  onQuickCopyPlantUML: () => void;
-  copiedPlantUML: boolean;
+  onQuickCopyPlantUML?: () => void;
+  copiedPlantUML?: boolean;
   isSequenceDiagram?: boolean;
   onToggleDiagramMode?: () => void;
   onOpenBugReport?: () => void;
+  svgControls?: OfficialRenderControls | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -79,10 +101,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   onJumpToHistory,
   onOpenExport,
   onQuickCopyPlantUML,
-  copiedPlantUML,
   isSequenceDiagram = false,
   onToggleDiagramMode,
-  onOpenBugReport
+  onOpenBugReport,
+  svgControls
 }) => {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState(title);
@@ -231,7 +253,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             title={renderEngine === 'official-svg' ? 'Viewing Official PlantUML Server SVG. Click to switch to Interactive Canvas.' : 'Viewing Interactive Canvas. Click to view Official PlantUML Server SVG.'}
           >
             <Eye className="w-3.5 h-3.5 text-[#c2652a]" />
-            <span>{renderEngine === 'official-svg' ? 'Official SVG' : 'Interactive 2D'}</span>
+            <span>{renderEngine === 'official-svg' ? 'SVG' : 'Interactive 2D'}</span>
           </button>
         )}
 
@@ -248,17 +270,26 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
-        {/* De-Overlap / Anti-Collision Button */}
-        {viewMode !== 'code' && renderEngine === 'interactive' && onResolveOverlaps && (
-          <button
-            id="btn-resolve-overlap"
-            onClick={onResolveOverlaps}
-            className="h-8 whitespace-nowrap shrink-0 flex items-center gap-1 px-2.5 rounded-lg text-xs font-medium bg-white hover:bg-[#faf5ee] border border-[#d8d0c8]/70 text-[#605850] hover:text-[#3a302a] transition-colors cursor-pointer"
-            title="Automatically space out and eliminate overlapping elements"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>De-Overlap</span>
-          </button>
+        {/* SVG Screen Controls integrated directly into top bar */}
+        {renderEngine === 'official-svg' && svgControls && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="w-px h-5 bg-[#d8d0c8] mx-0.5 shrink-0" />
+
+            {/* Visual Options Toggle */}
+            <button
+              id="btn-svg-visual-options"
+              onClick={() => svgControls.setIsStylePanelOpen(prev => !prev)}
+              className={`h-8 flex items-center gap-1.5 px-2.5 rounded-lg border transition-all cursor-pointer shrink-0 ${
+                svgControls.isStylePanelOpen 
+                  ? 'bg-[#c2652a] text-white border-[#c2652a] shadow-xs' 
+                  : 'bg-white hover:bg-[#faf5ee] text-[#3a302a] border-[#d8d0c8]'
+              }`}
+              title="Toggle PlantUML Visual Options Panel"
+            >
+              <Palette className={`w-3.5 h-3.5 ${svgControls.isStylePanelOpen ? 'text-white' : 'text-[#c2652a]'}`} />
+              <span className="text-xs font-semibold">Visual Options</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -542,36 +573,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <FilePlus className="w-3.5 h-3.5 text-[#78706a]" />
           <span>New</span>
-        </button>
-
-        {/* Reset Starter */}
-        <button
-          id="btn-reset-starter"
-          onClick={onResetStarter}
-          className="p-1.5 rounded-lg text-xs text-[#605850] hover:text-[#3a302a] hover:bg-[#f2ece4] border border-[#d8d0c8]/50 transition-colors cursor-pointer"
-          title="Reset to default PlantUML starter script"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Quick Copy PlantUML code */}
-        <button
-          id="btn-quick-copy"
-          onClick={onQuickCopyPlantUML}
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#605850] hover:text-[#3a302a] bg-[#f2ece4] hover:bg-white border border-[#d8d0c8]/50 transition-all cursor-pointer"
-          title="Quick copy PlantUML code to clipboard"
-        >
-          {copiedPlantUML ? (
-            <>
-              <Check className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="text-emerald-700 font-semibold">Copied!</span>
-            </>
-          ) : (
-            <>
-              <Copy className="w-3.5 h-3.5 text-[#78706a]" />
-              <span>Copy PUML</span>
-            </>
-          )}
         </button>
 
         {/* Import Diagram File (.puml, .txt, .json) */}

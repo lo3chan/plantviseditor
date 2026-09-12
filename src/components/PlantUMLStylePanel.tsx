@@ -553,6 +553,32 @@ export const PlantUMLStylePanel: React.FC<PlantUMLStylePanelProps> = ({
     });
   }, [selectedCategory, themeSearch]);
 
+  // Guarantee that exactly ONE preset can ever be shown as active at any time
+  const activePresetId = useMemo(() => {
+    if (settings.themePreset) return settings.themePreset;
+    if (currentTheme && currentTheme !== 'none') {
+      const match = UNIFIED_THEME_OPTIONS.find(o => o.themeId === currentTheme);
+      if (match) return match.id;
+    }
+    if (isHandwritten) return 'sketch-handdrawn';
+    if (isMonochromeReverse) return 'dark-invert-preset';
+    if (isStrictUml) return 'strictuml-preset';
+    if (isMonochrome) return 'strictuml-preset';
+    return 'classic-default';
+  }, [settings.themePreset, currentTheme, isHandwritten, isMonochromeReverse, isStrictUml, isMonochrome]);
+
+  const handleSelectPreset = (option: typeof UNIFIED_THEME_OPTIONS[0]) => {
+    onUpdateSettings({
+      theme: 'none',
+      strictuml: false,
+      monochromeReverse: false,
+      monochrome: false,
+      handwritten: false,
+      ...option.applyPatch,
+      themePreset: option.id
+    });
+  };
+
   return (
     <div className="w-84 h-full flex flex-col bg-[#fdfaf5] border-l border-[#d8d0c8]/80 shadow-2xl select-none z-30 overflow-hidden">
       {/* Panel Header */}
@@ -583,7 +609,6 @@ export const PlantUMLStylePanel: React.FC<PlantUMLStylePanelProps> = ({
               linetype: 'ortho',
               nodesep: 40,
               ranksep: 50,
-              padding: 8,
               margin: 8,
               minClassWidth: 0,
               wrapWidth: 0,
@@ -715,19 +740,12 @@ export const PlantUMLStylePanel: React.FC<PlantUMLStylePanelProps> = ({
             {/* Selection Menu (2-Column Grid Format) */}
             <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
               {filteredThemes.map(option => {
-                // Check if this option is currently active
-                const isActive = (
-                  (option.id === 'strictuml-preset' && isStrictUml) ||
-                  (option.id === 'dark-invert-preset' && isMonochromeReverse) ||
-                  (option.id === 'sketch-handdrawn' && (isHandwritten || currentTheme === 'sketchy')) ||
-                  (option.themeId !== 'none' && currentTheme === option.themeId) ||
-                  (option.id === 'classic-default' && currentTheme === 'none' && !isStrictUml && !isMonochromeReverse && !isHandwritten)
-                );
+                const isActive = option.id === activePresetId;
 
                 return (
                   <button
                     key={option.id}
-                    onClick={() => onUpdateSettings(option.applyPatch)}
+                    onClick={() => handleSelectPreset(option)}
                     className={`p-2 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between relative shadow-2xs ${
                       isActive
                         ? 'bg-white border-[#c2652a] ring-2 ring-[#c2652a]/25 shadow-xs'
@@ -987,25 +1005,6 @@ export const PlantUMLStylePanel: React.FC<PlantUMLStylePanelProps> = ({
                 { label: '50 Normal', value: 50 },
                 { label: '70 Relaxed', value: 70 },
                 { label: '100 Open', value: 100 }
-              ]}
-            />
-
-            {/* Inner Padding Slider */}
-            <SliderNumberControl
-              id="padding-var"
-              label="Inner Element Padding"
-              paramName="padding"
-              value={settings.padding || 8}
-              min={0}
-              max={40}
-              step={1}
-              unit="px"
-              onChange={(val) => onUpdateSettings({ padding: val })}
-              presets={[
-                { label: '4 Snug', value: 4 },
-                { label: '8 Std', value: 8 },
-                { label: '12 Generous', value: 12 },
-                { label: '16 Roomy', value: 16 }
               ]}
             />
 

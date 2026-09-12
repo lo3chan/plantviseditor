@@ -13,7 +13,6 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
-  Sparkles,
   Layers
 } from 'lucide-react';
 import { DiagramData } from '../types';
@@ -301,9 +300,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           <div>
             <h2 className="font-serif text-lg font-semibold text-[#3a302a] flex items-center gap-2">
               <span>Export Diagram</span>
-              <span className="text-[10px] bg-[#A80036]/10 text-[#A80036] font-mono px-2 py-0.5 rounded-full font-bold uppercase">
-                PlantUML Native
-              </span>
             </h2>
             <p className="text-xs text-[#78706a]">Save your model as ASCII text art, vectors, rasters, or source syntax</p>
           </div>
@@ -328,9 +324,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 <div>
                   <div className="text-xs font-bold text-[#1c1917] flex items-center gap-1.5">
                     <span>ASCII / Plain Text Art (.txt)</span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-1.5 py-0.2 rounded">
-                      Supported
-                    </span>
                   </div>
                   <div className="text-[11px] text-[#78706a]">
                     Monospace text art diagram for READMEs, code comments, and CLI terminals
@@ -692,11 +685,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="p-3 border-t border-[#d8d0c8]/60 bg-[#f6f0e8]/50 flex items-center justify-between text-xs">
-          <span className="text-[#78706a] text-[11px] flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-[#A80036]" />
-            Official PlantUML ASCII engine enabled
-          </span>
+        <div className="p-3 border-t border-[#d8d0c8]/60 bg-[#f6f0e8]/50 flex items-center justify-end text-xs">
           <button
             onClick={onClose}
             className="px-4 py-1.5 rounded-lg text-xs font-medium text-[#78706a] hover:text-[#3a302a] hover:bg-white transition-colors"

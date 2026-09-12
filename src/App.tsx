@@ -14,7 +14,7 @@ import { DEFAULT_DIAGRAM, BLANK_DIAGRAM, UNIFIED_STARTER_PRESETS } from './utils
 import { generatePlantUML, parsePlantUML, applyAutoLayout } from './utils/plantumlGenerator';
 import { resolveOverlaps, resolveDiagramOverlaps, resolveEdgeLabelOverlaps, findVacantPosition } from './utils/overlapResolver';
 import { ensureNodeDimensions } from './utils/nodeSizing';
-import { Navbar, WorkspaceViewMode, RenderEngineMode } from './components/Navbar';
+import { Navbar, WorkspaceViewMode, RenderEngineMode, OfficialRenderControls } from './components/Navbar';
 import { AssetPanel } from './components/AssetPanel';
 import { Canvas } from './components/Canvas';
 import { CodePanel } from './components/CodePanel';
@@ -43,6 +43,7 @@ export default function App() {
   // Layout and Engine view modes
   const [viewMode, setViewMode] = useState<WorkspaceViewMode>('split');
   const [renderEngine, setRenderEngine] = useState<RenderEngineMode>('interactive');
+  const [svgControls, setSvgControls] = useState<OfficialRenderControls | null>(null);
 
   // Asset Panel collapse state in canvas mode
   const [isAssetPanelCollapsed, setIsAssetPanelCollapsed] = useState<boolean>(false);
@@ -639,7 +640,6 @@ export default function App() {
         renderEngine={renderEngine}
         onToggleRenderEngine={() => setRenderEngine(mode => mode === 'interactive' ? 'official-svg' : 'interactive')}
         onAutoLayout={handleAutoLayout}
-        onResolveOverlaps={handleResolveOverlaps}
         onNewDiagram={handleNewDiagram}
         onResetStarter={handleResetStarter}
         onSelectTemplate={handleSelectTemplate}
@@ -660,6 +660,7 @@ export default function App() {
         }}
         onQuickCopyPlantUML={handleQuickCopyPlantUML}
         copiedPlantUML={copiedPlantUML}
+        svgControls={svgControls}
       />
 
       {/* Main Workspace Area */}
@@ -711,21 +712,24 @@ export default function App() {
                   isPlainWhite={isPlainWhiteBg}
                   onTogglePlainWhite={handleTogglePlainWhiteBg}
                   onUpdateCode={(newCode) => setLoadedPlantUMLCode(newCode)}
+                  onControlsChange={setSvgControls}
                 />
               )}
             </div>
           </div>
         )}
 
-        {/* MODE 2: VISUAL CANVAS ONLY (With Toolbox on Left) */}
+        {/* MODE 2: VISUAL CANVAS ONLY (With Toolbox on Left when interactive) */}
         {viewMode === 'canvas' && (
           <div className="w-full h-full flex overflow-hidden relative">
-            {/* Left Structural Toolbox */}
-            <AssetPanel
-              onAddNodeFromAsset={handleAddNodeFromAsset}
-              isCollapsed={isAssetPanelCollapsed}
-              onToggleCollapse={() => setIsAssetPanelCollapsed(!isAssetPanelCollapsed)}
-            />
+            {/* Left Structural Toolbox (only for interactive visual canvas) */}
+            {renderEngine === 'interactive' && (
+              <AssetPanel
+                onAddNodeFromAsset={handleAddNodeFromAsset}
+                isCollapsed={isAssetPanelCollapsed}
+                onToggleCollapse={() => setIsAssetPanelCollapsed(!isAssetPanelCollapsed)}
+              />
+            )}
 
             {/* Canvas or Official SVG */}
             <div className="flex-1 h-full relative overflow-hidden">
@@ -759,6 +763,7 @@ export default function App() {
                   isPlainWhite={isPlainWhiteBg}
                   onTogglePlainWhite={handleTogglePlainWhiteBg}
                   onUpdateCode={(newCode) => setLoadedPlantUMLCode(newCode)}
+                  onControlsChange={setSvgControls}
                 />
               )}
             </div>

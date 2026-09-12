@@ -2,31 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   ChevronDown, 
   Search, 
-  Palette, 
   ArrowRight, 
-  ArrowDown, 
   StickyNote, 
-  FolderPlus, 
-  Copy, 
-  Trash2, 
   Check, 
-  Plus, 
-  Sparkles, 
   Boxes, 
-  Database, 
-  Cloud, 
-  User, 
-  GitBranch, 
-  ArrowLeftRight, 
   Tag, 
-  X,
-  Layers,
-  FileCode,
-  Folder,
   Sliders
 } from 'lucide-react';
 import { DiagramNode, DiagramEdge, EdgeArrowType, AssetItem } from '../types';
-import { UNIFIED_ASSETS, COLOR_THEMES } from '../utils/assetsData';
+import { UNIFIED_ASSETS } from '../utils/assetsData';
 
 interface QuickActionBarProps {
   x: number;
@@ -154,7 +138,7 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
   onDelete,
   onOpenInspector
 }) => {
-  const [activeMenu, setActiveMenu] = useState<'none' | 'type' | 'tone' | 'nature' | 'connect' | 'more'>('none');
+  const [activeMenu, setActiveMenu] = useState<'none' | 'type' | 'tone' | 'nature' | 'connect'>('none');
   const [typeSearch, setTypeSearch] = useState('');
   const [customStereotype, setCustomStereotype] = useState('');
   const [connectSearch, setConnectSearch] = useState('');
@@ -174,7 +158,6 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
     return () => document.removeEventListener('mousedown', handleGlobalClick);
   }, []);
 
-  const currentColorConfig = COLOR_THEMES.find(t => t.id === node.color) || COLOR_THEMES[0];
   const currentTypeName = getFriendlyNodeTypeName(node.type, node.shape);
   const currentStereotype = node.sublabel ? node.sublabel.replace(/^<<|>>$/g, '') : null;
 
@@ -196,24 +179,24 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
       onWheel={(e) => e.stopPropagation()}
     >
       {/* Primary Condensed Verbal Pill Bar */}
-      <div className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#c2652a]/40 shadow-xl rounded-full p-1.5 text-xs text-[#2c2420]">
+      <div className="flex items-center gap-1 bg-white/95 backdrop-blur-md border border-[#d8d0c8]/80 shadow-lg shadow-black/8 rounded-full px-1.5 py-1 text-xs text-[#2c2420]">
         
         {/* SEGMENT 1: MODULAR TYPE REPLACE DROPDOWN */}
         <div className="relative">
           <button
             onClick={() => setActiveMenu(activeMenu === 'type' ? 'none' : 'type')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold transition-colors ${
+            className={`h-7 flex items-center gap-1 px-2 rounded-full font-semibold transition-all cursor-pointer ${
               activeMenu === 'type'
                 ? 'bg-[#c2652a] text-white shadow-xs'
-                : 'bg-[#faf5ee] hover:bg-[#ebd9c8] text-[#3a302a] border border-[#d8d0c8]/60'
+                : 'bg-[#faf5ee] hover:bg-[#ebd9c8] text-[#3a302a]'
             }`}
             title="Replace element type / archetype"
           >
-            <Boxes className="w-3.5 h-3.5 text-[#c2652a] shrink-0" />
-            <span className="font-bold text-[11.5px] max-w-[130px] truncate">
+            <Boxes className={`w-3.5 h-3.5 shrink-0 ${activeMenu === 'type' ? 'text-white' : 'text-[#c2652a]'}`} />
+            <span className="font-bold text-[11px] max-w-[85px] truncate">
               {currentTypeName}
             </span>
-            <ChevronDown className={`w-3 h-3 opacity-70 transition-transform ${activeMenu === 'type' ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-2.5 h-2.5 opacity-60 transition-transform ${activeMenu === 'type' ? 'rotate-180' : ''}`} />
           </button>
 
           {/* Morph Type Dropdown Popover */}
@@ -295,78 +278,23 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
           )}
         </div>
 
-        {/* SEGMENT 2: VERBAL TONE / PALETTE DROPDOWN */}
-        <div className="relative">
-          <button
-            onClick={() => setActiveMenu(activeMenu === 'tone' ? 'none' : 'tone')}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-colors ${
-              activeMenu === 'tone'
-                ? 'bg-[#faf5ee] text-[#c2652a] ring-1 ring-[#c2652a]'
-                : 'hover:bg-[#faf5ee] text-[#57534e]'
-            }`}
-            title={`Visual tone: ${currentColorConfig.name}`}
-          >
-            <span 
-              className="w-3 h-3 rounded-full border border-black/10 shrink-0"
-              style={{ backgroundColor: currentColorConfig.hex }}
-            />
-            <span className="text-[11px] font-medium hidden sm:inline">
-              {currentColorConfig.name.split(' ')[0]}
-            </span>
-            <ChevronDown className="w-2.5 h-2.5 opacity-60" />
-          </button>
-
-          {/* Color Themes Popover */}
-          {activeMenu === 'tone' && (
-            <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-[#d8d0c8] rounded-2xl shadow-xl p-2 z-50 animate-in fade-in zoom-in-95">
-              <span className="text-[10px] font-bold text-[#78706a] uppercase px-1 block mb-1.5">
-                Select Visual Palette
-              </span>
-              <div className="space-y-1">
-                {COLOR_THEMES.map(theme => (
-                  <button
-                    key={theme.id}
-                    onClick={() => {
-                      onUpdateNode({ color: theme.id });
-                      setActiveMenu('none');
-                    }}
-                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs transition-colors ${
-                      node.color === theme.id 
-                        ? 'bg-[#c2652a]/10 text-[#c2652a] font-bold' 
-                        : 'hover:bg-[#faf5ee] text-[#3a302a]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span 
-                        className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0"
-                        style={{ backgroundColor: theme.hex }}
-                      />
-                      <span>{theme.name}</span>
-                    </div>
-                    {node.color === theme.id && <Check className="w-3.5 h-3.5 text-[#c2652a]" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* SEGMENT 3: VERBAL STEREOTYPE / NATURE DROPDOWN */}
+        {/* SEGMENT 2: VERBAL STEREOTYPE / NATURE DROPDOWN */}
         <div className="relative">
           <button
             onClick={() => setActiveMenu(activeMenu === 'nature' ? 'none' : 'nature')}
-            className={`flex items-center gap-1 px-2 py-1 rounded-full text-[11px] transition-colors ${
+            className={`h-7 flex items-center gap-1 rounded-full transition-all cursor-pointer ${
               currentStereotype
-                ? 'bg-[#c2652a]/10 text-[#c2652a] font-bold border border-[#c2652a]/30'
-                : 'hover:bg-[#faf5ee] text-[#78706a] border border-transparent'
+                ? (activeMenu === 'nature' ? 'bg-[#c2652a] text-white px-2 shadow-xs' : 'bg-[#c2652a]/10 text-[#c2652a] font-semibold border border-[#c2652a]/30 px-2')
+                : (activeMenu === 'nature' ? 'bg-[#faf5ee] text-[#c2652a] w-7 justify-center' : 'hover:bg-[#faf5ee] text-[#78706a] w-7 justify-center')
             }`}
-            title="Configure architectural stereotype"
+            title={currentStereotype ? `Stereotype: «${currentStereotype}»` : "Add stereotype"}
           >
             <Tag className="w-3 h-3 shrink-0" />
-            <span className="max-w-[85px] truncate font-mono text-[10.5px]">
-              {currentStereotype ? `«${currentStereotype}»` : '+ Nature'}
-            </span>
-            <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+            {currentStereotype && (
+              <span className="max-w-[65px] truncate font-mono text-[10.5px]">
+                «{currentStereotype}»
+              </span>
+            )}
           </button>
 
           {/* Stereotype Popover */}
@@ -447,34 +375,44 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
           )}
         </div>
 
-        <div className="w-[1px] h-4 bg-[#d8d0c8]/60 mx-0.5" />
+        <div className="w-[1px] h-3.5 bg-[#d8d0c8]/60 mx-0.5" />
 
         {/* Edit / Inspect button */}
         {onOpenInspector && (
           <button
             onClick={() => onOpenInspector()}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold hover:bg-[#faf5ee] text-[#3a302a] transition-colors"
-            title="Open Element Properties & Data Inspector"
+            className="h-7 w-7 flex items-center justify-center rounded-full text-[#605850] hover:text-[#c2652a] hover:bg-[#faf5ee] transition-all cursor-pointer"
+            title="Edit properties (Inspector)"
           >
-            <Sliders className="w-3 h-3 text-[#c2652a]" />
-            <span>Edit</span>
+            <Sliders className="w-3.5 h-3.5" />
           </button>
         )}
 
-        {/* SEGMENT 4: VERBAL LINK TO DROPDOWN ("Connect to...") */}
+        {/* Attach UML Note button */}
+        {onAddNote && (
+          <button
+            onClick={() => onAddNote()}
+            className="h-7 w-7 flex items-center justify-center rounded-full text-[#605850] hover:text-amber-600 hover:bg-[#faf5ee] transition-all cursor-pointer"
+            title="Attach UML Note"
+          >
+            <StickyNote className="w-3.5 h-3.5 text-amber-600" />
+          </button>
+        )}
+
+        {/* SEGMENT 3: VERBAL LINK TO DROPDOWN ("Connect to...") */}
         <div className="relative">
           <button
             onClick={() => setActiveMenu(activeMenu === 'connect' ? 'none' : 'connect')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold transition-colors ${
+            className={`h-7 flex items-center gap-1 px-2 rounded-full font-semibold text-[11px] transition-all cursor-pointer ${
               activeMenu === 'connect'
                 ? 'bg-[#c2652a] text-white shadow-xs'
-                : 'hover:bg-[#faf5ee] text-[#c2652a] font-bold'
+                : 'hover:bg-[#faf5ee] text-[#c2652a]'
             }`}
-            title="Connect verbally to another node on canvas"
+            title="Connect / link to another node"
           >
             <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-            <span className="text-[11.5px]">Link To...</span>
-            <ChevronDown className="w-3 h-3 opacity-70" />
+            <span>Link</span>
+            <ChevronDown className={`w-2.5 h-2.5 opacity-60 transition-transform ${activeMenu === 'connect' ? 'rotate-180' : ''}`} />
           </button>
 
           {/* Connect Dropdown Popover */}
@@ -606,123 +544,6 @@ export const QuickActionBar: React.FC<QuickActionBarProps> = ({
           )}
         </div>
 
-        <div className="w-[1px] h-4 bg-[#d8d0c8]/60 mx-0.5" />
-
-        {/* SEGMENT 5: MODULAR MORE ACTIONS DROPDOWN */}
-        <div className="relative">
-          <button
-            onClick={() => setActiveMenu(activeMenu === 'more' ? 'none' : 'more')}
-            className={`p-1.5 rounded-full transition-colors ${
-              activeMenu === 'more' ? 'bg-[#faf5ee] text-[#c2652a]' : 'hover:bg-[#faf5ee] text-[#78706a]'
-            }`}
-            title="More actions"
-          >
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-
-          {/* More Actions Popover */}
-          {activeMenu === 'more' && (
-            <div className="absolute top-full right-0 mt-2 w-48 bg-white border border-[#d8d0c8] rounded-2xl shadow-xl p-1.5 z-50 animate-in fade-in zoom-in-95 text-xs">
-              {onOpenInspector && (
-                <button
-                  onClick={() => {
-                    onOpenInspector();
-                    setActiveMenu('none');
-                  }}
-                  className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] font-semibold transition-colors"
-                >
-                  <Sliders className="w-3.5 h-3.5 text-[#c2652a]" />
-                  <span>Inspect Properties</span>
-                </button>
-              )}
-
-              <button
-                onClick={() => {
-                  onDuplicate();
-                  setActiveMenu('none');
-                }}
-                className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
-              >
-                <Copy className="w-3.5 h-3.5 text-[#78706a]" />
-                <span>Duplicate (Ctrl+D)</span>
-              </button>
-
-              {onAddNote && (
-                <button
-                  onClick={() => {
-                    onAddNote();
-                    setActiveMenu('none');
-                  }}
-                  className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
-                >
-                  <StickyNote className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Attach UML Note</span>
-                </button>
-              )}
-
-              {onWrapInPackage && (
-                <button
-                  onClick={() => {
-                    onWrapInPackage();
-                    setActiveMenu('none');
-                  }}
-                  className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
-                >
-                  <FolderPlus className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Wrap in Package</span>
-                </button>
-              )}
-
-              {onWrapInFrame && (
-                <>
-                  <button
-                    onClick={() => {
-                      onWrapInFrame('frame');
-                      setActiveMenu('none');
-                    }}
-                    className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
-                  >
-                    <Layers className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Wrap in Frame</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      onWrapInFrame('alt', 'status == 200');
-                      setActiveMenu('none');
-                    }}
-                    className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
-                  >
-                    <Layers className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Wrap in Alt Block</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      onWrapInFrame('loop', 'for each item');
-                      setActiveMenu('none');
-                    }}
-                    className="w-full px-2.5 py-1.5 rounded-xl hover:bg-[#faf5ee] text-left flex items-center gap-2 text-[#3a302a] transition-colors"
-                  >
-                    <Layers className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Wrap in Loop Block</span>
-                  </button>
-                </>
-              )}
-
-              <div className="my-1 border-t border-[#d8d0c8]/60" />
-
-              <button
-                onClick={() => {
-                  onDelete();
-                  setActiveMenu('none');
-                }}
-                className="w-full px-2.5 py-1.5 rounded-xl hover:bg-red-50 text-left flex items-center gap-2 text-red-600 font-medium transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Element</span>
-              </button>
-            </div>
-          )}
-        </div>
 
       </div>
     </div>

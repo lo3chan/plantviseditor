@@ -59,6 +59,10 @@ import {
   C4QueueBadge,
   C4ComponentBadge,
   C4PersonAvatar,
+  EipGlyph,
+  OsaSecurityGlyph,
+  ElasticGlyph,
+  TechLogoGlyph,
   ActivityFlowFinalShape,
   StateHistoryShape,
   SaltWireframeMockup,
@@ -67,6 +71,7 @@ import {
   JsonYamlTreeViewer,
   WbsCardShape
 } from './PlantUMLShapes';
+import { renderPlantUMLFormattedText } from '../utils/plantumlTextFormatter';
 
 interface DiagramNodeProps {
   node: DiagramNode;
@@ -97,11 +102,35 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
 
   const colorConfig = getColorConfig(node.color);
 
+  // Parse multi-line formatted text for frames/packages
+  const cleanFrameText = (node.label || '').replace(/\\n/g, '\n');
+  const frameLines = cleanFrameText.split('\n');
+  const isMultiLineFrame = frameLines.length > 1;
+
+  let frameTitle = frameLines[0]?.replace(/^\*\*|\*\*$/g, '').trim() || node.label;
+  let frameSubtitle: string | null = null;
+  let bodyLines: string[] = [];
+
+  if (isMultiLineFrame) {
+    let startIdx = 1;
+    if (frameLines[1] && /^\/\/[^/]+\/\/$/.test(frameLines[1].trim())) {
+      frameSubtitle = frameLines[1].replace(/^\/\/|\/\/$/g, '').trim();
+      startIdx = 2;
+    }
+    bodyLines = frameLines.slice(startIdx);
+  }
+
+  const renderFormattedInlineText = (text: string) => {
+    return renderPlantUMLFormattedText(text);
+  };
+
   // Content-aware optimal dimensions ensuring everything starts out visible
   // while allowing the user full freedom to resize smaller or larger
   const optimal = getOptimalNodeDimensions(node);
   const effectiveWidth = node.width ?? optimal.width;
   const effectiveHeight = node.height ?? optimal.height;
+
+  const renderNodePorts = () => renderPorts(node.id, isHovered, isSelected, onStartConnection, onQuickAddChild);
 
   useEffect(() => {
     setEditLabel(node.label);
@@ -201,6 +230,11 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const isGcp = node.type.startsWith('gcp-') || node.type.startsWith('cloud-gcp') || node.data?.cloudProvider === 'gcp' || node.label.toLowerCase().startsWith('gcp');
   const isK8s = node.type.startsWith('k8s-') || node.type.startsWith('cloud-k8s') || node.data?.cloudProvider === 'k8s' || node.label.toLowerCase().startsWith('k8s');
   const isCloudNative = node.data?.cloudProvider === 'cloudogu' || node.type.startsWith('cloud-tool');
+  const isEip = node.category === 'eip' || Boolean(node.data?.eipPattern) || node.type.startsWith('eip-');
+  const isSecurity = node.category === 'security' || Boolean(node.data?.securityElement) || node.type.startsWith('osa-') || node.type.startsWith('security-');
+  const isElastic = node.category === 'elastic' || Boolean(node.data?.elasticComponent) || node.type.startsWith('elastic-') || node.data?.cloudService === 'ELASTICSEARCH';
+  const spriteMatch = node.label.match(/<\$([a-zA-Z0-9_]+)>/i);
+  const isLogo = node.category === 'logo' || Boolean(node.data?.logoName) || node.type.startsWith('logo-') || Boolean(spriteMatch);
   const isDomainStory = node.category === 'domainstory' || Boolean(node.data?.domainStoryType) || node.type.startsWith('domainstory-');
   const isAdaML = node.category === 'adaml' || Boolean(node.data?.adamlType) || node.type.startsWith('adaml-');
   
@@ -358,6 +392,58 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
 
   // Helper for visibility styling matching PlantUML
   const renderMemberText = (member: string) => {
+    const trimmed = member.trim();
+
+    // 1. Standard PlantUML Class Compartment Dividers
+    // Double line: == Title ==
+    const doubleMatch = trimmed.match(/^==\s*(.*?)\s*==$/);
+    if (doubleMatch) {
+      const title = doubleMatch[1];
+      return (
+        <div className="w-full my-1 flex items-center gap-1.5 opacity-90">
+          <div className="flex-1 border-t-2 border-b border-[#A80036]/50 h-1" />
+          {title && <span className="text-[10px] font-bold text-[#A80036] uppercase tracking-wider px-1 font-sans">{title}</span>}
+          <div className="flex-1 border-t-2 border-b border-[#A80036]/50 h-1" />
+        </div>
+      );
+    }
+    // Single solid line: -- Title --
+    const singleMatch = trimmed.match(/^--\s*(.*?)\s*--$/);
+    if (singleMatch) {
+      const title = singleMatch[1];
+      return (
+        <div className="w-full my-1 flex items-center gap-1.5 opacity-80">
+          <div className="flex-1 border-t border-[#A80036]/40" />
+          {title && <span className="text-[9px] font-semibold text-gray-700 uppercase tracking-tight px-1 font-sans">{title}</span>}
+          <div className="flex-1 border-t border-[#A80036]/40" />
+        </div>
+      );
+    }
+    // Dotted line: .. Title ..
+    const dottedMatch = trimmed.match(/^\.\.\s*(.*?)\s*\.\.$/);
+    if (dottedMatch) {
+      const title = dottedMatch[1];
+      return (
+        <div className="w-full my-1 flex items-center gap-1.5 opacity-70">
+          <div className="flex-1 border-t border-dotted border-[#A80036]/50" />
+          {title && <span className="text-[9px] italic text-gray-600 px-1 font-sans">{title}</span>}
+          <div className="flex-1 border-t border-dotted border-[#A80036]/50" />
+        </div>
+      );
+    }
+    // Dashed line: __ Title __
+    const dashedMatch = trimmed.match(/^__\s*(.*?)\s*__$/);
+    if (dashedMatch) {
+      const title = dashedMatch[1];
+      return (
+        <div className="w-full my-1 flex items-center gap-1.5 opacity-70">
+          <div className="flex-1 border-t border-dashed border-[#A80036]/50" />
+          {title && <span className="text-[9px] font-medium text-gray-600 px-1 font-sans">{title}</span>}
+          <div className="flex-1 border-t border-dashed border-[#A80036]/50" />
+        </div>
+      );
+    }
+
     let rest = member;
     let visibilityBadge: React.ReactNode = null;
 
@@ -383,7 +469,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       <div className="flex items-center gap-1.5 min-w-0">
         {visibilityBadge}
         <span className={`truncate text-[#181818] ${isStatic ? 'underline font-semibold' : ''} ${isAbstract ? 'italic text-gray-700' : ''}`}>
-          {cleanText}
+          {renderPlantUMLFormattedText(cleanText)}
         </span>
       </div>
     );
@@ -492,6 +578,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             zIndex: isSelected ? 4 : (isDropTarget ? 5 : 2)
           }}
           onClick={onSelect}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
         >
           {isDropTarget && (
             <div className="absolute -top-3 right-4 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold tracking-tight shadow-md pointer-events-none flex items-center gap-1 z-30 animate-pulse">
@@ -501,6 +589,19 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           <div className="text-xs font-bold text-[#444444] font-sans">
             [System Boundary: {node.label}]
           </div>
+          {renderNodePorts()}
+          {/* Corner Resize Handle */}
+          {isSelected && onStartResize && (
+            <div
+              className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-white border-2 border-[#444444] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform shadow-xs"
+              title="Drag to resize boundary"
+              data-drag-handle="true"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                onStartResize(node.id, 'se', e);
+              }}
+            />
+          )}
         </div>
       );
     }
@@ -609,7 +710,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         </div>
 
         {/* Ports */}
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
@@ -708,7 +809,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         </div>
 
         {/* Ports */}
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
@@ -801,7 +902,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         </div>
 
         {/* Ports */}
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
@@ -880,7 +981,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             </div>
           </div>
         </div>
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
@@ -958,7 +1059,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             </div>
           </div>
         </div>
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
@@ -1031,7 +1132,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             </div>
           </div>
         </div>
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
@@ -1103,12 +1204,308 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             </div>
           </div>
         </div>
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
           <div
             className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-slate-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // 3A5. ENTERPRISE INTEGRATION PATTERNS RENDERER (stdlib/eip)
+  // Official Gregor Hohpe Integration Pattern Cards
+  // =========================================================================
+  if (isEip) {
+    const pattern = node.data?.eipPattern || node.label.toLowerCase();
+
+    return (
+      <div
+        id={node.id}
+        className={`absolute cursor-move select-none transition-shadow ${
+          isSelected ? 'ring-2 ring-[#5C2D91] ring-offset-2 shadow-lg' : 'hover:shadow-md'
+        }`}
+        style={{
+          left: node.x,
+          top: node.y,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
+          zIndex: isSelected ? 30 : 10
+        }}
+        onClick={onSelect}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="w-full h-full rounded-xl bg-white border border-purple-200 shadow-xs overflow-hidden flex flex-col">
+          <div className="h-1.5 w-full bg-[#5C2D91]" />
+          <div className="p-2.5 flex items-center gap-2.5 flex-1">
+            <EipGlyph pattern={pattern} size={32} />
+            <div className="min-w-0 flex-1">
+              <div className="text-[9px] font-mono font-semibold uppercase tracking-wider text-[#5C2D91]">
+                {node.sublabel || `EIP: ${pattern}`}
+              </div>
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  onBlur={handleCommitEdit}
+                  onKeyDown={handleKeyDown}
+                  className="text-xs font-bold text-gray-900 bg-white border border-[#5C2D91] rounded px-1 py-0.5 outline-none w-full font-mono"
+                />
+              ) : (
+                <div
+                  className="text-xs font-bold text-gray-900 truncate font-mono cursor-text"
+                  onDoubleClick={() => setIsEditing(true)}
+                >
+                  {node.label}
+                </div>
+              )}
+              {node.data?.description && (
+                <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                  {node.data.description}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {renderNodePorts()}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#5C2D91] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // 3A6. OPEN SECURITY ARCHITECTURE RENDERER (stdlib/osa)
+  // Cybersecurity, Firewalls, Threat Agents, and Cryptographic Vaults
+  // =========================================================================
+  if (isSecurity) {
+    const element = node.data?.securityElement || node.label.toLowerCase();
+    const isThreat = element.includes('threat') || element.includes('attacker');
+    const borderCol = isThreat ? 'border-red-500' : 'border-slate-300';
+    const stripCol = isThreat ? 'bg-red-700' : 'bg-slate-700';
+
+    return (
+      <div
+        id={node.id}
+        className={`absolute cursor-move select-none transition-shadow ${
+          isSelected ? 'ring-2 ring-red-500 ring-offset-2 shadow-lg' : 'hover:shadow-md'
+        }`}
+        style={{
+          left: node.x,
+          top: node.y,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
+          zIndex: isSelected ? 30 : 10
+        }}
+        onClick={onSelect}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className={`w-full h-full rounded-xl bg-white border ${borderCol} shadow-xs overflow-hidden flex flex-col`}>
+          <div className={`h-1.5 w-full ${stripCol}`} />
+          <div className="p-2.5 flex items-center gap-2.5 flex-1">
+            <OsaSecurityGlyph element={element} size={32} />
+            <div className="min-w-0 flex-1">
+              <div className={`text-[9px] font-sans font-bold uppercase tracking-wider ${isThreat ? 'text-red-700' : 'text-slate-600'}`}>
+                {node.sublabel || `OSA: ${element}`}
+              </div>
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  onBlur={handleCommitEdit}
+                  onKeyDown={handleKeyDown}
+                  className="text-xs font-bold text-gray-900 bg-white border border-red-500 rounded px-1 py-0.5 outline-none w-full"
+                />
+              ) : (
+                <div
+                  className="text-xs font-bold text-gray-900 truncate font-sans cursor-text"
+                  onDoubleClick={() => setIsEditing(true)}
+                >
+                  {node.label}
+                </div>
+              )}
+              {node.data?.description && (
+                <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                  {node.data.description}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {renderNodePorts()}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-red-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // 3A7. ELASTIC STACK OBSERVABILITY RENDERER (stdlib/elastic)
+  // Official Elastic Teal and Cluster Badges
+  // =========================================================================
+  if (isElastic) {
+    const component = node.data?.elasticComponent || node.label.toLowerCase();
+
+    return (
+      <div
+        id={node.id}
+        className={`absolute cursor-move select-none transition-shadow ${
+          isSelected ? 'ring-2 ring-teal-600 ring-offset-2 shadow-lg' : 'hover:shadow-md'
+        }`}
+        style={{
+          left: node.x,
+          top: node.y,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
+          zIndex: isSelected ? 30 : 10
+        }}
+        onClick={onSelect}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="w-full h-full rounded-xl bg-white border border-teal-200 shadow-xs overflow-hidden flex flex-col">
+          <div className="h-1.5 w-full bg-[#005571]" />
+          <div className="p-2.5 flex items-center gap-2.5 flex-1">
+            <ElasticGlyph component={component} size={32} />
+            <div className="min-w-0 flex-1">
+              <div className="text-[9px] font-sans font-bold uppercase tracking-wider text-[#005571]">
+                {node.sublabel || `Elastic: ${component}`}
+              </div>
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  onBlur={handleCommitEdit}
+                  onKeyDown={handleKeyDown}
+                  className="text-xs font-bold text-gray-900 bg-white border border-teal-600 rounded px-1 py-0.5 outline-none w-full font-mono"
+                />
+              ) : (
+                <div
+                  className="text-xs font-bold text-gray-900 truncate font-sans cursor-text"
+                  onDoubleClick={() => setIsEditing(true)}
+                >
+                  {node.label}
+                </div>
+              )}
+              {node.data?.description && (
+                <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                  {node.data.description}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {renderNodePorts()}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-teal-600 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // 3A8. TECH LOGOS STDLIB RENDERER (stdlib/logos)
+  // Official Developer & Infrastructure Tech Badges
+  // =========================================================================
+  if (isLogo) {
+    const logoName = node.data?.logoName || (spriteMatch ? spriteMatch[1].toLowerCase().replace(/[-_]/g, '') : '') || node.type.replace('logo-', '') || node.label.toLowerCase();
+    const cleanLabel = node.label.replace(/^<\$[a-zA-Z0-9_]+>\\n?|\\n?<\$[a-zA-Z0-9_]+>/gi, '').trim();
+
+    return (
+      <div
+        id={node.id}
+        className={`absolute cursor-move select-none transition-shadow ${
+          isSelected ? 'ring-2 ring-blue-600 ring-offset-2 shadow-lg' : 'hover:shadow-md'
+        }`}
+        style={{
+          left: node.x,
+          top: node.y,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 60,
+          minHeight: 40,
+          zIndex: isSelected ? 30 : 10
+        }}
+        onClick={onSelect}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="w-full h-full rounded-xl bg-white border border-slate-300 shadow-xs overflow-hidden flex flex-col">
+          <div className="h-1.5 w-full bg-slate-700" />
+          <div className="p-2.5 flex items-center gap-2.5 flex-1">
+            <TechLogoGlyph logo={logoName} size={36} />
+            <div className="min-w-0 flex-1">
+              <div className="text-[9px] font-sans font-bold uppercase tracking-wider text-slate-500">
+                {node.sublabel || `<<${logoName}>>`}
+              </div>
+              {isEditing ? (
+                <input
+                  ref={inputRef}
+                  value={editLabel}
+                  onChange={(e) => setEditLabel(e.target.value)}
+                  onBlur={handleCommitEdit}
+                  onKeyDown={handleKeyDown}
+                  className="text-xs font-bold text-gray-900 bg-white border border-blue-600 rounded px-1 py-0.5 outline-none w-full font-mono"
+                />
+              ) : (
+                <div
+                  className="text-xs font-bold text-gray-900 truncate font-sans cursor-text"
+                  onDoubleClick={() => setIsEditing(true)}
+                >
+                  {renderPlantUMLFormattedText(cleanLabel || node.label)}
+                </div>
+              )}
+              {node.data?.description && (
+                <div className="text-[10px] text-gray-500 truncate mt-0.5">
+                  {renderPlantUMLFormattedText(node.data.description)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {renderNodePorts()}
+
+        {/* Corner Resize Handle */}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-slate-600 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
             title="Drag to resize element"
             onMouseDown={(e) => onStartResize(node.id, 'se', e)}
           />
@@ -1142,6 +1539,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             zIndex: isSelected ? 4 : (isDropTarget ? 5 : 2)
           }}
           onClick={onSelect}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
         >
           {isDropTarget && (
             <div className="absolute -top-3 right-4 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold tracking-tight shadow-md pointer-events-none flex items-center gap-1 z-30 animate-pulse">
@@ -1152,6 +1551,22 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
             [Domain Boundary: {node.label}]
           </div>
+
+          {/* Ports */}
+          {renderNodePorts()}
+
+          {/* Corner Resize Handle */}
+          {isSelected && onStartResize && (
+            <div
+              data-drag-handle="true"
+              className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-white border-2 border-[#c2652a] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+              title="Drag to resize boundary"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                onStartResize(node.id, 'se', e);
+              }}
+            />
+          )}
         </div>
       );
     }
@@ -1229,7 +1644,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </div>
         </div>
 
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
@@ -1309,7 +1724,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </div>
         </div>
 
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
@@ -1327,6 +1742,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   // 3D. ACTIVITY & STATE SPECIALIZED SHAPES (Start, Stop, Decision, Fork)
   // =========================================================================
   if (isActivityStart) {
+    const startW = (node.width && node.width <= 60) ? node.width : 30;
+    const startH = (node.height && node.height <= 60) ? node.height : 30;
     return (
       <div
         id={node.id}
@@ -1336,21 +1753,34 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 30,
-          height: node.height || 30,
+          width: startW,
+          height: startH,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <ActivityStartShape size={Math.min(node.width || 26, node.height || 26)} color={colorConfig.borderHex || '#000000'} />
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        <ActivityStartShape size={Math.min(startW - 4, startH - 4)} color={colorConfig.borderHex || '#000000'} />
+        {renderNodePorts()}
+        {isSelected && onStartResize && (
+          <div
+            data-drag-handle="true"
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#c2652a] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onStartResize(node.id, 'se', e);
+            }}
+          />
+        )}
       </div>
     );
   }
 
   if (isActivityStop) {
+    const stopW = (node.width && node.width <= 60) ? node.width : 34;
+    const stopH = (node.height && node.height <= 60) ? node.height : 34;
     return (
       <div
         id={node.id}
@@ -1360,21 +1790,34 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 32,
-          height: node.height || 32,
+          width: stopW,
+          height: stopH,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <ActivityStopShape size={Math.min(node.width || 28, node.height || 28)} color={colorConfig.borderHex || '#000000'} />
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        <ActivityStopShape size={Math.min(stopW - 4, stopH - 4)} color={colorConfig.borderHex || '#000000'} />
+        {renderNodePorts()}
+        {isSelected && onStartResize && (
+          <div
+            data-drag-handle="true"
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#c2652a] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onStartResize(node.id, 'se', e);
+            }}
+          />
+        )}
       </div>
     );
   }
 
   if (isSyncBar) {
+    const syncW = node.width || 120;
+    const syncH = (node.height && node.height <= 30) ? node.height : 8;
     return (
       <div
         id={node.id}
@@ -1382,16 +1825,27 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 120,
-          height: node.height || 8,
+          width: syncW,
+          height: syncH,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <SyncBarShape width={node.width || 120} height={node.height || 8} color={colorConfig.borderHex || '#000000'} isSelected={isSelected} />
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        <SyncBarShape width={syncW} height={syncH} color={colorConfig.borderHex || '#000000'} isSelected={isSelected} />
+        {renderNodePorts()}
+        {isSelected && onStartResize && (
+          <div
+            data-drag-handle="true"
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#c2652a] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onStartResize(node.id, 'se', e);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -1399,6 +1853,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   if (isDecision) {
     const strokeColor = colorConfig.borderHex || '#A80036';
     const fillColor = colorConfig.bgHex || '#FEFECE';
+    const decW = (node.width && node.width <= 160) ? node.width : 110;
+    const decH = (node.height && node.height <= 100) ? node.height : 64;
     return (
       <div
         id={node.id}
@@ -1406,15 +1862,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 110,
-          height: node.height || 64,
+          width: decW,
+          height: decH,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <DecisionDiamondShape width={node.width || 110} height={node.height || 64} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />
+        <DecisionDiamondShape width={decW} height={decH} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />
         <div className="relative z-10 w-full h-full flex flex-col items-center justify-center p-2 text-center">
           {isEditing ? (
             <input
@@ -1434,13 +1890,26 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             </div>
           )}
         </div>
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
+        {isSelected && onStartResize && (
+          <div
+            data-drag-handle="true"
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#A80036] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onStartResize(node.id, 'se', e);
+            }}
+          />
+        )}
       </div>
     );
   }
 
   // Activity Flow Final (Circle with X)
   if (isActivityFlowFinal) {
+    const flowW = (node.width && node.width <= 60) ? node.width : 32;
+    const flowH = (node.height && node.height <= 60) ? node.height : 32;
     return (
       <div
         id={node.id}
@@ -1450,16 +1919,27 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 32,
-          height: node.height || 32,
+          width: flowW,
+          height: flowH,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <ActivityFlowFinalShape size={Math.min(node.width || 28, node.height || 28)} color={colorConfig.borderHex || '#000000'} />
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        <ActivityFlowFinalShape size={Math.min(flowW - 4, flowH - 4)} color={colorConfig.borderHex || '#000000'} />
+        {renderNodePorts()}
+        {isSelected && onStartResize && (
+          <div
+            data-drag-handle="true"
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#c2652a] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onStartResize(node.id, 'se', e);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -1467,6 +1947,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   // State Machine History ([H] or [H*])
   if (isStateHistory) {
     const isDeep = node.label === '[H*]' || Boolean(node.data?.isDeep);
+    const histW = (node.width && node.width <= 60) ? node.width : 34;
+    const histH = (node.height && node.height <= 60) ? node.height : 34;
     return (
       <div
         id={node.id}
@@ -1476,8 +1958,8 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         style={{
           left: node.x,
           top: node.y,
-          width: node.width || 34,
-          height: node.height || 34,
+          width: histW,
+          height: histH,
           zIndex: isSelected ? 30 : 10
         }}
         onClick={onSelect}
@@ -1485,12 +1967,23 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         onMouseLeave={() => setIsHovered(false)}
       >
         <StateHistoryShape
-          size={Math.min(node.width || 32, node.height || 32)}
+          size={Math.min(histW - 2, histH - 2)}
           isDeep={isDeep}
           color={colorConfig.borderHex || '#A80036'}
           fill={colorConfig.bgHex || '#FEFECE'}
         />
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
+        {isSelected && onStartResize && (
+          <div
+            data-drag-handle="true"
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#A80036] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onStartResize(node.id, 'se', e);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -1524,7 +2017,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           onUpdateContent={(newContent) => onUpdate({ data: { ...node.data, saltContent: newContent, embeddedContent: newContent } })}
           onUpdateTitle={(newTitle) => onUpdate({ label: newTitle })}
         />
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
         {isSelected && onStartResize && (
           <div
             className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-blue-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
@@ -1567,7 +2060,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           onUpdateContent={(newContent) => onUpdate({ data: { ...node.data, embeddedContent: newContent } })}
           onUpdateTitle={(newTitle) => onUpdate({ label: newTitle })}
         />
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
         {isSelected && onStartResize && (
           <div
             className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-amber-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
@@ -1610,7 +2103,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           onUpdateFormula={(newFormula) => onUpdate({ data: { ...node.data, mathFormula: newFormula, embeddedContent: newFormula } })}
           onUpdateTitle={(newTitle) => onUpdate({ label: newTitle })}
         />
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
         {isSelected && onStartResize && (
           <div
             className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#A80036] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
@@ -1655,7 +2148,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           onUpdateCode={(newCode) => onUpdate({ data: { ...node.data, wbsCode: newCode } })}
           onUpdateTitle={(newTitle) => onUpdate({ label: newTitle })}
         />
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
         {isSelected && onStartResize && (
           <div
             className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-emerald-500 rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
@@ -1717,7 +2210,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             {node.label}
           </span>
         )}
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
+        {renderNodePorts()}
         {isSelected && onStartResize && (
           <div
             className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#A80036] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
@@ -1827,41 +2320,74 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           </div>
         )}
 
-        {/* 4A2. Specific PlantUML Frame Header Cut-out Tab Labeling */}
+        {/* 4A2. Specific PlantUML Frame Header Cut-out Tab Labeling & Body */}
         {isFrame && (
-          <div className="absolute top-0 left-2.5 h-[24px] max-w-[280px] flex items-center pr-3 z-20 overflow-hidden select-none">
-            <span className="text-[9px] font-mono text-[#A80036] font-bold uppercase tracking-wider mr-1.5 shrink-0">
-              {node.data?.frameKind || 'frame'}
-            </span>
-            {node.data?.condition && (
-              <span className="text-[9px] font-mono text-emerald-800 font-semibold mr-1.5 shrink-0 bg-emerald-50 px-1 rounded truncate max-w-[120px]" title={node.data.condition}>
-                [{node.data.condition}]
+          <>
+            <div className="absolute top-0 left-2.5 h-[24px] max-w-[320px] flex items-center pr-3 z-20 overflow-hidden select-none">
+              <span className="text-[9px] font-mono text-[#A80036] font-bold uppercase tracking-wider mr-1.5 shrink-0">
+                {node.data?.frameKind || 'frame'}
               </span>
+              {node.data?.condition && (
+                <span className="text-[9px] font-mono text-emerald-800 font-semibold mr-1.5 shrink-0 bg-emerald-50 px-1 rounded truncate max-w-[120px]" title={node.data.condition}>
+                  [{node.data.condition}]
+                </span>
+              )}
+              {node.sublabel && (
+                <span className="text-[9px] font-mono text-gray-600 mr-1 italic shrink-0">
+                  {node.sublabel.startsWith('<<') ? node.sublabel : `<<${node.sublabel}>>`}
+                </span>
+              )}
+              {!isMultiLineFrame && (
+                isEditing ? (
+                  <input
+                    ref={inputRef}
+                    value={editLabel}
+                    onChange={(e) => setEditLabel(e.target.value)}
+                    onBlur={handleCommitEdit}
+                    onKeyDown={handleKeyDown}
+                    className="text-xs font-bold text-gray-900 bg-white border border-[#A80036] rounded px-1 py-0 outline-none w-full shadow-xs"
+                  />
+                ) : (
+                  <span
+                    className="text-xs font-bold text-[#181818] font-sans truncate cursor-text"
+                    onDoubleClick={() => setIsEditing(true)}
+                    title="Double click to rename frame"
+                  >
+                    {node.label}
+                  </span>
+                )
+              )}
+            </div>
+
+            {/* If frame has rich multi-line body content, render inside the frame body */}
+            {isMultiLineFrame && (
+              <div className="relative z-10 w-full h-full pt-7 pb-2 px-3.5 flex flex-col text-left overflow-auto select-text font-sans pointer-events-auto">
+                <div className="text-xs font-bold text-[#181818] tracking-tight">
+                  {frameTitle}
+                </div>
+                {frameSubtitle && (
+                  <div className="text-[10.5px] italic text-gray-600 mt-0.5">
+                    {frameSubtitle}
+                  </div>
+                )}
+                {bodyLines.length > 0 && (
+                  <div className="mt-1.5 text-[11px] leading-relaxed text-[#2c2420] whitespace-pre-wrap">
+                    {bodyLines.map((bLine, bIdx) => {
+                      const trimmed = bLine.trim();
+                      if (!trimmed) {
+                        return <div key={bIdx} className="h-1.5" />;
+                      }
+                      return (
+                        <div key={bIdx} className="my-0.5">
+                          {renderFormattedInlineText(bLine)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             )}
-            {node.sublabel && (
-              <span className="text-[9px] font-mono text-gray-600 mr-1 italic shrink-0">
-                {node.sublabel.startsWith('<<') ? node.sublabel : `<<${node.sublabel}>>`}
-              </span>
-            )}
-            {isEditing ? (
-              <input
-                ref={inputRef}
-                value={editLabel}
-                onChange={(e) => setEditLabel(e.target.value)}
-                onBlur={handleCommitEdit}
-                onKeyDown={handleKeyDown}
-                className="text-xs font-bold text-gray-900 bg-white border border-[#A80036] rounded px-1 py-0 outline-none w-full shadow-xs"
-              />
-            ) : (
-              <span
-                className="text-xs font-bold text-[#181818] font-sans truncate cursor-text"
-                onDoubleClick={() => setIsEditing(true)}
-                title="Double click to rename frame"
-              >
-                {node.label}
-              </span>
-            )}
-          </div>
+          </>
         )}
 
         {/* 4B. Specific PlantUML Note Content (Multiline formatted) */}
@@ -1885,7 +2411,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
                 onDoubleClick={() => setIsEditing(true)}
                 title="Double click to edit note"
               >
-                {node.data?.noteText || node.data?.description || node.label}
+                {renderPlantUMLFormattedText(node.data?.noteText || node.data?.description || node.label)}
               </div>
             )}
           </div>
@@ -1985,21 +2511,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         )}
 
         {/* Ports */}
-        {renderPorts(node.id, isHovered, isSelected, onStartConnection)}
-
-        {/* Quick Add Connected Node button on Right */}
-        {onQuickAddChild && isHovered && !isPackage && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onQuickAddChild(node.id);
-            }}
-            className="absolute -right-6 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-[#A80036] text-white flex items-center justify-center shadow-xs hover:scale-115 transition-transform z-40 cursor-pointer"
-            title="Quick add connected element (Click to open Connect menu)"
-          >
-            <Plus className="w-3 h-3" />
-          </button>
-        )}
+        {renderNodePorts()}
 
         {/* Corner Resize Handle */}
         {isSelected && onStartResize && (
@@ -2020,6 +2532,9 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const spot = getClassifierSpot();
   const isAbstract = node.type === 'abstract-class' || Boolean(node.data?.isAbstract);
 
+  const hasMembers = isErTable || isMap || (node.data?.attributes && node.data.attributes.length > 0) || (node.data?.methods && node.data.methods.length > 0);
+  const isEmptyClassifier = !hasMembers && !node.data?.generics && !node.sublabel;
+
   return (
     <div
       id={node.id}
@@ -2032,10 +2547,10 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         top: node.y,
         width: effectiveWidth,
         height: effectiveHeight,
-        minWidth: 60,
-        minHeight: 40,
+        minWidth: isEmptyClassifier ? 48 : 60,
+        minHeight: isEmptyClassifier ? 26 : 40,
         zIndex: isSelected ? 30 : 10,
-        filter: 'drop-shadow(2px 2px 2px rgba(0,0,0,0.15))'
+        filter: 'drop-shadow(1px 1px 2px rgba(0,0,0,0.12))'
       }}
       onClick={onSelect}
       onMouseEnter={() => setIsHovered(true)}
@@ -2053,7 +2568,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
 
       {/* Main Classifier Card */}
       <div 
-        className="w-full h-full flex-1 border overflow-hidden flex flex-col"
+        className={`w-full h-full flex-1 border overflow-hidden flex flex-col ${isEmptyClassifier ? 'rounded-xs' : ''}`}
         style={{ 
           backgroundColor: colorConfig.bgHex || '#FEFECE', 
           borderColor: colorConfig.borderHex || '#A80036' 
@@ -2061,7 +2576,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       >
         {/* Header with Spot Circle and Name */}
         <div 
-          className="p-2 border-b flex flex-col items-center justify-center text-center relative"
+          className={`${isEmptyClassifier ? 'h-full flex-1 px-2 py-0.5' : `p-1.5 ${hasMembers ? 'border-b' : 'h-full flex-1'}`} flex flex-col items-center justify-center text-center relative`}
           style={{ 
             backgroundColor: colorConfig.bgHex || '#FEFECE', 
             borderColor: colorConfig.borderHex || '#A80036' 
@@ -2324,7 +2839,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         )}
 
         {/* 3. Class / Interface Attributes & Methods */}
-        {isClassOrOO && !isMap && !isErTable && (
+        {isClassOrOO && !isMap && !isErTable && (hasMembers || isHovered) && (
           <div className="text-[11px] font-mono flex-1">
             {/* Attributes Partition */}
             <div className="p-2 border-b border-[#A80036]">
@@ -2551,7 +3066,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       </div>
 
       {/* Ports */}
-      {renderPorts(node.id, isHovered, isSelected, onStartConnection, onQuickAddChild)}
+      {renderNodePorts()}
 
       {/* Corner Resize Handle */}
       {isSelected && onStartResize && (
@@ -2583,9 +3098,18 @@ function renderPorts(
       <div
         className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center group/port"
         title="Connect from Top (Double-click to branch upwards)"
-        onMouseDown={(e) => onStartConnection(nodeId, 'top', e)}
+        onMouseDown={(e) => {
+          if (e.detail >= 2) {
+            e.stopPropagation();
+            e.preventDefault();
+            onQuickAddChild?.(nodeId, 'top');
+            return;
+          }
+          onStartConnection(nodeId, 'top', e);
+        }}
         onDoubleClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           onQuickAddChild?.(nodeId, 'top');
         }}
       >
@@ -2595,9 +3119,18 @@ function renderPorts(
       <div
         className="absolute top-1/2 -right-2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center group/port"
         title="Connect from Right (Double-click to branch right)"
-        onMouseDown={(e) => onStartConnection(nodeId, 'right', e)}
+        onMouseDown={(e) => {
+          if (e.detail >= 2) {
+            e.stopPropagation();
+            e.preventDefault();
+            onQuickAddChild?.(nodeId, 'right');
+            return;
+          }
+          onStartConnection(nodeId, 'right', e);
+        }}
         onDoubleClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           onQuickAddChild?.(nodeId, 'right');
         }}
       >
@@ -2607,9 +3140,18 @@ function renderPorts(
       <div
         className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center group/port"
         title="Connect from Bottom (Double-click to branch downwards)"
-        onMouseDown={(e) => onStartConnection(nodeId, 'bottom', e)}
+        onMouseDown={(e) => {
+          if (e.detail >= 2) {
+            e.stopPropagation();
+            e.preventDefault();
+            onQuickAddChild?.(nodeId, 'bottom');
+            return;
+          }
+          onStartConnection(nodeId, 'bottom', e);
+        }}
         onDoubleClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           onQuickAddChild?.(nodeId, 'bottom');
         }}
       >
@@ -2619,9 +3161,18 @@ function renderPorts(
       <div
         className="absolute top-1/2 -left-2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-[#A80036] shadow-xs cursor-crosshair hover:scale-125 transition-transform z-40 flex items-center justify-center group/port"
         title="Connect from Left (Double-click to branch left)"
-        onMouseDown={(e) => onStartConnection(nodeId, 'left', e)}
+        onMouseDown={(e) => {
+          if (e.detail >= 2) {
+            e.stopPropagation();
+            e.preventDefault();
+            onQuickAddChild?.(nodeId, 'left');
+            return;
+          }
+          onStartConnection(nodeId, 'left', e);
+        }}
         onDoubleClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           onQuickAddChild?.(nodeId, 'left');
         }}
       >

@@ -18,14 +18,11 @@ import {
   Loader2,
   Palette,
   Move,
-  Code,
-  Wand2,
-  Sun,
-  X,
-  Play
+  Sun
 } from 'lucide-react';
 import { GlobalCanvasSettings } from '../types';
 import { PlantUMLStylePanel } from './PlantUMLStylePanel';
+import { OfficialRenderControls } from './Navbar';
 
 interface OfficialRenderViewProps {
   code: string;
@@ -35,6 +32,7 @@ interface OfficialRenderViewProps {
   isPlainWhite?: boolean;
   onTogglePlainWhite?: () => void;
   onUpdateCode?: (newCode: string) => void;
+  onControlsChange?: (controls: OfficialRenderControls | null) => void;
 }
 
 export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({ 
@@ -44,7 +42,8 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
   isSequenceDiagram = false,
   isPlainWhite: externalPlainWhite,
   onTogglePlainWhite: externalTogglePlainWhite,
-  onUpdateCode
+  onUpdateCode,
+  onControlsChange
 }) => {
   const [svgUrl, setSvgUrl] = useState<string>('');
   const [pngUrl, setPngUrl] = useState<string>('');
@@ -79,23 +78,6 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
   const effectiveCode = useMemo(() => {
     return plumbSettingsIntoPlantUMLCode(code, settings, isSequenceDiagram);
   }, [code, settings, isSequenceDiagram]);
-
-  // Syntax Inspector Drawer state
-  const [isCodeDrawerOpen, setIsCodeDrawerOpen] = useState<boolean>(false);
-  const [editableCode, setEditableCode] = useState<string>(effectiveCode);
-
-  useEffect(() => {
-    setEditableCode(effectiveCode);
-  }, [effectiveCode]);
-
-  // Detect diagram type for top-bar badge
-  const detectedType = useMemo(() => {
-    const trimmed = (code || '').trim();
-    const match = trimmed.match(/^@start([a-z0-9_-]+)/i);
-    if (match) return `@start${match[1].toLowerCase()}`;
-    if (isSequenceDiagram) return '@startsequence';
-    return '@startuml';
-  }, [code, isSequenceDiagram]);
 
   // Interactive Pan & Zoom state (Draw.io scheme)
   const [zoom, setZoom] = useState<number>(1);
@@ -380,23 +362,28 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
     }
   }, [zoom, pan.x, pan.y]);
 
-  const handleCopyUrl = () => {
+  const fitToWindow = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
+  const handleCopyUrl = useCallback(() => {
     if (svgUrl) {
       navigator.clipboard.writeText(svgUrl);
       setCopiedUrl(true);
       setTimeout(() => setCopiedUrl(false), 2000);
     }
-  };
+  }, [svgUrl]);
 
-  const handleCopySvg = () => {
+  const handleCopySvg = useCallback(() => {
     if (svgContent) {
       navigator.clipboard.writeText(svgContent);
       setCopiedSvg(true);
       setTimeout(() => setCopiedSvg(false), 2000);
     }
-  };
+  }, [svgContent]);
 
-  const handleDownloadSvg = () => {
+  const handleDownloadSvg = useCallback(() => {
     if (!svgContent && !svgUrl) return;
     if (svgContent) {
       const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
@@ -418,9 +405,9 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
       a.click();
       a.remove();
     }
-  };
+  }, [svgContent, svgUrl]);
 
-  const handleDownloadPng = async () => {
+  const handleDownloadPng = useCallback(async () => {
     if (!pngUrl) return;
     try {
       const res = await fetch(pngUrl);
@@ -436,9 +423,9 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
     } catch {
       window.open(pngUrl, '_blank', 'noopener,noreferrer');
     }
-  };
+  }, [pngUrl]);
 
-  const handleCopyPngImage = async () => {
+  const handleCopyPngImage = useCallback(async () => {
     if (!pngUrl) return;
     setIsCopyingPng(true);
     try {
@@ -458,24 +445,50 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
     } finally {
       setIsCopyingPng(false);
     }
-  };
+  }, [pngUrl]);
 
-  const handleAutoFix = () => {
-    const fixed = autoFixPlantUMLSyntax(editableCode || effectiveCode);
-    setEditableCode(fixed);
-    if (onUpdateCode) {
-      onUpdateCode(fixed);
-    }
-    setRefreshKey(k => k + 1);
-  };
-
-  const handleApplyEditedCode = () => {
-    if (onUpdateCode) {
-      onUpdateCode(editableCode);
-    }
-    setRefreshKey(k => k + 1);
-    setIsCodeDrawerOpen(false);
-  };
+  // Publish SVG controls to parent navbar
+  useEffect(() => {
+    if (!onControlsChange) return;
+    onControlsChange({
+      zoom,
+      setZoom,
+      fitToWindow,
+      refresh: () => setRefreshKey(k => k + 1),
+      copySvg: handleCopySvg,
+      copyUrl: handleCopyUrl,
+      downloadSvg: handleDownloadSvg,
+      downloadPng: handleDownloadPng,
+      copyPngImage: handleCopyPngImage,
+      isCopyingPng,
+      copiedSvg,
+      copiedUrl,
+      copiedPng,
+      svgUrl,
+      pngUrl,
+      hasSvg: Boolean(svgContent || svgUrl),
+      isStylePanelOpen,
+      setIsStylePanelOpen
+    });
+    return () => onControlsChange(null);
+  }, [
+    onControlsChange,
+    zoom,
+    fitToWindow,
+    handleCopySvg,
+    handleCopyUrl,
+    handleDownloadSvg,
+    handleDownloadPng,
+    handleCopyPngImage,
+    isCopyingPng,
+    copiedSvg,
+    copiedUrl,
+    copiedPng,
+    svgUrl,
+    pngUrl,
+    svgContent,
+    isStylePanelOpen
+  ]);
 
   const canvasCursor = isPanning 
     ? 'cursor-grabbing' 
@@ -487,239 +500,6 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
     <div className="w-full h-full flex overflow-hidden relative bg-[#faf5ee]">
       {/* SVG Canvas Area */}
       <div className="flex-1 h-full flex flex-col relative overflow-hidden">
-        {/* Top Floating Control Bar */}
-        <div className="absolute top-4 right-4 max-w-[calc(100%-2rem)] z-20 flex items-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#d8d0c8] p-1.5 rounded-xl shadow-md text-xs select-none overflow-x-auto">
-          {/* Engine & Syntax Type Badge */}
-          <span className="text-[11px] font-semibold text-[#78706a] px-2 border-r border-[#d8d0c8] flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>PlantUML Server</span>
-            <span className="font-mono text-[10px] bg-[#f5ede4] text-[#c2652a] px-1.5 py-0.5 rounded-md font-bold">
-              {detectedType}
-            </span>
-          </span>
-
-          {/* Quick Syntax Editor Toggle */}
-          <button
-            id="btn-toggle-code-drawer"
-            onClick={() => setIsCodeDrawerOpen(!isCodeDrawerOpen)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-              isCodeDrawerOpen 
-                ? 'bg-[#3a302a] text-white border-[#3a302a] shadow-xs' 
-                : 'bg-white hover:bg-[#faf5ee] text-[#3a302a] border-[#d8d0c8]'
-            }`}
-            title="Inspect or edit plumbed PlantUML render syntax"
-          >
-            <Code className={`w-3.5 h-3.5 ${isCodeDrawerOpen ? 'text-amber-400' : 'text-[#c2652a]'}`} />
-            <span className="text-[11px] font-semibold">Syntax</span>
-          </button>
-
-          {/* PlantUML Style & Visual Options Toggle */}
-          {settings && onUpdateSettings && (
-            <button
-              onClick={() => setIsStylePanelOpen(!isStylePanelOpen)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                isStylePanelOpen 
-                  ? 'bg-[#c2652a] text-white border-[#c2652a] shadow-xs' 
-                  : 'bg-white hover:bg-[#faf5ee] text-[#3a302a] border-[#d8d0c8]'
-              }`}
-              title="Toggle PlantUML Visual Options Panel"
-            >
-              <Palette className={`w-3.5 h-3.5 ${isStylePanelOpen ? 'text-white' : 'text-[#c2652a]'}`} />
-              <span className="text-[11px] font-semibold">Visual Options</span>
-            </button>
-          )}
-
-          <div className="w-px h-4 bg-[#d8d0c8] mx-0.5" />
-
-          {/* Plain White / Sahara Canvas Background Toggle */}
-          <button
-            id="btn-svg-toggle-plain-white"
-            onClick={handleTogglePlainWhite}
-            className={`p-1 rounded-lg transition-colors cursor-pointer ${
-              isPlainWhite 
-                ? 'bg-amber-100 text-[#c2652a] border border-amber-300' 
-                : 'hover:bg-[#faf5ee] text-[#3a302a]'
-            }`}
-            title={isPlainWhite ? "Switch to Sahara Grid Canvas" : "Switch to Plain White Canvas"}
-          >
-            <Sun className={`w-4 h-4 ${isPlainWhite ? 'text-[#c2652a]' : 'text-[#78706a]'}`} />
-          </button>
-
-          <div className="w-px h-4 bg-[#d8d0c8] mx-0.5" />
-
-          {/* Zoom Controls */}
-          <button
-            onClick={() => setZoom(z => Math.max(0.15, +(z * 0.85).toFixed(2)))}
-            className="p-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Zoom Out (Ctrl + Wheel down)"
-          >
-            <ZoomOut className="w-4 h-4" />
-          </button>
-          <span 
-            onClick={() => {
-              setZoom(1);
-              setPan({ x: 0, y: 0 });
-            }}
-            className="text-[11px] font-mono text-[#78706a] min-w-[44px] text-center hover:text-[#c2652a] cursor-pointer"
-            title="Click to reset zoom to 100%"
-          >
-            {Math.round(zoom * 100)}%
-          </span>
-          <button
-            onClick={() => setZoom(z => Math.min(5.0, +(z * 1.15).toFixed(2)))}
-            className="p-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Zoom In (Ctrl + Wheel up)"
-          >
-            <ZoomIn className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => {
-              setZoom(1);
-              setPan({ x: 0, y: 0 });
-            }}
-            className="p-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Reset Zoom & Pan"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-
-          <div className="w-px h-4 bg-[#d8d0c8] mx-0.5" />
-
-          {/* Reload button */}
-          <button
-            onClick={() => setRefreshKey(k => k + 1)}
-            className="p-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Refresh diagram render"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-[#c2652a]' : ''}`} />
-          </button>
-
-          {/* Copy SVG Markup button */}
-          <button
-            onClick={handleCopySvg}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Copy raw SVG vector XML code"
-          >
-            {copiedSvg ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-[#78706a]" />}
-            <span className="text-[11px]">Copy SVG</span>
-          </button>
-
-          {/* Copy SVG URL */}
-          <button
-            onClick={handleCopyUrl}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Copy direct PlantUML server SVG URL"
-          >
-            {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <ExternalLink className="w-3.5 h-3.5 text-[#78706a]" />}
-            <span className="text-[11px]">Copy URL</span>
-          </button>
-
-          {/* Download SVG */}
-          <button
-            onClick={handleDownloadSvg}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Download vector SVG file"
-          >
-            <Download className="w-3.5 h-3.5 text-[#78706a]" />
-            <span className="text-[11px]">SVG</span>
-          </button>
-
-          {/* Download PNG */}
-          <button
-            onClick={handleDownloadPng}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer"
-            title="Download raster PNG image"
-          >
-            <Download className="w-3.5 h-3.5 text-[#78706a]" />
-            <span className="text-[11px]">PNG</span>
-          </button>
-
-          {/* Copy PNG Image */}
-          <button
-            onClick={handleCopyPngImage}
-            disabled={isCopyingPng}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] transition-colors cursor-pointer disabled:opacity-50"
-            title="Copy PNG image bitmap to clipboard (paste into Figma, Slack, Word, Docs)"
-          >
-            {copiedPng ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-[#78706a]" />}
-            <span className="text-[11px]">{copiedPng ? 'Copied Image' : isCopyingPng ? 'Copying...' : 'Copy Image'}</span>
-          </button>
-
-          {/* Open in new tab */}
-          {svgUrl && (
-            <a
-              href={svgUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#c2652a] text-white hover:bg-[#a95420] transition-colors cursor-pointer font-medium shadow-xs"
-              title="Open raw SVG in new browser tab"
-            >
-              <span className="text-[11px]">Open Link</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
-        </div>
-
-        {/* Quick Syntax Inspector Drawer */}
-        {isCodeDrawerOpen && (
-          <div 
-            id="svg-syntax-drawer"
-            className="absolute top-16 right-4 z-30 w-96 max-h-[70vh] flex flex-col bg-[#1f1b18] text-[#e8dfd5] border border-[#4a4036] rounded-2xl shadow-2xl overflow-hidden"
-          >
-            <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-[#3a302a] bg-[#161311]">
-              <div className="flex items-center gap-2">
-                <Code className="w-4 h-4 text-[#c2652a]" />
-                <span className="text-xs font-semibold text-white">Plumbed PlantUML Syntax</span>
-              </div>
-              <button
-                onClick={() => setIsCodeDrawerOpen(false)}
-                className="p-1 rounded-lg hover:bg-[#2b2420] text-[#a89b91] hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="p-3 flex-1 flex flex-col gap-2 overflow-hidden">
-              <p className="text-[11px] text-[#a89b91]">
-                The exact PlantUML code with all visual styling directives plumbed and sent to the rendering engine:
-              </p>
-              <textarea
-                value={editableCode}
-                onChange={(e) => setEditableCode(e.target.value)}
-                className="w-full flex-1 min-h-[220px] bg-[#141210] border border-[#3a302a] rounded-lg p-2.5 text-xs font-mono text-[#f3ede6] focus:outline-none focus:border-[#c2652a] resize-none selection:bg-[#c2652a]/40"
-                spellCheck={false}
-              />
-              <div className="flex items-center justify-between pt-1">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(editableCode);
-                  }}
-                  className="px-2.5 py-1 text-[11px] text-[#a89b91] hover:text-white bg-[#2b2420] rounded-md transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <Copy className="w-3 h-3" />
-                  <span>Copy Code</span>
-                </button>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleAutoFix}
-                    className="px-2.5 py-1 text-[11px] text-[#c2652a] hover:text-white hover:bg-[#c2652a] bg-[#2b2420] border border-[#c2652a]/40 rounded-md transition-all cursor-pointer flex items-center gap-1 font-medium"
-                    title="Sanitize syntax and auto-fix theme typos"
-                  >
-                    <Wand2 className="w-3 h-3" />
-                    <span>Auto-Fix</span>
-                  </button>
-                  <button
-                    onClick={handleApplyEditedCode}
-                    className="px-3 py-1 text-[11px] text-white bg-[#c2652a] hover:bg-[#a95420] rounded-md transition-colors cursor-pointer flex items-center gap-1 font-semibold shadow-xs"
-                  >
-                    <Play className="w-3 h-3 fill-current" />
-                    <span>Apply & Render</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* SVG Canvas Area with Interactive Pan and Zoom (Draw.io scheme) */}
         <div 
           id="official-svg-container"
@@ -766,26 +546,11 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
                 )}
                 <div className="flex items-center gap-2 mt-3">
                   <button
-                    onClick={handleAutoFix}
-                    className="px-3.5 py-1.5 bg-[#c2652a] text-white text-xs font-medium rounded-lg hover:bg-[#a95420] transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
-                    title="Automatically repair theme typos and syntax tags"
-                  >
-                    <Wand2 className="w-3.5 h-3.5" />
-                    <span>Auto-Fix & Retry</span>
-                  </button>
-                  <button
-                    onClick={() => setIsCodeDrawerOpen(true)}
-                    className="px-3 py-1.5 bg-white text-[#78706a] border border-[#d8d0c8] text-xs font-medium rounded-lg hover:bg-[#f5ede4] transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                  >
-                    <Code className="w-3.5 h-3.5 text-[#c2652a]" />
-                    <span>Inspect & Edit Code</span>
-                  </button>
-                  <button
                     onClick={() => setRefreshKey(k => k + 1)}
-                    className="px-3 py-1.5 bg-[#f5ede4] text-[#4a4036] text-xs font-medium rounded-lg hover:bg-[#ede3d8] transition-colors cursor-pointer flex items-center gap-1.5"
+                    className="px-3.5 py-1.5 bg-[#c2652a] text-white text-xs font-medium rounded-lg hover:bg-[#a95420] transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Retry</span>
+                    <span>Retry Render</span>
                   </button>
                 </div>
               </div>
@@ -833,6 +598,26 @@ export const OfficialRenderView: React.FC<OfficialRenderViewProps> = ({
             <Move className="w-3.5 h-3.5 text-[#c2652a]" />
             <span>Right-click or Middle-click or Space+Drag to pan • Wheel to scroll / Ctrl+Wheel to zoom</span>
           </div>
+
+          {/* Bottom-right Floating Toolbar: Plain White Background Toggle */}
+          <aside
+            aria-label="SVG Canvas Display Controls"
+            className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 bg-white/95 backdrop-blur-md border border-[#d8d0c8] p-1.5 rounded-xl shadow-md text-xs select-none"
+          >
+            <button
+              id="btn-svg-bottom-toggle-plain-white"
+              onClick={handleTogglePlainWhite}
+              className={`px-2 py-1 rounded-lg transition-colors flex items-center gap-1.5 text-xs cursor-pointer ${
+                isPlainWhite 
+                  ? 'bg-[#c2652a] text-white font-medium shadow-xs' 
+                  : 'text-[#78706a] hover:bg-[#faf5ee] hover:text-[#2b2622]'
+              }`}
+              title={isPlainWhite ? 'Canvas Background: Plain White (Click to switch to Warm Grid)' : 'Canvas Background: Warm Grid (Click to switch to Plain White)'}
+            >
+              <div className={`w-3.5 h-3.5 rounded-xs border transition-colors ${isPlainWhite ? 'border-white bg-white shadow-xs' : 'border-[#8f8377] bg-[#faf5ee]'}`} />
+              <span className="font-mono text-[11px]">Plain White</span>
+            </button>
+          </aside>
         </div>
       </div>
 

@@ -10,14 +10,13 @@ import {
   Database, 
   Boxes, 
   Tag, 
-  Palette, 
   Code, 
   Move,
   ArrowRight,
   HelpCircle
 } from 'lucide-react';
 import { DiagramNode, ErColumn, MapEntry, ObjectSlot, AssetItem } from '../types';
-import { COLOR_THEMES, UNIFIED_ASSETS } from '../utils/assetsData';
+import { UNIFIED_ASSETS } from '../utils/assetsData';
 import { getFriendlyNodeTypeName } from './QuickActionBar';
 
 interface ElementInspectorProps {
@@ -39,7 +38,7 @@ export const ElementInspector: React.FC<ElementInspectorProps> = ({
 }) => {
   if (!isOpen || !node) return null;
 
-  const [activeTab, setActiveTab] = useState<'content' | 'properties' | 'style'>('content');
+  const [activeTab, setActiveTab] = useState<'content' | 'properties'>('content');
 
   // Local draft states
   const [label, setLabel] = useState(node.label);
@@ -221,16 +220,6 @@ export const ElementInspector: React.FC<ElementInspectorProps> = ({
           }`}
         >
           Properties
-        </button>
-        <button
-          onClick={() => setActiveTab('style')}
-          className={`flex-1 py-2 text-center border-b-2 transition-colors cursor-pointer ${
-            activeTab === 'style'
-              ? 'border-[#c2652a] text-[#c2652a] bg-white'
-              : 'border-transparent text-[#78706a] hover:text-[#2c2420]'
-          }`}
-        >
-          Appearance
         </button>
       </div>
 
@@ -792,39 +781,6 @@ export const ElementInspector: React.FC<ElementInspectorProps> = ({
               </span>
             </div>
 
-          </div>
-        )}
-
-        {/* ================= TAB 3: APPEARANCE & STYLING ================= */}
-        {activeTab === 'style' && (
-          <div className="space-y-3.5">
-            <div>
-              <label className="text-[10px] font-bold uppercase tracking-wider text-[#78706a] block mb-1.5">
-                Color Palette Theme
-              </label>
-              <div className="space-y-1.5">
-                {COLOR_THEMES.map(theme => (
-                  <button
-                    key={theme.id}
-                    onClick={() => onUpdateNode({ color: theme.id })}
-                    className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-                      node.color === theme.id 
-                        ? 'bg-[#c2652a]/10 text-[#c2652a] font-bold border border-[#c2652a]/40' 
-                        : 'bg-[#faf5ee] hover:bg-[#ebd9c8] text-[#3a302a] border border-transparent'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span 
-                        className="w-4 h-4 rounded-full border border-black/10 shrink-0 shadow-2xs"
-                        style={{ backgroundColor: theme.hex }}
-                      />
-                      <span>{theme.name}</span>
-                    </div>
-                    {node.color === theme.id && <Check className="w-3.5 h-3.5 text-[#c2652a]" />}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 

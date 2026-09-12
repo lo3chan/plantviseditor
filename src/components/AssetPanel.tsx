@@ -14,7 +14,7 @@ import {
   User, 
   Box, 
   FileCode, 
-  ListFilter, 
+  ListFilter,
   Sparkles, 
   GitBranch, 
   Lightbulb, 
@@ -143,8 +143,8 @@ export const AssetPanel: React.FC<AssetPanelProps> = ({
         </button>
       </div>
 
-      {/* Search Input & Category Dropdown */}
-      <div className="px-3 pt-2.5 pb-2 space-y-2 border-b border-[#d8d0c8]/40">
+      {/* Search Input */}
+      <div className="px-3 pt-2.5 pb-2 border-b border-[#d8d0c8]/40">
         <div className="relative flex items-center">
           <Search className="w-3.5 h-3.5 absolute left-2.5 text-[#9a9088]" />
           <input
@@ -154,29 +154,6 @@ export const AssetPanel: React.FC<AssetPanelProps> = ({
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full text-xs pl-8 pr-2.5 py-1.5 bg-white border border-[#d8d0c8]/70 rounded-lg text-[#3a302a] placeholder-[#9a9088] focus:border-[#c2652a] focus:ring-1 focus:ring-[#c2652a] outline-none transition-all"
           />
-        </div>
-
-        {/* Category Dropdown Selector */}
-        <div className="relative">
-          <select
-            id="select-asset-category"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full text-xs py-1.5 pl-2.5 pr-7 bg-white border border-[#d8d0c8]/80 rounded-lg text-[#3a302a] font-medium focus:border-[#c2652a] focus:ring-1 focus:ring-[#c2652a] outline-none cursor-pointer appearance-none shadow-2xs"
-          >
-            <option value="all">All Models & Categories ({UNIFIED_ASSETS.length})</option>
-            {STRUCTURAL_CATEGORIES.map(cat => {
-              const count = UNIFIED_ASSETS.filter(a => a.category === cat.id).length;
-              return (
-                <option key={cat.id} value={cat.id}>
-                  {cat.label} ({count})
-                </option>
-              );
-            })}
-          </select>
-          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-[#78706a]">
-            <ListFilter className="w-3.5 h-3.5" />
-          </div>
         </div>
       </div>
 

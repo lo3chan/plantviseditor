@@ -76,7 +76,7 @@ export function generatePlantUML(diagram: DiagramData): string {
     }
 
     if (settings.handwritten) {
-      seqLines.push('skinparam handwritten true');
+      seqLines.push('!option handwritten true');
     }
 
     if (settings.shadowing !== undefined) {
@@ -275,7 +275,7 @@ export function generatePlantUML(diagram: DiagramData): string {
   }
 
   if (settings.handwritten) {
-    lines.push('skinparam handwritten true');
+    lines.push('!option handwritten true');
   }
 
   // Corner geometry: diagonal chamfer or rounded corner
@@ -293,9 +293,6 @@ export function generatePlantUML(diagram: DiagramData): string {
   }
   if (settings.ranksep) {
     lines.push(`skinparam ranksep ${settings.ranksep}`);
-  }
-  if (settings.padding) {
-    lines.push(`skinparam padding ${settings.padding}`);
   }
   if (settings.margin) {
     lines.push(`skinparam margin ${settings.margin}`);
@@ -348,12 +345,17 @@ export function generatePlantUML(diagram: DiagramData): string {
   const hasC4 = (diagram.nodes || []).some(n => n.type.startsWith('c4-') || n.category === 'c4' || Boolean(n.data?.c4Type));
 
   const hasDomainStory = (diagram.nodes || []).some(n => n.type?.startsWith('domainstory') || n.category === 'domainstory' || Boolean(n.data?.domainStoryType));
+  const hasStateNodes = (diagram.nodes || []).some(n => n.type === 'state' || n.type === 'state-history');
   const hasAdaML = (diagram.nodes || []).some(n => n.type?.startsWith('adaml') || n.category === 'adaml' || Boolean(n.data?.adamlType));
   const hasAws = (diagram.nodes || []).some(n => n.category === 'aws' || n.type?.startsWith('aws-') || Boolean(n.data?.awsCategory) || n.data?.cloudProvider === 'aws');
   const hasAzure = (diagram.nodes || []).some(n => n.type?.startsWith('azure-') || n.type?.startsWith('cloud-azure') || n.data?.cloudProvider === 'azure');
   const hasGcp = (diagram.nodes || []).some(n => n.type?.startsWith('gcp-') || n.type?.startsWith('cloud-gcp') || n.data?.cloudProvider === 'gcp');
   const hasK8s = (diagram.nodes || []).some(n => n.type?.startsWith('k8s-') || n.type?.startsWith('cloud-k8s') || n.data?.cloudProvider === 'k8s');
   const hasCloudogu = (diagram.nodes || []).some(n => n.data?.cloudProvider === 'cloudogu' || n.type?.startsWith('cloud-tool'));
+  const hasEip = (diagram.nodes || []).some(n => n.category === 'eip' || Boolean(n.data?.eipPattern) || n.type?.startsWith('eip-'));
+  const hasSecurity = (diagram.nodes || []).some(n => n.category === 'security' || Boolean(n.data?.securityElement) || n.type?.startsWith('osa-') || n.type?.startsWith('security-'));
+  const hasElastic = (diagram.nodes || []).some(n => n.category === 'elastic' || Boolean(n.data?.elasticComponent) || n.type?.startsWith('elastic-'));
+  const hasLogos = (diagram.nodes || []).some(n => n.category === 'logo' || Boolean(n.data?.logoName) || n.type?.startsWith('logo-'));
 
   if (hasC4Deployment) {
     lines.push('!include <C4/C4_Deployment>');
@@ -367,6 +369,34 @@ export function generatePlantUML(diagram: DiagramData): string {
 
   if (hasArchimate) {
     lines.push('!include <archimate/Archimate>');
+  }
+
+  if (hasEip) {
+    lines.push('!include <eip/EIP-PlantUML>');
+  }
+
+  if (hasSecurity) {
+    lines.push('!include <osa/all>');
+  }
+
+  if (hasElastic) {
+    lines.push('!include <elastic/common>');
+    lines.push('!include <elastic/elasticsearch/elasticsearch>');
+    lines.push('!include <elastic/logstash/logstash>');
+    lines.push('!include <elastic/kibana/kibana>');
+  }
+
+  if (hasLogos) {
+    const usedLogos = new Set<string>();
+    (diagram.nodes || []).forEach(n => {
+      if (n.category === 'logo' || n.data?.logoName || n.type?.startsWith('logo-')) {
+        const logo = (n.data?.logoName || n.type?.replace('logo-', '') || n.label || 'docker').toLowerCase().replace(/[-_]/g, '');
+        usedLogos.add(logo);
+      }
+    });
+    usedLogos.forEach(logo => {
+      lines.push(`!include <logos/${logo}>`);
+    });
   }
 
   if (hasDomainStory) {
@@ -456,6 +486,9 @@ export function generatePlantUML(diagram: DiagramData): string {
       return;
     }
 
+    const isAnchorOrKernel = /^N\d+$/i.test(node.label || node.id) || node.id === 'Kernel' || node.label === 'Kernel';
+    if (isAnchorOrKernel) return;
+
     let bestContainer: DiagramNode | null = null;
     let bestArea = Infinity;
 
@@ -522,29 +555,122 @@ export function generatePlantUML(diagram: DiagramData): string {
         lines.push(`SystemDb(${id}, "${label}", ${desc})`);
       } else if (c4Type === 'system-queue') {
         lines.push(`SystemQueue(${id}, "${label}", ${desc})`);
+      } else if (c4Type === 'system-db-ext') {
+        lines.push(`SystemDb_Ext(${id}, "${label}", ${desc})`);
+      } else if (c4Type === 'system-queue-ext') {
+        lines.push(`SystemQueue_Ext(${id}, "${label}", ${desc})`);
       } else if (c4Type === 'container') {
         lines.push(`Container(${id}, "${label}", ${tech}, ${desc})`);
       } else if (c4Type === 'container-ext') {
         lines.push(`Container_Ext(${id}, "${label}", ${tech}, ${desc})`);
       } else if (c4Type === 'container-db') {
         lines.push(`ContainerDb(${id}, "${label}", ${tech}, ${desc})`);
+      } else if (c4Type === 'container-db-ext') {
+        lines.push(`ContainerDb_Ext(${id}, "${label}", ${tech}, ${desc})`);
       } else if (c4Type === 'container-queue') {
         lines.push(`ContainerQueue(${id}, "${label}", ${tech}, ${desc})`);
+      } else if (c4Type === 'container-queue-ext') {
+        lines.push(`ContainerQueue_Ext(${id}, "${label}", ${tech}, ${desc})`);
       } else if (c4Type === 'component') {
         lines.push(`Component(${id}, "${label}", ${tech}, ${desc})`);
       } else if (c4Type === 'component-ext') {
         lines.push(`Component_Ext(${id}, "${label}", ${tech}, ${desc})`);
       } else if (c4Type === 'component-db') {
         lines.push(`ComponentDb(${id}, "${label}", ${tech}, ${desc})`);
+      } else if (c4Type === 'component-db-ext') {
+        lines.push(`ComponentDb_Ext(${id}, "${label}", ${tech}, ${desc})`);
       } else if (c4Type === 'component-queue') {
         lines.push(`ComponentQueue(${id}, "${label}", ${tech}, ${desc})`);
+      } else if (c4Type === 'component-queue-ext') {
+        lines.push(`ComponentQueue_Ext(${id}, "${label}", ${tech}, ${desc})`);
       } else if (c4Type === 'deployment-node') {
         lines.push(`Deployment_Node(${id}, "${label}", ${tech || '"Host Instance"'})`);
+      } else if (c4Type === 'enterprise-boundary') {
+        lines.push(`Enterprise_Boundary(${id}, "${label}")`);
+      } else if (c4Type === 'container-boundary') {
+        lines.push(`Container_Boundary(${id}, "${label}")`);
       } else if (c4Type === 'boundary' || c4Type === 'system-boundary') {
         lines.push(`System_Boundary(${id}, "${label}")`);
       } else {
         lines.push(`System(${id}, "${label}", ${desc})`);
       }
+      return;
+    }
+
+    // Enterprise Integration Patterns (stdlib/eip)
+    if (node.category === 'eip' || Boolean(node.data?.eipPattern) || node.type.startsWith('eip-')) {
+      const pat = (node.data?.eipPattern || node.type.replace('eip-', '') || node.label).toLowerCase();
+      if (pat.includes('splitter')) {
+        lines.push(`Splitter(${id}, "${label}")`);
+      } else if (pat.includes('aggregator')) {
+        lines.push(`Aggregator(${id}, "${label}")`);
+      } else if (pat.includes('filter')) {
+        lines.push(`ContentFilter(${id}, "${label}")`);
+      } else if (pat.includes('wiretap') || pat.includes('wire_tap') || pat.includes('wire-tap')) {
+        lines.push(`WireTap(${id}, "${label}")`);
+      } else if (pat.includes('dead') || pat.includes('dlq')) {
+        lines.push(`DeadLetterChannel(${id}, "${label}")`);
+      } else if (pat.includes('translator') || pat.includes('transform')) {
+        lines.push(`MessageTranslator(${id}, "${label}")`);
+      } else if (pat.includes('store')) {
+        lines.push(`MessageStore(${id}, "${label}")`);
+      } else if (pat.includes('detour')) {
+        lines.push(`Detour(${id}, "${label}")`);
+      } else if (pat.includes('proxy')) {
+        lines.push(`SmartProxy(${id}, "${label}")`);
+      } else if (pat.includes('content') && pat.includes('router')) {
+        lines.push(`ContentBasedRouter(${id}, "${label}")`);
+      } else {
+        lines.push(`MessageRouter(${id}, "${label}")`);
+      }
+      return;
+    }
+
+    // Open Security Architecture (stdlib/osa)
+    if (node.category === 'security' || Boolean(node.data?.securityElement) || node.type.startsWith('osa-') || node.type.startsWith('security-')) {
+      const el = (node.data?.securityElement || node.type.replace(/^(osa|security)-/, '') || node.label).toLowerCase();
+      if (el.includes('threat') || el.includes('attacker')) {
+        lines.push(`ThreatAgent(${id}, "${label}")`);
+      } else if (el.includes('waf')) {
+        lines.push(`WAF(${id}, "${label}")`);
+      } else if (el.includes('vpn')) {
+        lines.push(`VPN(${id}, "${label}")`);
+      } else if (el.includes('bastion')) {
+        lines.push(`Bastion(${id}, "${label}")`);
+      } else if (el.includes('hsm') || el.includes('crypto')) {
+        lines.push(`HSM(${id}, "${label}")`);
+      } else if (el.includes('control')) {
+        lines.push(`SecurityControl(${id}, "${label}")`);
+      } else {
+        lines.push(`Firewall(${id}, "${label}")`);
+      }
+      return;
+    }
+
+    // Elastic Stack (stdlib/elastic)
+    if (node.category === 'elastic' || Boolean(node.data?.elasticComponent) || node.type.startsWith('elastic-')) {
+      const comp = (node.data?.elasticComponent || node.type.replace('elastic-', '') || node.label).toLowerCase();
+      const desc = node.data?.description ? `"${node.data.description.replace(/"/g, '\\"')}"` : '""';
+      if (comp.includes('kibana')) {
+        lines.push(`Kibana(${id}, "${label}", ${desc})`);
+      } else if (comp.includes('logstash')) {
+        lines.push(`Logstash(${id}, "${label}", ${desc})`);
+      } else if (comp.includes('beats')) {
+        lines.push(`Beats(${id}, "${label}", ${desc})`);
+      } else if (comp.includes('apm')) {
+        lines.push(`APM(${id}, "${label}", ${desc})`);
+      } else if (comp.includes('fleet')) {
+        lines.push(`Fleet(${id}, "${label}", ${desc})`);
+      } else {
+        lines.push(`Elasticsearch(${id}, "${label}", ${desc})`);
+      }
+      return;
+    }
+
+    // Tech Logos (stdlib/logos)
+    if (node.category === 'logo' || Boolean(node.data?.logoName) || node.type.startsWith('logo-')) {
+      const logo = (node.data?.logoName || node.type.replace('logo-', '') || node.label).toLowerCase().replace(/[-_]/g, '');
+      lines.push(`rectangle "<$${logo}>\\n${label}" as ${id}`);
       return;
     }
 
@@ -707,8 +833,10 @@ export function generatePlantUML(diagram: DiagramData): string {
       lines.push(`card "${label}" as ${id} <<salt>>`);
       lines.push(`note bottom of ${id}`);
       lines.push('  {{');
-      lines.push('    salt');
-      lines.push(content.split('\n').map(l => `    ${l}`).join('\n'));
+      lines.push('    @startsalt');
+      const cleanContent = content.replace(/^\s*(@startsalt|startsalt|salt)\s*\n?/i, '').replace(/\s*@endsalt\s*$/i, '');
+      lines.push(cleanContent.split('\n').map(l => `    ${l}`).join('\n'));
+      lines.push('    @endsalt');
       lines.push('  }}');
       lines.push('end note');
       return;
@@ -719,8 +847,10 @@ export function generatePlantUML(diagram: DiagramData): string {
       lines.push(`card "${label}" as ${id}`);
       lines.push(`note bottom of ${id}`);
       lines.push('  {{');
-      lines.push('    ditaa');
-      lines.push(content.split('\n').map(l => `    ${l}`).join('\n'));
+      lines.push('    @startditaa');
+      const cleanContent = content.replace(/^\s*(@startditaa|startditaa|ditaa)\s*\n?/i, '').replace(/\s*@endditaa\s*$/i, '');
+      lines.push(cleanContent.split('\n').map(l => `    ${l}`).join('\n'));
+      lines.push('    @endditaa');
       lines.push('  }}');
       lines.push('end note');
       return;
@@ -835,29 +965,29 @@ export function generatePlantUML(diagram: DiagramData): string {
       return;
     }
 
-    // Boundary & Grouping Containers (package, namespace, frame, folder, rectangle)
+    // Boundary & Grouping Containers (package, namespace, frame, folder, container rectangle)
+    const isExplicitContainer = Boolean(node.data?.isContainer) || 
+      node.category === 'container' || 
+      node.data?.containerType !== undefined || 
+      (containerChildrenMap.get(node.id) || []).length > 0;
+
     if (
       node.type === 'package' || 
       node.type === 'namespace' || 
       node.type === 'frame' || 
       node.type === 'folder' || 
-      node.type === 'rectangle' || 
-      node.category === 'container' || 
-      Boolean(node.data?.isContainer) || 
-      node.data?.containerType === 'frame' ||
-      node.data?.containerType === 'package' ||
-      node.data?.shape === 'package' ||
-      node.data?.shape === 'frame'
+      (node.type === 'rectangle' && isExplicitContainer) ||
+      (isExplicitContainer && (node.data?.shape === 'package' || node.data?.shape === 'frame'))
     ) {
       let kw = 'package';
-      if (node.type === 'frame' || node.data?.containerType === 'frame' || node.data?.shape === 'frame') {
+      if (node.type === 'rectangle' || node.data?.containerType === 'rectangle') {
+        kw = 'rectangle';
+      } else if (node.type === 'frame' || node.data?.containerType === 'frame' || node.data?.shape === 'frame') {
         kw = 'frame';
       } else if (node.type === 'folder' || node.data?.containerType === 'folder' || node.data?.shape === 'folder') {
         kw = 'folder';
       } else if (node.type === 'namespace' || node.data?.containerType === 'namespace') {
         kw = 'namespace';
-      } else if (node.type === 'rectangle' || node.data?.containerType === 'rectangle') {
-        kw = 'rectangle';
       } else if (node.type === 'node' || node.data?.containerType === 'node') {
         kw = 'node';
       }
@@ -875,9 +1005,23 @@ export function generatePlantUML(diagram: DiagramData): string {
       return;
     }
 
-    // Notes (single-line or multiline)
+    // Notes (single-line or multiline, attached or floating)
     if (node.type === 'note' || node.data?.shape === 'note') {
       const noteContent = node.data?.noteText || node.data?.description || label;
+      const targetId = node.data?.attachedToNodeId;
+      const dir = node.data?.noteDirection || 'right';
+
+      if (targetId && dir !== 'floating') {
+        if (noteContent.includes('\n')) {
+          lines.push(`note ${dir} of ${targetId}`);
+          noteContent.split('\n').forEach(l => lines.push(`  ${l}`));
+          lines.push('end note');
+        } else {
+          lines.push(`note ${dir} of ${targetId} : ${noteContent}`);
+        }
+        return;
+      }
+
       if (noteContent.includes('\n')) {
         lines.push(`note as ${id}`);
         noteContent.split('\n').forEach(l => lines.push(`  ${l}`));
@@ -955,12 +1099,16 @@ export function generatePlantUML(diagram: DiagramData): string {
         lines.push(`usecase "${label}" as ${id}${stereotype}`);
         break;
       case 'state':
+        lines.push(`state "${label}" as ${id}${stereotype}`);
         if (node.data?.attributes && node.data.attributes.length > 0) {
-          lines.push(`state "${label}" as ${id}${stereotype} {`);
-          node.data.attributes.forEach(attr => lines.push(`  ${attr}`));
-          lines.push('}');
-        } else {
-          lines.push(`state "${label}" as ${id}${stereotype}`);
+          node.data.attributes.forEach(attr => {
+            const trimmed = attr.trim();
+            if (trimmed.startsWith(`${id} :`) || trimmed.startsWith(`${id}:`)) {
+              lines.push(trimmed);
+            } else {
+              lines.push(`${id} : ${trimmed}`);
+            }
+          });
         }
         break;
       case 'state-history':
@@ -968,16 +1116,32 @@ export function generatePlantUML(diagram: DiagramData): string {
         lines.push(`state "${hTag}" as ${id}`);
         break;
       case 'activity-start':
-        lines.push(`circle "${label}" as ${id} <<start>>`);
+        if (hasStateNodes) {
+          lines.push(`state "${label}" as ${id} <<start>>`);
+        } else {
+          lines.push(`circle "${label}" as ${id} <<start>>`);
+        }
         break;
       case 'activity-stop':
-        lines.push(`circle "${label}" as ${id} <<stop>>`);
+        if (hasStateNodes) {
+          lines.push(`state "${label}" as ${id} <<end>>`);
+        } else {
+          lines.push(`circle "${label}" as ${id} <<stop>>`);
+        }
         break;
       case 'activity-flow-final':
-        lines.push(`circle "${label}" as ${id} <<flowfinal>>`);
+        if (hasStateNodes) {
+          lines.push(`state "${label}" as ${id} <<end>>`);
+        } else {
+          lines.push(`circle "${label}" as ${id} <<flowfinal>>`);
+        }
         break;
       case 'activity-decision':
-        lines.push(`diamond "${label}" as ${id}`);
+        if (hasStateNodes) {
+          lines.push(`state "${label}" as ${id} <<choice>>`);
+        } else {
+          lines.push(`diamond "${label}" as ${id}`);
+        }
         break;
       case 'activity-fork':
         lines.push(`state " " as ${id} <<fork>>`);
@@ -997,8 +1161,24 @@ export function generatePlantUML(diagram: DiagramData): string {
 
   // 3. Connectors & Relationships
   diagram.edges.forEach(edge => {
+    // Skip edges linking attached notes (rendered via note dir of Target)
+    const srcNode = diagram.nodes?.find(n => n.id === edge.source);
+    const tgtNode = diagram.nodes?.find(n => n.id === edge.target);
+    if ((srcNode?.type === 'note' && srcNode?.data?.attachedToNodeId) ||
+        (tgtNode?.type === 'note' && tgtNode?.data?.attachedToNodeId)) {
+      return;
+    }
+
     const src = sanitizeId(edge.source);
     const tgt = sanitizeId(edge.target);
+
+    // Hidden layout constraints
+    if (edge.isHidden || edge.style === 'hidden') {
+      const dir = edge.directionHint ? edge.directionHint : '';
+      lines.push(`${src} -[hidden]${dir}-> ${tgt}`);
+      return;
+    }
+
     const srcCard = edge.cardinalitySource ? `"${edge.cardinalitySource}" ` : '';
     const tgtCard = edge.cardinalityTarget ? ` "${edge.cardinalityTarget}"` : '';
     const readingDir = edge.readingDirection ? ` ${edge.readingDirection}` : '';
@@ -1073,10 +1253,10 @@ export function generatePlantUML(diagram: DiagramData): string {
         arrow = dirTag ? `x${colorTag}-${dirTag}-` : 'x--';
         break;
       case 'socket-ball':
-        arrow = '-0)';
+        arrow = '-(0-';
         break;
       case 'lollipop':
-        arrow = '()--';
+        arrow = '-()-';
         break;
       case 'dependency':
         arrow = dirTag || colorTag ? `.${colorTag}${dirTag}.>` : '..>';
@@ -1357,9 +1537,13 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
   const lines = cleanText.split('\n');
 
   // Detect if script is sequence diagram
-  // A diagram is structural if it contains class/component/state block definitions, C4 macros, or ERD relationships
+  // A diagram is structural if it contains class/component/state block definitions, structural declarations, stdlib macros, or ERD relationships
   const hasStructuralBlocks = /\b(class|interface|abstract\s+class|enum|struct|component|usecase|package|namespace|state|archimate)\s+[^{\n]*\{/i.test(cleanText) ||
-    /\b(Person|System|Container|Component|Rel)\s*\(/i.test(cleanText) ||
+    /^\s*together\s*\{/im.test(cleanText) ||
+    /^\s*note\s+(?:(?:top|right|bottom|left)\s+of|"|as\s+)/im.test(cleanText) ||
+    /^\s*(rectangle|node|artifact|folder|file|package|frame|cloud|database|storage|queue|card|stack|agent)\s+/im.test(cleanText) ||
+    /\b(Person|Person_Ext|System|System_Ext|SystemDb|SystemQueue|Container|Container_Ext|ContainerDb|ContainerQueue|Component|Component_Ext|Rel|Rel_Index|Enterprise_Boundary|Container_Boundary|System_Boundary|Splitter|Aggregator|WireTap|DeadLetterChannel|MessageRouter|ContentFilter|MessageTranslator|MessageStore|Detour|SmartProxy|Firewall|WAF|VPN|ThreatAgent|Bastion|HSM|SecurityControl|Elasticsearch|Logstash|Kibana|Beats|APM|Fleet|AWSLAMBDA|AMAZONDYNAMODB|AMAZONRDS|AMAZONS3|AzureFunction|AzureAppService|GCPCompute|GCPStorage|KubePod|KubeService|docker|kubernetes|k8s|kafka|postgresql|postgres|redis|react|nodejs|node|python|java|golang|rust|nginx)\s*\(/i.test(cleanText) ||
+    /!include\s*<(?:C4(?!.*Sequence)|eip|osa|elastic|logos|awslib|azure|gcp|kubernetes|domainstory|archimate|material|tupadr3|cloudogu)/i.test(cleanText) ||
     /(\|\|--|\}--|--\|\{|\*--|o--|<\|--|--\|>|\.\.\|\>)/.test(cleanText);
 
   const hasExplicitSequenceConstructs = 
@@ -1397,6 +1581,8 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     stereotype?: string;
     spot?: { character: string; colorHex: string };
     parentId?: string;
+    targetId?: string;
+    dir?: string;
     isContainer: boolean;
     lines: string[];
   }
@@ -1414,10 +1600,14 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     const rawLine = lines[i].trim();
     if (
       !rawLine || 
-      rawLine.startsWith("'") || 
-      rawLine.startsWith('@') || 
-      rawLine.toLowerCase() === 'allowmixing'
-    ) continue;
+      rawLine.startsWith('@start') || 
+      rawLine.startsWith('@end') ||
+      rawLine.startsWith("'") ||
+      rawLine.startsWith('//')
+    ) {
+      continue;
+    }
+    if (rawLine.startsWith('!')) continue;
 
     // Check !theme directive
     const themeMatch = rawLine.match(/^!theme\s+([a-zA-Z0-9_-]+)/i);
@@ -1453,7 +1643,7 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     } else if (/skinparam\s+monochrome\s+true/i.test(rawLine)) {
       settings.monochrome = true;
     }
-    if (rawLine.includes('skinparam handwritten true')) settings.handwritten = true;
+    if (rawLine.includes('skinparam handwritten true') || /!option\s+handwritten\s+true/i.test(rawLine)) settings.handwritten = true;
     if (/skinparam\s+shadowing\s+true/i.test(rawLine)) settings.shadowing = true;
     if (/skinparam\s+shadowing\s+false/i.test(rawLine)) settings.shadowing = false;
 
@@ -1476,8 +1666,53 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
 
     const currentBlock = blockStack.length > 0 ? blockStack[blockStack.length - 1] : null;
 
+    // Inside a multi-line NOTE block
+    if (currentBlock && currentBlock.type === 'note') {
+      if (/^end\s*note/i.test(rawLine)) {
+        blockStack.pop();
+        const noteText = currentBlock.lines.join('\n');
+        const id = currentBlock.id;
+        const targetId = currentBlock.targetId;
+        const dir = currentBlock.dir || 'right';
+
+        const node: DiagramNode = {
+          id,
+          type: 'note',
+          category: 'annotation',
+          label: noteText,
+          x: 0,
+          y: 0,
+          width: 200,
+          height: Math.max(80, 40 + currentBlock.lines.length * 18),
+          color: 'gold',
+          data: {
+            noteDirection: dir as any,
+            attachedToNodeId: targetId,
+            noteText,
+            ...(currentBlock.parentId ? { parentId: currentBlock.parentId } : {})
+          }
+        };
+        nodes.push(node);
+        nodeMap.set(id, node);
+
+        if (targetId) {
+          edges.push({
+            id: `edge_${targetId}_${id}_${edges.length}`,
+            source: targetId,
+            target: id,
+            style: 'dotted',
+            arrowType: 'none',
+            directionHint: dir as any
+          });
+        }
+      } else {
+        currentBlock.lines.push(rawLine);
+      }
+      continue;
+    }
+
     // Inside a multi-line LEAF block (e.g. entity, class, map, object, state, json, yaml)
-    if (currentBlock && !currentBlock.isContainer) {
+    if (currentBlock && !currentBlock.isContainer && currentBlock.type !== 'together') {
       if (rawLine === '}' || rawLine.endsWith('}')) {
         blockStack.pop();
         finishBlock(currentBlock, nodes, nodeMap);
@@ -1487,10 +1722,61 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
       continue;
     }
 
-    // Inside a CONTAINER block, check if this line closes the container
-    if (currentBlock && currentBlock.isContainer && (rawLine === '}' || rawLine.endsWith('}'))) {
+    // Inside a CONTAINER or TOGETHER block, check if this line closes it
+    if (currentBlock && (currentBlock.isContainer || currentBlock.type === 'together') && (rawLine === '}' || rawLine.endsWith('}'))) {
       blockStack.pop();
-      finishBlock(currentBlock, nodes, nodeMap);
+      if (currentBlock.isContainer) {
+        finishBlock(currentBlock, nodes, nodeMap);
+      }
+      continue;
+    }
+
+    // 0A. together { ... } block (layout grouping without outer frame box)
+    if (/^together\s*\{/i.test(rawLine)) {
+      const togetherId = `together_${nodes.length}_${blockStack.length}`;
+      blockStack.push({
+        type: 'together',
+        id: togetherId,
+        label: 'together',
+        parentId: currentBlock?.isContainer ? currentBlock.id : undefined,
+        isContainer: false,
+        lines: []
+      });
+      continue;
+    }
+
+    // 0B. Multi-line attached note start: note (left|right|top|bottom) of Target
+    const noteMultiAttachMatch = rawLine.match(/^note\s+(top|right|bottom|left)\s+of\s+([a-zA-Z0-9_./$-]+)$/i);
+    if (noteMultiAttachMatch) {
+      const dir = noteMultiAttachMatch[1].toLowerCase();
+      const rawTarget = noteMultiAttachMatch[2];
+      const targetId = resolveOrCreateNode(rawTarget, nodes, nodeMap, 'source');
+      const noteId = sanitizeId(`note_${targetId}_${dir}_${nodes.length}`);
+      blockStack.push({
+        type: 'note',
+        id: noteId,
+        label: 'note',
+        targetId,
+        dir: dir as any,
+        parentId: currentBlock?.isContainer ? currentBlock.id : undefined,
+        isContainer: false,
+        lines: []
+      });
+      continue;
+    }
+
+    // 0C. Multi-line floating note start: note as ID
+    const noteMultiFloatingMatch = rawLine.match(/^note\s+as\s+([a-zA-Z0-9_]+)$/i);
+    if (noteMultiFloatingMatch) {
+      const noteId = sanitizeId(noteMultiFloatingMatch[1]);
+      blockStack.push({
+        type: 'note',
+        id: noteId,
+        label: 'note',
+        parentId: currentBlock?.isContainer ? currentBlock.id : undefined,
+        isContainer: false,
+        lines: []
+      });
       continue;
     }
 
@@ -2059,6 +2345,155 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
       continue;
     }
 
+    // 7f. Enterprise Integration Patterns (stdlib/eip)
+    // Splitter(id, "Label"), Aggregator(id, "Label"), ContentFilter, Filter, WireTap, DeadLetterChannel, etc.
+    const eipMatch = rawLine.match(/^(MessageRouter|ContentBasedRouter|Splitter|Aggregator|ContentFilter|Filter|WireTap|DeadLetterChannel|MessageTranslator|MessageStore|Detour|SmartProxy)\s*\(\s*([a-zA-Z0-9_]+)(?:\s*,\s*"([^"]+)")?\s*\)/i);
+    if (eipMatch) {
+      const eipMacro = eipMatch[1];
+      const id = sanitizeId(eipMatch[2]);
+      const label = eipMatch[3] || eipMacro;
+      const pattern = eipMacro.toLowerCase();
+
+      if (!nodeMap.has(id)) {
+        const node: DiagramNode = {
+          id,
+          type: 'eip-pattern',
+          category: 'eip',
+          label,
+          sublabel: `<<EIP ${eipMacro}>>`,
+          x: 0,
+          y: 0,
+          width: 190,
+          height: 85,
+          color: 'purple',
+          data: {
+            eipPattern: pattern as any,
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
+        };
+        nodes.push(node);
+        nodeMap.set(id, node);
+      }
+      continue;
+    }
+
+    // 7f2. EIP Relationships: Send(src, tgt) and Pipe(src, tgt)
+    const eipRelMatch = rawLine.match(/^(Send|Pipe)\s*\(\s*["']?([a-zA-Z0-9_./$-]+)["']?\s*,\s*["']?([a-zA-Z0-9_./$-]+)["']?\s*\)/i);
+    if (eipRelMatch) {
+      const relKind = eipRelMatch[1].toLowerCase();
+      const rawSrc = eipRelMatch[2];
+      const rawTgt = eipRelMatch[3];
+      const srcId = resolveOrCreateNode(rawSrc, nodes, nodeMap, 'source');
+      const tgtId = resolveOrCreateNode(rawTgt, nodes, nodeMap, 'target');
+
+      edges.push({
+        id: `eip_edge_${srcId}_${tgtId}_${edges.length}`,
+        source: srcId,
+        target: tgtId,
+        label: relKind === 'pipe' ? 'Pipe' : '',
+        style: 'solid',
+        arrowType: 'arrow'
+      });
+      continue;
+    }
+
+    // 7g. Open Security Architecture Macros (stdlib/osa)
+    // Firewall(id, "Label"), WAF(id, "Label"), VPN(id, "Label"), ThreatAgent(id, "Label"), etc.
+    const osaMatch = rawLine.match(/^(Firewall|WAF|VPN|ThreatAgent|Threat|Bastion|HSM|SecurityControl|osa_firewall|osa_waf|osa_vpn|osa_threat|osa_bastion|osa_hsm)\s*\(\s*([a-zA-Z0-9_]+)(?:\s*,\s*"([^"]+)")?\s*\)/i);
+    if (osaMatch) {
+      const osaMacro = osaMatch[1];
+      const id = sanitizeId(osaMatch[2]);
+      const label = osaMatch[3] || osaMacro.replace('osa_', '');
+      const element = osaMacro.replace('osa_', '').toLowerCase();
+
+      if (!nodeMap.has(id)) {
+        const node: DiagramNode = {
+          id,
+          type: 'security-element',
+          category: 'security',
+          label,
+          sublabel: `<<OSA ${osaMacro}>>`,
+          x: 0,
+          y: 0,
+          width: 190,
+          height: 85,
+          color: 'slate',
+          data: {
+            securityElement: element as any,
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
+        };
+        nodes.push(node);
+        nodeMap.set(id, node);
+      }
+      continue;
+    }
+
+    // 7h. Elastic Stack Macros (stdlib/elastic)
+    // Elasticsearch(id, "Label", "Desc"), Kibana, Logstash, Beats, APM, Fleet
+    const elasticMatch = rawLine.match(/^(Elasticsearch|Kibana|Logstash|Beats|APM|Fleet)\s*\(\s*([a-zA-Z0-9_]+)\s*,\s*"([^"]+)"(?:\s*,\s*"([^"]*)")?\s*\)/i);
+    if (elasticMatch) {
+      const comp = elasticMatch[1].toLowerCase();
+      const id = sanitizeId(elasticMatch[2]);
+      const label = elasticMatch[3];
+      const desc = elasticMatch[4];
+
+      if (!nodeMap.has(id)) {
+        const node: DiagramNode = {
+          id,
+          type: 'elastic-component',
+          category: 'elastic',
+          label,
+          sublabel: `<<Elastic ${elasticMatch[1]}>>`,
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 85,
+          color: 'teal',
+          data: {
+            elasticComponent: comp as any,
+            description: desc,
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
+        };
+        nodes.push(node);
+        nodeMap.set(id, node);
+      }
+      continue;
+    }
+
+    // 7i. Tech Logos Macros (stdlib/logos)
+    // docker(id, "Label"), kubernetes(id, "Label"), kafka, postgres, redis, react, etc.
+    const logoMatch = rawLine.match(/^(docker|kubernetes|k8s|kafka|postgresql|postgres|redis|react|nodejs|node|python|java|golang|go|rust|nginx)\s*\(\s*([a-zA-Z0-9_]+)(?:\s*,\s*"([^"]+)")?\s*\)/i);
+    if (logoMatch) {
+      const logoName = logoMatch[1].toLowerCase().replace(/[-_]/g, '');
+      const id = sanitizeId(logoMatch[2]);
+      const label = logoMatch[3] || logoMatch[1];
+
+      if (!nodeMap.has(id)) {
+        const node: DiagramNode = {
+          id,
+          type: 'logo-tech',
+          category: 'logo',
+          label,
+          sublabel: `<<${logoName}>>`,
+          x: 0,
+          y: 0,
+          width: 190,
+          height: 85,
+          color: 'slate',
+          data: {
+            logoName,
+            ...(currentBlock?.type === 'together' ? { togetherGroup: currentBlock.id } : {}),
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
+        };
+        nodes.push(node);
+        nodeMap.set(id, node);
+      }
+      continue;
+    }
+
     // 8. ArchiMate Elements: archimate #Business "Label" as id <<actor>>
     const archimateMatch = rawLine.match(/^archimate\s+(?:#([a-zA-Z]+)\s+)?"([^"]+)"\s+as\s+([a-zA-Z0-9_]+)(?:\s*<<([^>]+)>>)?/i);
     if (archimateMatch) {
@@ -2326,7 +2761,51 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
       continue;
     }
 
-    // Note declaration: note "Text" as id
+    // Note declarations:
+    // 1. Single-line attached note: note (left|right|top|bottom) of Target : Text
+    const noteAttachMatch = rawLine.match(/^note\s+(top|right|bottom|left)\s+of\s+([a-zA-Z0-9_./$-]+)\s*:\s*(.+)$/i);
+    if (noteAttachMatch) {
+      const dir = noteAttachMatch[1].toLowerCase();
+      const rawTarget = noteAttachMatch[2];
+      const text = noteAttachMatch[3].trim();
+      const targetId = resolveOrCreateNode(rawTarget, nodes, nodeMap, 'source');
+      const noteId = sanitizeId(`note_${targetId}_${dir}_${nodes.length}`);
+
+      if (!nodeMap.has(noteId)) {
+        const node: DiagramNode = {
+          id: noteId,
+          type: 'note',
+          category: 'annotation',
+          label: text,
+          x: 0,
+          y: 0,
+          width: 190,
+          height: 80,
+          color: 'gold',
+          data: {
+            noteDirection: dir as any,
+            attachedToNodeId: targetId,
+            noteText: text,
+            ...(currentBlock?.type === 'together' ? { togetherGroup: currentBlock.id } : {}),
+            ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
+          }
+        };
+        nodes.push(node);
+        nodeMap.set(noteId, node);
+
+        edges.push({
+          id: `edge_${targetId}_${noteId}_${edges.length}`,
+          source: targetId,
+          target: noteId,
+          style: 'dotted',
+          arrowType: 'none',
+          directionHint: dir as any
+        });
+      }
+      continue;
+    }
+
+    // 2. Note declaration: note "Text" as id
     const noteMatch = rawLine.match(/^note\s+"([^"]+)"\s+as\s+([a-zA-Z0-9_]+)/i);
     if (noteMatch) {
       const label = noteMatch[1];
@@ -2344,6 +2823,8 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
           color: 'gold',
           data: { 
             description: label,
+            noteText: label,
+            ...(currentBlock?.type === 'together' ? { togetherGroup: currentBlock.id } : {}),
             ...(currentBlock?.isContainer ? { parentId: currentBlock.id } : {})
           }
         };
@@ -2368,9 +2849,13 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
     }
 
     // Support: ||--||, ||--|{, ||--o{, ||--0{, ||--o|, ||--0|, }|--|{, }o--o{, |o--o|, }|--o|, }|--0|, <|--, --|>, ..|>, *--, o--, +--, x--, -0), ()--, -->, ..>, <-->
+    // Dedicated lollipop & ball-and-socket connector check: -()-, -(0-, -0)-, ()--, --(), etc.
+    const lolliMatch = lineForArrow.match(/^\s*("(?:[^"\\]|\\.)*"|\([^)]+\)|\[[^\]]+\]|:[^:]+:|[a-zA-Z0-9_./$@#~-]+(?:::[a-zA-Z0-9_]+)?)\s*(-\(\)-|-\(0-|-0\)-|\(\)--|--\(\)|-0\(|\)0-|-\(\)|-\(0)\s*("(?:[^"\\]|\\.)*"|\([^)]+\)|\[[^\]]+\]|:[^:]+:|[a-zA-Z0-9_./$@#~-]+(?:::[a-zA-Z0-9_]+)?)(?:\s*:\s*(.+))?$/i);
     // As well as single-dash arrows (->, <-), directional (-down->, -r->), dotted (.>, ..>), bracketed styles (-[#red]->, -[dashed]->), bracketed [Comp], usecase (UC), actor :Act:, quoted "Name"
     const arrowRegex = /^\s*("(?:[^"\\]|\\.)*"|\([^)]+\)|\[[^\]]+\]|:[^:]+:|[a-zA-Z0-9_./$@#~-]+(?:::[a-zA-Z0-9_]+)?)\s*(?:"([^"]*)"|\(([^)]*)\)|\[([0-9.*]+)\])?\s*([<*o0O+#x}(|]{0,3}[-.=~|]+(?:\[[^\]]*\])?[-.=~|]*(?:up|down|left|right|[udlr])?[-.=~|]*(?:\[[^\]]*\])?[-.=~|]*[>*o0O+#x{)|]{0,3})\s*(?:"([^"]*)"|\(([^)]*)\)|\[([0-9.*]+)\])?\s*("(?:[^"\\]|\\.)*"|\([^)]+\)|\[[^\]]+\]|:[^:]+:|[a-zA-Z0-9_./$@#~-]+(?:::[a-zA-Z0-9_]+)?)(?:\s*:\s*(.+))?$/;
-    const arrowMatch = lineForArrow.match(arrowRegex);
+    const arrowMatch = lolliMatch
+      ? ([lolliMatch[0], lolliMatch[1], undefined, undefined, undefined, lolliMatch[2], undefined, undefined, undefined, lolliMatch[3], lolliMatch[4]] as unknown as RegExpMatchArray)
+      : lineForArrow.match(arrowRegex);
     if (arrowMatch) {
       const rawSrc = arrowMatch[1];
       const srcCard = (arrowMatch[2] || arrowMatch[3] || arrowMatch[4])?.trim();
@@ -2432,7 +2917,7 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
         else if (bracketContent.includes('dotted')) bracketStyle = 'dotted';
         else if (bracketContent.includes('bold') || bracketContent.includes('thick')) bracketStyle = 'thick';
         else if (bracketContent.includes('hidden')) {
-          bracketStyle = 'dotted';
+          bracketStyle = 'hidden';
           customColor = customColor || '#dfd8ce';
         }
       }
@@ -2493,13 +2978,19 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
       else if (arrowOp.includes('o--') || arrowOp.includes('--o') || arrowOp.includes('o->') || arrowOp.includes('<-o') || arrowOp.includes('o-->') || arrowOp.includes('<--o')) arrowType = 'aggregation';
       else if (arrowOp.includes('+--') || arrowOp.includes('--+')) arrowType = 'nesting';
       else if (arrowOp.includes('x--') || arrowOp.includes('--x')) arrowType = 'cancellation';
-      else if (arrowOp.includes('-0)') || arrowOp.includes('-0(') || arrowOp.includes('(0-')) arrowType = 'socket-ball';
-      else if (arrowOp.includes('()--') || arrowOp.includes('--()') || arrowOp.includes('()-')) arrowType = 'lollipop';
+      else if (arrowOp.includes('-0)') || arrowOp.includes('-0(') || arrowOp.includes('(0-') || arrowOp.includes('-(0-') || arrowOp.includes('0)-')) arrowType = 'socket-ball';
+      else if (arrowOp.includes('()--') || arrowOp.includes('--()') || arrowOp.includes('()-') || arrowOp.includes('-()-')) arrowType = 'lollipop';
       else if (arrowOp.includes('..>') || arrowOp.includes('<..') || arrowOp.includes('.>') || arrowOp.includes('<.')) {
         arrowType = 'dependency';
         style = 'dashed';
       } else if (arrowOp.includes('<-->') || arrowOp.includes('<->')) arrowType = 'bi-arrow';
       else if (arrowOp === '--' || arrowOp === '..' || arrowOp === '==') arrowType = 'none';
+
+      const isHiddenEdge = arrowOp.includes('hidden') || bracketStyle === 'hidden' || style === 'hidden';
+      if (isHiddenEdge) {
+        arrowType = 'none';
+        style = 'hidden';
+      }
 
       edges.push({
         id: `edge_${srcId}_${tgtId}_${edges.length}`,
@@ -2516,7 +3007,8 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
         sourceHandle,
         targetHandle,
         sourceMarker: isReverseArrow ? targetMarker : sourceMarker,
-        targetMarker: isReverseArrow ? sourceMarker : targetMarker
+        targetMarker: isReverseArrow ? sourceMarker : targetMarker,
+        isHidden: isHiddenEdge
       });
     }
   }
@@ -2811,8 +3303,18 @@ function finishBlock(
   lines.forEach(l => {
     const clean = l.trim();
     if (!clean) return;
+    const isDivider = /^(--|==|\.\.|__)\s*(.*?)\s*\1$/.test(clean);
     if (clean === '--' || clean === '__') {
       readingMethods = true;
+      attributes.push('--');
+      return;
+    }
+    if (isDivider) {
+      if (readingMethods) {
+        methods.push(clean);
+      } else {
+        attributes.push(clean);
+      }
       return;
     }
     if (clean.includes('(') || readingMethods) {
@@ -3051,29 +3553,41 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
 
   // If there are containers with children, use hierarchical cluster layout
   if (containerChildren.size > 0) {
-    // 1. Layout children inside each container
+    // 1. Layout children inside each container using flow layout
     containerChildren.forEach((children, cId) => {
       const container = containerMap.get(cId)!;
 
-      const START_X = 40;
+      // Order domain children logically if present (Marketing -> Accounting -> FieldOps -> Customer Care -> Land Dev -> Shared Kernel)
+      const domainFlow = ['market', 'account', 'field', 'superintendent', 'customer', 'warranty', 'avid', 'land', 'dirt', 'shared', 'kernel', 'candidate'];
+      children.sort((a, b) => {
+        const getScore = (n: DiagramNode) => {
+          const s = (n.id + ' ' + (n.label || '')).toLowerCase();
+          const idx = domainFlow.findIndex(term => s.includes(term));
+          return idx >= 0 ? idx : 99;
+        };
+        return getScore(a) - getScore(b);
+      });
+
+      const START_X = 36;
       const START_Y = 56;
-      const GAP_X = 50;
-      const GAP_Y = 40;
+      const GAP_X = 28;
+      const GAP_Y = 28;
+      const MAX_ROW_WIDTH = 2800;
 
-      let col0Y = START_Y;
-      let col1Y = START_Y;
-      const maxCol0W = Math.max(...children.map(c => c.width), 230);
+      let rowX = START_X;
+      let rowY = START_Y;
+      let rowMaxH = 0;
 
-      children.forEach((child, idx) => {
-        if (children.length > 3 && idx % 2 === 1) {
-          child.x = START_X + maxCol0W + GAP_X;
-          child.y = col1Y;
-          col1Y += child.height + GAP_Y;
-        } else {
-          child.x = START_X;
-          child.y = col0Y;
-          col0Y += child.height + GAP_Y;
+      children.forEach((child) => {
+        if (rowX > START_X && rowX + child.width > MAX_ROW_WIDTH) {
+          rowX = START_X;
+          rowY += rowMaxH + GAP_Y;
+          rowMaxH = 0;
         }
+        child.x = rowX;
+        child.y = rowY;
+        rowX += child.width + GAP_X;
+        if (child.height > rowMaxH) rowMaxH = child.height;
       });
 
       let maxChildR = 0;
@@ -3083,42 +3597,158 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
         maxChildB = Math.max(maxChildB, ch.y + ch.height);
       });
 
-      container.width = Math.max(340, maxChildR + 40);
+      container.width = Math.max(340, maxChildR + 36);
       container.height = Math.max(240, maxChildB + 36);
     });
 
-    // 2. Layout top-level nodes (containers and loose nodes)
-    const TOP_START_X = 80;
-    const TOP_START_Y = 60;
-    const TOP_GAP_X = 140;
-    const TOP_GAP_Y = 80;
-
-    let currX = TOP_START_X;
-    let currY = TOP_START_Y;
-    let rowMaxH = 0;
-    const MAX_WIDTH = 2600;
-
-    topLevelNodes.forEach(node => {
-      if (currX > TOP_START_X && currX + node.width > MAX_WIDTH) {
-        currX = TOP_START_X;
-        currY += rowMaxH + TOP_GAP_Y;
-        rowMaxH = 0;
+    // 2. Identify effective entity mapping (child -> top-level container)
+    const getEntityId = (nodeId: string): string => {
+      const n = nodes.find(item => item.id === nodeId);
+      if (n?.data?.parentId && containerMap.has(n.data.parentId)) {
+        return n.data.parentId;
       }
+      return nodeId;
+    };
 
-      node.x = currX;
-      node.y = currY;
+    // Separate anchor/marker nodes (e.g. N1..N5) from regular structural entities
+    const isAnchorNode = (n: DiagramNode) => {
+      const isSmallClass = (n.type === 'class' || n.category === 'code') && 
+        (!n.data?.attributes || n.data.attributes.length === 0) &&
+        (!n.data?.methods || n.data.methods.length === 0);
+      return isSmallClass && /^N\d+$/i.test(n.label || n.id);
+    };
 
-      // Shift enclosed children to absolute canvas coordinates
-      const children = containerChildren.get(node.id);
-      if (children) {
-        children.forEach(ch => {
-          ch.x += node.x;
-          ch.y += node.y;
+    const anchorNodes = topLevelNodes.filter(isAnchorNode);
+    const regularTopLevel = topLevelNodes.filter(n => !isAnchorNode(n));
+
+    // Build entity dependency graph for topological ranking
+    const inDegree = new Map<string, number>();
+    const entityAdj = new Map<string, Set<string>>();
+    regularTopLevel.forEach(n => {
+      inDegree.set(n.id, 0);
+      entityAdj.set(n.id, new Set());
+    });
+
+    edges.forEach(edge => {
+      const src = getEntityId(edge.source);
+      const tgt = getEntityId(edge.target);
+      if (src !== tgt && entityAdj.has(src) && entityAdj.has(tgt)) {
+        const isDirected = edge.arrowType !== 'none' && !edge.arrowType?.startsWith('bi-') && edge.style !== 'dotted';
+        const isFromContainer = containerChildren.has(src);
+        if (isDirected || isFromContainer) {
+          if (!entityAdj.get(src)!.has(tgt)) {
+            entityAdj.get(src)!.add(tgt);
+            inDegree.set(tgt, (inDegree.get(tgt) || 0) + 1);
+          }
+        }
+      }
+    });
+
+    // Compute topological ranks
+    const ranks = new Map<string, number>();
+    regularTopLevel.forEach(n => {
+      if ((inDegree.get(n.id) || 0) === 0) {
+        ranks.set(n.id, 0);
+      }
+    });
+
+    let changed = true;
+    let iterations = 0;
+    while (changed && iterations < 10) {
+      changed = false;
+      iterations++;
+      regularTopLevel.forEach(n => {
+        const myRank = ranks.get(n.id) ?? 0;
+        const succs = entityAdj.get(n.id) || new Set();
+        succs.forEach(tgtId => {
+          const tgtRank = ranks.get(tgtId) ?? 0;
+          if (tgtRank < myRank + 1) {
+            ranks.set(tgtId, myRank + 1);
+            changed = true;
+          }
         });
-      }
+      });
+    }
 
-      currX += node.width + TOP_GAP_X;
-      if (node.height > rowMaxH) rowMaxH = node.height;
+    // Group regular top-level nodes by rank
+    const rankGroups = new Map<number, DiagramNode[]>();
+    regularTopLevel.forEach(n => {
+      const r = ranks.get(n.id) ?? 0;
+      if (!rankGroups.has(r)) rankGroups.set(r, []);
+      rankGroups.get(r)!.push(n);
+    });
+
+    const sortedRankKeys = Array.from(rankGroups.keys()).sort((a, b) => a - b);
+
+    // Position rank tiers from top to bottom
+    let currentY = 100;
+    sortedRankKeys.forEach(r => {
+      const group = rankGroups.get(r)!;
+
+      // Sort elements within rank tier for minimum line crossings (e.g. MapComp left, Kernel center, LVOps right)
+      group.sort((a, b) => {
+        const getXScore = (n: DiagramNode) => {
+          const s = (n.id + ' ' + (n.label || '')).toLowerCase();
+          if (s.includes('map')) return 1;
+          if (s.includes('kernel') || s.includes('core')) return 2;
+          if (s.includes('ops') || s.includes('lv')) return 3;
+          if (s.includes('legacy') || s.includes('marksystem') || s.includes('bbj')) return 4;
+          return 2;
+        };
+        return getXScore(a) - getXScore(b);
+      });
+
+      const groupTotalW = group.reduce((sum, item) => sum + item.width, 0) + (group.length - 1) * 60;
+      let startX = Math.max(60, Math.round((2200 - groupTotalW) / 2));
+      let rankMaxH = 0;
+
+      group.forEach(n => {
+        n.x = startX;
+        n.y = currentY;
+
+        // Shift enclosed children to absolute canvas coordinates
+        const children = containerChildren.get(n.id);
+        if (children) {
+          children.forEach(ch => {
+            ch.x += n.x;
+            ch.y += n.y;
+          });
+        }
+
+        startX += n.width + 60;
+        if (n.height > rankMaxH) rankMaxH = n.height;
+      });
+
+      currentY += rankMaxH + 70;
+    });
+
+    // Dock anchor nodes (N1..N5) near their connected partners
+    anchorNodes.forEach(anchor => {
+      const edge = edges.find(e => e.source === anchor.id || e.target === anchor.id);
+      if (edge) {
+        const partnerId = edge.source === anchor.id ? edge.target : edge.source;
+        const partner = nodes.find(n => n.id === partnerId);
+        if (partner) {
+          const rhcContainer = containerMap.get('RHC') || Array.from(containerMap.values())[0];
+          if (anchor.label === 'N3' || anchor.label === 'N4') {
+            anchor.x = partner.x + Math.round((partner.width - anchor.width) / 2);
+            anchor.y = rhcContainer ? Math.max(16, rhcContainer.y - 14) : Math.max(16, partner.y - 36);
+          } else if (anchor.label === 'N1') {
+            anchor.x = Math.max(20, partner.x - anchor.width - 24);
+            anchor.y = partner.y + Math.round((partner.height - anchor.height) / 2);
+          } else if (anchor.label === 'N2') {
+            const rightEdge = rhcContainer ? Math.max(rhcContainer.x + rhcContainer.width + 24, partner.x + partner.width + 24) : partner.x + partner.width + 24;
+            anchor.x = rightEdge;
+            anchor.y = partner.y + Math.round((partner.height - anchor.height) / 2);
+          } else if (anchor.label === 'N5') {
+            anchor.x = partner.x + 30;
+            anchor.y = partner.y - 42;
+          } else {
+            anchor.x = partner.x - anchor.width - 24;
+            anchor.y = partner.y + 20;
+          }
+        }
+      }
     });
 
     // Final pass: resolve any remaining overlaps

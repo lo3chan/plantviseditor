@@ -211,13 +211,13 @@ const PLANTUML_AUTOCOMPLETE_ITEMS: AutocompleteItem[] = [
   },
   { 
     label: 'salt', 
-    insertText: 'card "Login Window" as win <<salt>>\nnote bottom of win\n  {{\n    salt\n    {\n      <b>Login Screen\n      Username: | "admin"\n      Password: | "****"\n      [Submit] | [Cancel]\n    }\n  }}\nend note\n', 
+    insertText: 'card "Login Window" as win <<salt>>\nnote bottom of win\n  {{\n    @startsalt\n    {\n      <b>Login Screen\n      Username: | "admin"\n      Password: | "****"\n      [Submit] | [Cancel]\n    }\n    @endsalt\n  }}\nend note\n', 
     detail: 'Salt GUI wireframe', 
     type: 'snippet' 
   },
   { 
     label: 'ditaa', 
-    insertText: 'card "System Flow" as ditaa_box <<ditaa>>\nnote bottom of ditaa_box\n  {{\n    ditaa\n    +--------+  TCP  +--------+\n    | Client | ----> | Server |\n    +--------+       +--------+\n  }}\nend note\n', 
+    insertText: 'card "System Flow" as ditaa_box <<ditaa>>\nnote bottom of ditaa_box\n  {{\n    @startditaa\n    +--------+  TCP  +--------+\n    | Client | ----> | Server |\n    +--------+       +--------+\n    @endditaa\n  }}\nend note\n', 
     detail: 'Ditaa ASCII art diagram', 
     type: 'snippet' 
   },
@@ -240,7 +240,7 @@ const PLANTUML_AUTOCOMPLETE_ITEMS: AutocompleteItem[] = [
   { label: 'skinparam style strictuml', insertText: 'skinparam style strictuml\n', detail: 'Strict OMG UML 2.5', type: 'skinparam' },
   { label: 'skinparam monochrome true', insertText: 'skinparam monochrome true\n', detail: 'Monochrome black & white', type: 'skinparam' },
   { label: 'skinparam monochrome reverse', insertText: 'skinparam monochrome reverse\n', detail: 'Dark invert canvas', type: 'skinparam' },
-  { label: 'skinparam handwritten true', insertText: 'skinparam handwritten true\n', detail: 'Organic sketch lines', type: 'skinparam' },
+  { label: '!option handwritten true', insertText: '!option handwritten true\n', detail: 'Organic sketch lines', type: 'skinparam' },
   { label: 'skinparam roundcorner', insertText: 'skinparam roundcorner 10\n', detail: 'Rounded corners (px)', type: 'skinparam' },
   { label: 'skinparam diagonalCorner', insertText: 'skinparam diagonalCorner 10\n', detail: 'Chamfered corners (px)', type: 'skinparam' },
   { label: 'skinparam nodesep', insertText: 'skinparam nodesep 40\n', detail: 'Horizontal node spacing', type: 'skinparam' },

@@ -9,6 +9,10 @@ export type StructuralCategory =
   | 'sequence'
   | 'c4'
   | 'archimate'
+  | 'eip'
+  | 'security'
+  | 'elastic'
+  | 'logo'
   | 'cloud'
   | 'aws'
   | 'domainstory'
@@ -20,7 +24,7 @@ export type StructuralCategory =
 
 export type PortPosition = 'top' | 'right' | 'bottom' | 'left';
 
-export type EdgeStyle = 'solid' | 'dashed' | 'dotted' | 'thick';
+export type EdgeStyle = 'solid' | 'dashed' | 'dotted' | 'thick' | 'hidden';
 
 export type EdgeArrowType = 
   | 'arrow'                  // -->
@@ -129,6 +133,18 @@ export interface DiagramNode {
     awsIcon?: string;
     region?: string;
 
+    // Enterprise Integration Patterns (stdlib/eip)
+    eipPattern?: 'router' | 'content-based-router' | 'splitter' | 'aggregator' | 'filter' | 'wiretap' | 'dead-letter' | 'translator' | 'store' | 'detour' | 'smart-proxy';
+
+    // Open Security Architecture (stdlib/osa)
+    securityElement?: 'firewall' | 'waf' | 'vpn' | 'threat-agent' | 'bastion' | 'hsm' | 'security-control';
+
+    // Elastic Stack (stdlib/elastic)
+    elasticComponent?: 'elasticsearch' | 'logstash' | 'kibana' | 'beats' | 'apm' | 'fleet';
+
+    // Generic Stdlib Macro identifier
+    stdlibMacro?: string;
+
     // Embedded Sub-Engines
     embeddedType?: 'salt' | 'ditaa' | 'math';
     embeddedContent?: string;
@@ -154,7 +170,11 @@ export interface DiagramNode {
     // Notes
     noteDirection?: 'top' | 'right' | 'bottom' | 'left' | 'floating';
     attachedToNodeId?: string;
-    noteText?: string;
+    // Logos (stdlib/logos)
+    logoName?: string;
+
+    // Layout grouping
+    togetherGroup?: string;
 
     // Generic shape
     shape?: NodeShape;
@@ -179,6 +199,7 @@ export interface DiagramEdge {
   labelOffset?: { x: number; y: number }; // custom offset to prevent overlapping or obscuring
   sourceMarker?: string; // explicit SVG marker ID for source end
   targetMarker?: string; // explicit SVG marker ID for target end
+  isHidden?: boolean; // layout constraint link (-[hidden]->)
 }
 
 export interface GlobalCanvasSettings {
@@ -190,6 +211,7 @@ export interface GlobalCanvasSettings {
   handwritten: boolean; // Organic / Sketchy (skinparam handwritten true)
   shadowing: boolean; // 3D drop-shadows (skinparam shadowing false/true)
   theme?: string; // PlantUML !theme (e.g. plain, materia, sketchy, blueprint, cyborg, etc.)
+  themePreset?: string; // Active unified preset identifier (e.g. 'sketch-handdrawn', 'vibrant-punchy')
   roundcorner?: number; // Rounded corners (skinparam roundCorner <px>)
   diagonalCorner?: number; // Chamfered / beveled box corners (skinparam diagonalCorner <px>)
   hideFootbox?: boolean; // Suppress sequence bottom participant boxes (hide footbox)

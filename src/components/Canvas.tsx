@@ -526,7 +526,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     shiftFromId?: string;
     shiftToId?: string;
     endpoint?: 'from' | 'to';
-    initialLabelOffsetX: number;
+    initialLabelOffsetX?: number;
   } | null>(null);
 
   // Sequence Block Dragging & Resizing State
@@ -1100,15 +1100,12 @@ export const Canvas: React.FC<CanvasProps> = ({
             (draggingMessage.shiftToId && draggingMessage.shiftToId !== orig.to)
           );
           const hasOrderChange = draggingMessage.currentOrder !== draggingMessage.initialOrder;
-          const hasLabelMove = Math.abs(draggingMessage.dragX) > 6 && !draggingMessage.endpoint;
 
           const updatedMsg = {
             ...orig,
             from: draggingMessage.shiftFromId || orig.from,
             to: draggingMessage.shiftToId || orig.to,
-            labelOffset: hasLabelMove 
-              ? { x: Math.round(draggingMessage.initialLabelOffsetX + draggingMessage.dragX), y: 0 } 
-              : orig.labelOffset
+            labelOffset: undefined
           };
 
           sorted[movingIndex] = updatedMsg;
@@ -1120,7 +1117,7 @@ export const Canvas: React.FC<CanvasProps> = ({
             sorted = sorted.map((m, idx) => ({ ...m, order: idx + 1 }));
           }
 
-          if (hasHorizontalShift || hasOrderChange || hasLabelMove) {
+          if (hasHorizontalShift || hasOrderChange) {
             onUpdateDiagram({ messages: sorted }, `Moved sequence message ${orig.label || orig.id}`);
           }
         }
@@ -2420,16 +2417,19 @@ export const Canvas: React.FC<CanvasProps> = ({
       const midX = (src.x + tgt.x) / 2;
       const midY = (src.y + tgt.y) / 2;
 
-      // Extract main description and technology badge
-      const rawLabel = edge.label || getFriendlyRelationLabel(edge.arrowType, edge.style);
+      // Extract main description and technology badge (strictly explicit labels only)
+      const rawLabel = edge.label ? edge.label.trim() : '';
       let mainDesc = rawLabel;
       let techNote: string | undefined = undefined;
 
-      const bracketMatch = rawLabel.match(/^(.*?)\[(.*?)\]$/);
-      if (bracketMatch) {
-        mainDesc = bracketMatch[1].trim();
-        techNote = bracketMatch[2].trim();
-      } else if (edge.cardinalityTarget && !isMultiplicity(edge.cardinalityTarget)) {
+      if (rawLabel) {
+        const bracketMatch = rawLabel.match(/^(.*?)\[(.*?)\]$/);
+        if (bracketMatch) {
+          mainDesc = bracketMatch[1].trim();
+          techNote = bracketMatch[2].trim();
+        }
+      }
+      if (!techNote && edge.cardinalityTarget && !isMultiplicity(edge.cardinalityTarget)) {
         techNote = edge.cardinalityTarget.trim();
       }
 
@@ -3190,21 +3190,17 @@ export const Canvas: React.FC<CanvasProps> = ({
             const strokeWidth = (isSelected || isDraggingThis) ? 2.5 : 1.8;
             const dashArray = isReply ? '5,4' : undefined;
 
-            const labelOffsetX = (isDraggingThis && !draggingMessage.endpoint)
-              ? ((msg.labelOffset?.x || 0) + draggingMessage.dragX)
-              : (msg.labelOffset?.x || 0);
-
             let pathD = '';
             let labelX = 0;
             let labelY = msgY - 7;
 
             if (isSelf) {
               pathD = `M ${srcX} ${msgY} H ${srcX + 42} V ${msgY + 24} H ${srcX}`;
-              labelX = srcX + 48 + labelOffsetX;
+              labelX = srcX + 48;
               labelY = msgY + 16;
             } else {
               pathD = `M ${srcX} ${msgY} L ${tgtX} ${msgY}`;
-              labelX = (srcX + tgtX) / 2 + labelOffsetX;
+              labelX = (srcX + tgtX) / 2;
               labelY = msgY - 7;
             }
 
@@ -3228,7 +3224,6 @@ export const Canvas: React.FC<CanvasProps> = ({
                 currentOrder: order,
                 dragX: 0,
                 dragY: 0,
-                initialLabelOffsetX: msg.labelOffset?.x || 0,
                 endpoint
               });
             };
@@ -3307,7 +3302,7 @@ export const Canvas: React.FC<CanvasProps> = ({
                   transform={`translate(${labelX}, ${labelY})`}
                   className="cursor-grab active:cursor-grabbing select-none"
                   data-drag-handle="true"
-                  title="Drag label left/right to reposition, or up/down to reorder step"
+                  title="Drag message to reorder vertically or shift across lifelines"
                   onMouseDown={(e) => handleMsgMouseDown(e)}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
@@ -3367,15 +3362,26 @@ export const Canvas: React.FC<CanvasProps> = ({
                 />
 
                 {/* Visible Path */}
-                <path
-                  d={pathData}
-                  fill="none"
-                  stroke={isSelected ? '#c2652a' : (edge.color || defaultArrowColor)}
-                  strokeWidth={isSelected ? 2.5 : 1.8}
-                  strokeDasharray={edge.style === 'dashed' ? '6,4' : edge.style === 'dotted' ? '2,4' : undefined}
-                  markerStart={getMarkerStart(edge.arrowType, isSelected, edge)}
-                  markerEnd={getMarkerEnd(edge.arrowType, isSelected, edge)}
-                />
+                {(!edge.isHidden && edge.style !== 'hidden') ? (
+                  <path
+                    d={pathData}
+                    fill="none"
+                    stroke={isSelected ? '#c2652a' : (edge.color || defaultArrowColor)}
+                    strokeWidth={isSelected ? 2.5 : 1.8}
+                    strokeDasharray={edge.style === 'dashed' ? '6,4' : edge.style === 'dotted' ? '2,4' : undefined}
+                    markerStart={getMarkerStart(edge.arrowType, isSelected, edge)}
+                    markerEnd={getMarkerEnd(edge.arrowType, isSelected, edge)}
+                  />
+                ) : isSelected ? (
+                  <path
+                    d={pathData}
+                    fill="none"
+                    stroke="#c2652a"
+                    strokeWidth={1.5}
+                    strokeDasharray="4,4"
+                    strokeOpacity={0.4}
+                  />
+                ) : null}
               </g>
             );
           })}
@@ -3465,28 +3471,33 @@ export const Canvas: React.FC<CanvasProps> = ({
                 onQuickAddChild={(id, port) => {
                   const targetNode = nodes.find(n => n.id === id);
                   if (!targetNode) return;
+                  setConnecting(null);
                   setSelectedNodeId(id);
                   setSelectedEdgeId(null);
 
+                  const opt = getOptimalNodeDimensions(targetNode);
+                  const nodeW = targetNode.width ?? opt.width;
+                  const nodeH = targetNode.height ?? opt.height;
+
                   let branchDir: 'right' | 'down' | 'left' | 'up' = 'right';
-                  let popupX = targetNode.x + targetNode.width + 16;
+                  let popupX = targetNode.x + nodeW + 16;
                   let popupY = targetNode.y;
 
                   if (port === 'top') {
                     branchDir = 'up';
-                    popupX = targetNode.x + targetNode.width / 2 - 144;
+                    popupX = targetNode.x + nodeW / 2 - 144;
                     popupY = targetNode.y - 240;
                   } else if (port === 'bottom') {
                     branchDir = 'down';
-                    popupX = targetNode.x + targetNode.width / 2 - 144;
-                    popupY = targetNode.y + targetNode.height + 16;
+                    popupX = targetNode.x + nodeW / 2 - 144;
+                    popupY = targetNode.y + nodeH + 16;
                   } else if (port === 'left') {
                     branchDir = 'left';
                     popupX = targetNode.x - 304;
                     popupY = targetNode.y;
                   } else {
                     branchDir = 'right';
-                    popupX = targetNode.x + targetNode.width + 16;
+                    popupX = targetNode.x + nodeW + 16;
                     popupY = targetNode.y;
                   }
 
@@ -3702,75 +3713,89 @@ export const Canvas: React.FC<CanvasProps> = ({
                   </div>
                 )}
 
-                {/* Edge Label Card - Linked, Draggable, Structured, Zero Collision */}
-                <div
-                  className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto select-none z-20"
-                  style={{ left: `${labelPos.x}px`, top: `${labelPos.y}px` }}
-                >
-                  {isEditing ? (
-                    <input
-                      autoFocus
-                      value={edgeLabelText}
-                      onChange={(e) => setEdgeLabelText(e.target.value)}
-                      onBlur={() => {
-                        onUpdateEdges(diagram.edges.map(ed => 
-                          ed.id === edge.id ? { ...ed, label: edgeLabelText.trim() || undefined } : ed
-                        ));
-                        setEditingEdgeId(null);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                {/* Edge Label Card - Only rendered when label is explicitly specified or currently editing */}
+                {((mainDesc && mainDesc.trim().length > 0) || isEditing) && (
+                  <div
+                    className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto select-none z-20"
+                    style={{ left: `${labelPos.x}px`, top: `${labelPos.y}px` }}
+                  >
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        value={edgeLabelText}
+                        onChange={(e) => setEdgeLabelText(e.target.value)}
+                        onBlur={() => {
                           onUpdateEdges(diagram.edges.map(ed => 
                             ed.id === edge.id ? { ...ed, label: edgeLabelText.trim() || undefined } : ed
                           ));
                           setEditingEdgeId(null);
-                        }
-                        if (e.key === 'Escape') setEditingEdgeId(null);
-                      }}
-                      placeholder={getFriendlyRelationLabel(edge.arrowType, edge.style)}
-                      className={`text-[11px] font-semibold text-center rounded-lg px-2.5 py-1 outline-none shadow-md min-w-[110px] border-2 border-[#c2652a] ${
-                        isDark ? 'bg-[#1e1e24] text-[#f4f4f5]' : 'bg-white text-[#1c1917]'
-                      }`}
-                    />
-                  ) : (
-                    <div
-                      onMouseDown={(e) => handleStartDragLabel(edge, e)}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedEdgeId(edge.id);
-                        setSelectedNodeId(null);
-                      }}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation();
-                        setEdgeLabelText(edge.label || '');
-                        setEditingEdgeId(edge.id);
-                      }}
-                      className={`group/badge flex flex-col items-center justify-center max-w-[220px] px-2.5 py-1 rounded-lg border shadow-xs transition-all select-none cursor-grab active:cursor-grabbing backdrop-blur-xs ${
-                        isSelected 
-                          ? (isDark ? 'bg-[#27272a] text-[#c2652a] border-[#c2652a] font-bold shadow-md ring-2 ring-[#c2652a]/30 scale-105 z-30' : 'bg-white text-[#c2652a] border-[#c2652a] font-bold shadow-md ring-2 ring-[#c2652a]/20 scale-105 z-30')
-                          : (isDark ? 'bg-[#18181b]/95 text-[#f4f4f5] border-[#3f3f46] hover:border-[#c2652a] hover:bg-[#27272a]' : 'bg-white/95 text-[#2c2420] border-[#d8d0c8] hover:border-[#c2652a] hover:shadow-sm hover:bg-white')
-                      }`}
-                      title="Drag to reposition • Double-click to edit label • Click to configure"
-                    >
-                      <div className="flex items-center gap-1.5 text-center">
-                        <span 
-                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: isSelected ? '#c2652a' : (edge.color || defaultArrowColor) }}
-                        />
-                        <span className={`text-[11px] font-medium leading-snug text-center break-words text-balance ${isDark ? 'text-[#f4f4f5]' : 'text-[#181818]'}`}>
-                          {mainDesc}
-                        </span>
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            onUpdateEdges(diagram.edges.map(ed => 
+                              ed.id === edge.id ? { ...ed, label: edgeLabelText.trim() || undefined } : ed
+                            ));
+                            setEditingEdgeId(null);
+                          }
+                          if (e.key === 'Escape') setEditingEdgeId(null);
+                        }}
+                        placeholder={getFriendlyRelationLabel(edge.arrowType, edge.style)}
+                        className={`text-[11px] font-semibold text-center rounded-lg px-2.5 py-1 outline-none shadow-md min-w-[110px] border-2 border-[#c2652a] ${
+                          isDark ? 'bg-[#1e1e24] text-[#f4f4f5]' : 'bg-white text-[#1c1917]'
+                        }`}
+                      />
+                    ) : (
+                      <div
+                        onMouseDown={(e) => handleStartDragLabel(edge, e)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedEdgeId(edge.id);
+                          setSelectedNodeId(null);
+                        }}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setEdgeLabelText(edge.label || '');
+                          setEditingEdgeId(edge.id);
+                        }}
+                        className={`group/badge flex flex-col items-center justify-center max-w-[260px] px-2 py-0.5 rounded-md border shadow-xs transition-all select-none cursor-grab active:cursor-grabbing backdrop-blur-xs ${
+                          isSelected 
+                            ? (isDark ? 'bg-[#27272a] text-[#c2652a] border-[#c2652a] font-bold shadow-md ring-2 ring-[#c2652a]/30 scale-105 z-30' : 'bg-white text-[#c2652a] border-[#c2652a] font-bold shadow-md ring-2 ring-[#c2652a]/20 scale-105 z-30')
+                            : (isDark ? 'bg-[#18181b]/95 text-[#f4f4f5] border-[#3f3f46] hover:border-[#c2652a] hover:bg-[#27272a]' : 'bg-white/95 text-[#2c2420] border-[#d8d0c8] hover:border-[#c2652a] hover:shadow-sm hover:bg-white')
+                        }`}
+                        title="Drag to reposition • Double-click to edit label • Click to configure"
+                      >
+                        <div className={`text-[11px] font-medium leading-snug text-center break-words text-balance flex flex-col items-center ${isDark ? 'text-[#f4f4f5]' : 'text-[#181818]'}`}>
+                          {(() => {
+                            const lines = (mainDesc || '').split(/\\n|\n/);
+                            return lines.map((lineText, lineIdx) => {
+                              const parts = lineText.split(/(\*\*[^*]+\*\*|\/\/[^/]+\/\/)/g);
+                              return (
+                                <div key={lineIdx} className="leading-tight">
+                                  {parts.map((part, pIdx) => {
+                                    if (part.startsWith('**') && part.endsWith('**')) {
+                                      return <strong key={pIdx} className="font-bold">{part.slice(2, -2)}</strong>;
+                                    }
+                                    if (part.startsWith('//') && part.endsWith('//')) {
+                                      return <em key={pIdx} className="italic text-[#555] dark:text-[#aaa]">{part.slice(2, -2)}</em>;
+                                    }
+                                    return <span key={pIdx}>{part}</span>;
+                                  })}
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                        {techNote && (
+                          <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.2 rounded mt-0.5 tracking-tight border ${
+                            isDark ? 'bg-[#27272a] text-[#fbbf24] border-[#3f3f46]' : 'bg-[#f4ebe1] text-[#78350f] border-[#d8d0c8]/70'
+                          }`}>
+                            {techNote}
+                          </span>
+                        )}
                       </div>
-                      {techNote && (
-                        <span className={`text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded mt-1 tracking-tight border ${
-                          isDark ? 'bg-[#27272a] text-[#fbbf24] border-[#3f3f46]' : 'bg-[#f4ebe1] text-[#78350f] border-[#d8d0c8]/70'
-                        }`}>
-                          {techNote}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </React.Fragment>
             );
           })}
@@ -3779,61 +3804,11 @@ export const Canvas: React.FC<CanvasProps> = ({
 
       {/* Floating Canvas Controls Dock (Bottom Right) */}
       <aside className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-white/90 backdrop-blur-md border border-[#d8d0c8]/80 shadow-md rounded-xl p-1.5 z-20 text-xs select-none">
-        <button
-          id="btn-zoom-out"
-          onClick={() => onUpdateViewport({ ...viewport, zoom: Math.max(viewport.zoom * 0.85, 0.3) })}
-          className="p-1.5 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] hover:text-[#c2652a] transition-colors"
-          title="Zoom Out"
-        >
-          <Minus className="w-3.5 h-3.5" />
-        </button>
-
-        <span 
-          onClick={() => onUpdateViewport({ ...viewport, zoom: 1 })}
-          className="px-1.5 font-mono text-[11px] text-[#78706a] hover:text-[#c2652a] cursor-pointer"
-          title="Click to reset to 100%"
-        >
-          {Math.round(viewport.zoom * 100)}%
-        </span>
-
-        <button
-          id="btn-zoom-in"
-          onClick={() => onUpdateViewport({ ...viewport, zoom: Math.min(viewport.zoom * 1.15, 2.5) })}
-          className="p-1.5 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] hover:text-[#c2652a] transition-colors"
-          title="Zoom In"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="w-[1px] h-4 bg-[#d8d0c8]/60 mx-0.5" />
-
-        <button
-          id="btn-center-view"
-          onClick={() => onUpdateViewport({ x: 60, y: 40, zoom: 1 })}
-          className="p-1.5 rounded-lg hover:bg-[#faf5ee] text-[#3a302a] hover:text-[#c2652a] transition-colors"
-          title="Reset Canvas Position"
-        >
-          <Maximize className="w-3.5 h-3.5" />
-        </button>
-
-        <button
-          id="btn-snap-grid"
-          onClick={onToggleSnap}
-          className={`p-1.5 rounded-lg transition-colors ${
-            snapToGrid ? 'bg-[#A80036]/10 text-[#A80036]' : 'text-[#78706a] hover:bg-[#faf5ee]'
-          }`}
-          title={snapToGrid ? 'Grid Snap: ON' : 'Grid Snap: OFF'}
-        >
-          <Grid className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="w-[1px] h-4 bg-[#d8d0c8]/60 mx-0.5" />
-
         {/* Toggle Plain White Background */}
         <button
           id="btn-toggle-plain-white"
           onClick={handleTogglePlainWhite}
-          className={`px-2 py-1 rounded-lg transition-colors flex items-center gap-1.5 text-xs ${
+          className={`px-2.5 py-1 rounded-lg transition-colors flex items-center gap-1.5 text-xs cursor-pointer ${
             isPlainWhite 
               ? 'bg-[#c2652a] text-white font-medium shadow-xs' 
               : 'text-[#78706a] hover:bg-[#faf5ee] hover:text-[#2b2622]'

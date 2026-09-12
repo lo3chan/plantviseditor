@@ -1254,6 +1254,333 @@ export const C4PersonAvatar: React.FC<{ size?: number; color?: string }> = ({ si
 };
 
 // ============================================
+// 13E. ENTERPRISE INTEGRATION PATTERNS GLYPHS (stdlib/eip)
+// Gregor Hohpe EIP Vector Patterns
+// ============================================
+export const EipGlyph: React.FC<{
+  pattern?: string;
+  size?: number;
+}> = ({ pattern = 'router', size = 32 }) => {
+  const p = (pattern || '').toLowerCase();
+
+  const renderPattern = () => {
+    // Splitter (1 -> 3)
+    if (p.includes('splitter')) {
+      return (
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="9" y2="12" />
+          <path d="M9 12l5-7h7" />
+          <line x1="9" y1="12" x2="21" y2="12" />
+          <path d="M9 12l5 7h7" />
+          <polyline points="18 3 21 5 18 7" />
+          <polyline points="18 10 21 12 18 14" />
+          <polyline points="18 17 21 19 18 21" />
+        </svg>
+      );
+    }
+    // Aggregator (3 -> 1)
+    if (p.includes('aggregator')) {
+      return (
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 5h7l5 7" />
+          <line x1="3" y1="12" x2="15" y2="12" />
+          <path d="M3 19h7l5-7" />
+          <line x1="15" y1="12" x2="21" y2="12" />
+          <polyline points="18 10 21 12 18 14" />
+        </svg>
+      );
+    }
+    // Filter
+    if (p.includes('filter')) {
+      return (
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+        </svg>
+      );
+    }
+    // Wire Tap
+    if (p.includes('wiretap') || p.includes('wire_tap') || p.includes('wire-tap')) {
+      return (
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="2" y1="8" x2="22" y2="8" />
+          <polyline points="19 5 22 8 19 11" />
+          <path d="M12 8v8a4 4 0 0 0 4 4h6" />
+          <polyline points="19 17 22 20 19 23" />
+          <circle cx="12" cy="8" r="2.5" fill="currentColor" />
+        </svg>
+      );
+    }
+    // Dead Letter Channel
+    if (p.includes('dead') || p.includes('dlq')) {
+      return (
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="2" />
+          <line x1="2" y1="10" x2="22" y2="10" />
+          <circle cx="12" cy="15" r="2" fill="currentColor" />
+          <line x1="7" y1="5" x2="7" y2="3" />
+          <line x1="17" y1="5" x2="17" y2="3" />
+        </svg>
+      );
+    }
+    // Translator
+    if (p.includes('translator') || p.includes('transform')) {
+      return (
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="4" width="8" height="16" rx="2" />
+          <rect x="14" y="4" width="8" height="16" rx="2" />
+          <path d="M10 9l4 3-4 3" />
+        </svg>
+      );
+    }
+    // Store
+    if (p.includes('store')) {
+      return (
+        <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3" />
+          <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+          <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+        </svg>
+      );
+    }
+    // Default Router / Content-Based Router (Diamond routing)
+    return (
+      <svg width={size * 0.7} height={size * 0.7} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="12 2 22 12 12 22 2 12 12 2" />
+        <line x1="12" y1="8" x2="12" y2="16" />
+        <line x1="8" y1="12" x2="16" y2="12" />
+      </svg>
+    );
+  };
+
+  return (
+    <div
+      className="rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm bg-[#5C2D91] transition-transform hover:scale-110"
+      style={{
+        width: size,
+        height: size
+      }}
+      title={`EIP Pattern: ${pattern}`}
+    >
+      {renderPattern()}
+    </div>
+  );
+};
+
+// ============================================
+// 13F. OPEN SECURITY ARCHITECTURE GLYPHS (stdlib/osa)
+// Cybersecurity & Threat Modeling Vector Icons
+// ============================================
+export const OsaSecurityGlyph: React.FC<{
+  element?: string;
+  size?: number;
+}> = ({ element = 'firewall', size = 32 }) => {
+  const el = (element || '').toLowerCase();
+
+  const getSecurityBg = () => {
+    if (el.includes('threat') || el.includes('attacker')) return '#991B1B'; // dark crimson
+    if (el.includes('firewall') || el.includes('waf')) return '#DC2626'; // firewall red
+    if (el.includes('vpn')) return '#2563EB'; // vpn blue
+    if (el.includes('hsm') || el.includes('crypto')) return '#D97706'; // hsm amber
+    if (el.includes('bastion')) return '#4B5563'; // bastion slate
+    return '#059669'; // security green
+  };
+
+  const renderSecurityVector = () => {
+    // Threat Actor / Hacker
+    if (el.includes('threat') || el.includes('attacker')) {
+      return (
+        <svg width={size * 0.65} height={size * 0.65} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5z" />
+          <circle cx="9" cy="15" r="1" fill="currentColor" />
+          <circle cx="15" cy="15" r="1" fill="currentColor" />
+        </svg>
+      );
+    }
+    // VPN / Secure Tunnel
+    if (el.includes('vpn')) {
+      return (
+        <svg width={size * 0.65} height={size * 0.65} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+      );
+    }
+    // HSM / Encryption Key
+    if (el.includes('hsm') || el.includes('crypto') || el.includes('key')) {
+      return (
+        <svg width={size * 0.65} height={size * 0.65} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="7.5" cy="15.5" r="5.5" />
+          <path d="M21 2l-9.6 9.6" />
+          <path d="M15.5 7.5l3 3" />
+        </svg>
+      );
+    }
+    // Bastion Host
+    if (el.includes('bastion')) {
+      return (
+        <svg width={size * 0.65} height={size * 0.65} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 21V9l8-6 8 6v12" />
+          <path d="M9 21v-6h6v6" />
+          <line x1="12" y1="7" x2="12" y2="10" />
+        </svg>
+      );
+    }
+    // Default Firewall (Shield with brick pattern)
+    return (
+      <svg width={size * 0.65} height={size * 0.65} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <line x1="8" y1="10" x2="16" y2="10" />
+        <line x1="8" y1="14" x2="16" y2="14" />
+        <line x1="12" y1="6" x2="12" y2="10" />
+        <line x1="10" y1="10" x2="10" y2="14" />
+        <line x1="14" y1="10" x2="14" y2="14" />
+      </svg>
+    );
+  };
+
+  return (
+    <div
+      className="rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm transition-transform hover:scale-110"
+      style={{
+        backgroundColor: getSecurityBg(),
+        width: size,
+        height: size
+      }}
+      title={`OSA Security: ${element}`}
+    >
+      {renderSecurityVector()}
+    </div>
+  );
+};
+
+// ============================================
+// 13G. ELASTIC STACK GLYPHS (stdlib/elastic)
+// Official Elastic Observability Vector Icons
+// ============================================
+export const ElasticGlyph: React.FC<{
+  component?: string;
+  size?: number;
+}> = ({ component = 'elasticsearch', size = 32 }) => {
+  const c = (component || '').toLowerCase();
+
+  const getComponentColor = () => {
+    if (c.includes('kibana')) return '#E7157B';
+    if (c.includes('logstash')) return '#00BFB3';
+    if (c.includes('beats')) return '#FED10A';
+    if (c.includes('apm')) return '#8C4FFF';
+    return '#005571'; // Elasticsearch dark teal
+  };
+
+  return (
+    <div
+      className="rounded-lg flex items-center justify-center text-white shrink-0 shadow-sm transition-transform hover:scale-110"
+      style={{
+        backgroundColor: getComponentColor(),
+        width: size,
+        height: size
+      }}
+      title={`Elastic: ${component}`}
+    >
+      <svg width={size * 0.65} height={size * 0.65} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+        <circle cx="12" cy="12" r="9" strokeWidth="2" />
+        <line x1="7" y1="12" x2="17" y2="12" />
+        <path d="M12 7a5 5 0 0 1 5 5" />
+      </svg>
+    </div>
+  );
+};
+
+// ============================================
+// 13H. TECH LOGOS STDLIB GLYPHS (stdlib/logos)
+// Official Developer & Infrastructure Vector Logos
+// ============================================
+export const TechLogoGlyph: React.FC<{
+  logo?: string;
+  size?: number;
+}> = ({ logo = 'docker', size = 36 }) => {
+  const norm = (logo || '').toLowerCase().replace(/[-_]/g, '');
+
+  const getLogoConfig = () => {
+    if (norm.includes('docker')) return { bg: '#2496ed', text: '#ffffff', title: 'Docker' };
+    if (norm.includes('kube') || norm === 'k8s') return { bg: '#326ce5', text: '#ffffff', title: 'Kubernetes' };
+    if (norm.includes('kafka')) return { bg: '#231f20', text: '#ffffff', title: 'Kafka' };
+    if (norm.includes('postgres') || norm.includes('pgsql')) return { bg: '#336791', text: '#ffffff', title: 'PostgreSQL' };
+    if (norm.includes('redis')) return { bg: '#dc382d', text: '#ffffff', title: 'Redis' };
+    if (norm.includes('react')) return { bg: '#20232a', text: '#61dafb', title: 'React' };
+    if (norm.includes('node')) return { bg: '#333333', text: '#539e43', title: 'Node.js' };
+    if (norm.includes('python')) return { bg: '#3776ab', text: '#ffd43b', title: 'Python' };
+    if (norm.includes('java')) return { bg: '#e76f00', text: '#ffffff', title: 'Java' };
+    if (norm.includes('go') || norm.includes('golang')) return { bg: '#00add8', text: '#ffffff', title: 'Go' };
+    if (norm.includes('rust')) return { bg: '#000000', text: '#e43716', title: 'Rust' };
+    if (norm.includes('nginx')) return { bg: '#009639', text: '#ffffff', title: 'Nginx' };
+    return { bg: '#475569', text: '#ffffff', title: logo };
+  };
+
+  const cfg = getLogoConfig();
+
+  const renderPath = () => {
+    if (norm.includes('docker')) {
+      return (
+        <path d="M13.983 11.078h2.119a.186.186 0 00.186-.185V9.006a.186.186 0 00-.186-.186h-2.119a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.954-5.43h2.118a.186.186 0 00.186-.186V3.574a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.888c0 .102.082.185.185.185m0 2.716h2.118a.187.187 0 00.186-.186V6.29a.186.186 0 00-.186-.185h-2.118a.185.185 0 00-.185.185v1.887c0 .102.082.186.185.186m-2.93 0h2.12a.186.186 0 00.184-.186V6.29a.185.185 0 00-.185-.185H8.1a.185.185 0 00-.185.185v1.887c0 .102.083.186.185.186m-2.964 0h2.119a.186.186 0 00.185-.186V6.29a.185.185 0 00-.185-.185H5.136a.186.186 0 00-.186.185v1.887c0 .102.084.186.186.186m5.893 2.715h2.118a.186.186 0 00.186-.186V9.006a.186.186 0 00-.186-.186h-2.118a.186.186 0 00-.186.185v1.888c0 .102.082.185.186.185m-2.929 0h2.119a.185.185 0 00.185-.186V9.006a.185.185 0 00-.185-.186H8.1a.185.185 0 00-.185.185v1.888c0 .102.083.185.185.185m-2.964 0h2.119a.185.185 0 00.185-.186V9.006a.185.185 0 00-.185-.186H5.136a.186.186 0 00-.186.185v1.888c0 .102.084.185.186.185m-2.928 0h2.119a.185.185 0 00.185-.186V9.006a.185.185 0 00-.185-.186H2.208a.186.186 0 00-.186.185v1.888c0 .102.084.185.186.185M23.79 12.19c-.38-.264-1.25-.373-2.19-.187-.14-.49-.44-.92-.88-1.23l-.53-.33-.36.52c-.65.94-.78 2.05-.75 2.87-.58.33-1.4.52-2.38.52H1.27c-.42 0-.76.34-.76.76 0 3.84 2.37 7.02 6.55 7.49 1.13.13 2.34.15 3.59.04 4.54-.39 7.78-2.61 9.57-6.55.77-.07 2.09-.34 2.85-1.92.17-.34.11-.79-.19-1.07" />
+      );
+    }
+    if (norm.includes('kube') || norm === 'k8s') {
+      return (
+        <path d="M12 2.25a.75.75 0 00-.36.09L3.75 6.72a.75.75 0 00-.39.66v8.74a.75.75 0 00.39.66l7.89 4.38a.75.75 0 00.72 0l7.89-4.38a.75.75 0 00.39-.66V7.38a.75.75 0 00-.39-.66l-7.89-4.38a.75.75 0 00-.36-.09zm0 3.19l5.88 3.26-2.13 1.19-3.75-2.08-3.75 2.08-2.13-1.19L12 5.44zm-5.88 5.75l2.13 1.19v3.74l-2.13-1.18v-3.75zm11.76 0v3.75l-2.13 1.18v-3.74l2.13-1.19zm-4.38 2.44v3.25L12 17.75l-1.5-1.07v-3.25l1.5.83 1.5-.83z" />
+      );
+    }
+    if (norm.includes('kafka')) {
+      return (
+        <g>
+          <circle cx="17.5" cy="5.5" r="3" fill="#e01a22" />
+          <circle cx="17.5" cy="18.5" r="3" fill="#e01a22" />
+          <circle cx="6.5" cy="12" r="3" fill="#e01a22" />
+          <path d="M6.5 12l11-6.5M6.5 12l11 6.5" stroke="#ffffff" strokeWidth="2" />
+        </g>
+      );
+    }
+    if (norm.includes('react')) {
+      return (
+        <g stroke="currentColor" strokeWidth="1.5" fill="none">
+          <ellipse cx="12" cy="12" rx="4" ry="11" />
+          <ellipse cx="12" cy="12" rx="4" ry="11" transform="rotate(60 12 12)" />
+          <ellipse cx="12" cy="12" rx="4" ry="11" transform="rotate(120 12 12)" />
+          <circle cx="12" cy="12" r="2" fill="currentColor" />
+        </g>
+      );
+    }
+    if (norm.includes('redis')) {
+      return (
+        <path d="M12 2L2 7l10 5 10-5-10-5zm0 9L4.5 7.25 12 3.5l7.5 3.75L12 11zm10 2l-10 5-10-5 2.5-1.25L12 15.5l7.5-3.75L22 13zm0 4l-10 5-10-5 2.5-1.25L12 19.5l7.5-3.75L22 17z" />
+      );
+    }
+    // Default symbol / letter
+    return (
+      <text x="12" y="16" textAnchor="middle" fontSize="13" fontWeight="bold" fill="currentColor" fontFamily="monospace">
+        {cfg.title.charAt(0)}
+      </text>
+    );
+  };
+
+  return (
+    <div
+      className="rounded-lg flex items-center justify-center shrink-0 shadow-sm transition-transform hover:scale-105"
+      style={{
+        backgroundColor: cfg.bg,
+        color: cfg.text,
+        width: size,
+        height: size
+      }}
+      title={`Tech Logo: ${cfg.title}`}
+    >
+      <svg width={size * 0.65} height={size * 0.65} viewBox="0 0 24 24" fill="currentColor">
+        {renderPath()}
+      </svg>
+    </div>
+  );
+};
+
+// ============================================
 // 14. AUTHENTIC PLANTUML PACKAGE / NAMESPACE
 // Tab on top-left, bordered container body
 // ============================================
