@@ -514,9 +514,10 @@ export default function App() {
               blocks: parsed.blocks || [],
               settings: parsed.settings
             };
-            setLoadedPlantUMLCode('');
+            const generated = generatePlantUML(loadedDiagram);
+            setLoadedPlantUMLCode(generated);
             pushHistory(loadedDiagram, `Imported ${file.name}`);
-            setToastMessage({ text: `Successfully loaded "${file.name}"`, type: 'success' });
+            setToastMessage({ text: `Successfully restored layout from "${file.name}"`, type: 'success' });
             setTimeout(() => setToastMessage(null), 3500);
             return;
           }
@@ -791,6 +792,7 @@ export default function App() {
         onClose={() => setIsExportModalOpen(false)}
         diagram={diagram}
         pumlCode={activePlantUMLCode}
+        onImportFile={handleImportFile}
       />
 
       {/* Bug Report & Diagnostics Dialog */}

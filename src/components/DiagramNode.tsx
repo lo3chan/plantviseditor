@@ -69,7 +69,12 @@ import {
   DitaaAsciiMockup,
   MathFormulaCard,
   JsonYamlTreeViewer,
-  WbsCardShape
+  WbsCardShape,
+  StackShape,
+  CardShape,
+  LollipopInterfaceShape,
+  AgentAvatarShape,
+  RectangleContainerShape
 } from './PlantUMLShapes';
 import { renderPlantUMLFormattedText } from '../utils/plantumlTextFormatter';
 
@@ -77,6 +82,7 @@ interface DiagramNodeProps {
   node: DiagramNode;
   isSelected: boolean;
   isDropTarget?: boolean;
+  zIndex?: number;
   onSelect: (e: React.MouseEvent) => void;
   onUpdate: (updatedNode: Partial<DiagramNode>) => void;
   onStartConnection: (nodeId: string, port: PortPosition, e: React.MouseEvent) => void;
@@ -88,6 +94,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   node,
   isSelected,
   isDropTarget = false,
+  zIndex: propZIndex,
   onSelect,
   onUpdate,
   onStartConnection,
@@ -247,30 +254,43 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   const isNote = node.type === 'note' || node.data?.shape === 'note';
   const isFrame = node.type === 'frame' || node.data?.shape === 'frame' || node.data?.containerType === 'frame';
   const isFolder = (node.type === 'folder' || node.data?.shape === 'folder' || node.data?.containerType === 'folder') && !isFrame;
-  const isPackage = ((node.type === 'package' || node.type === 'namespace' || node.category === 'container' || Boolean(node.data?.isContainer) || node.data?.shape === 'package') && !isFrame && !isFolder && node.type !== 'rectangle');
+  const isRectangleContainer = node.type === 'rectangle' && (node.category === 'container' || Boolean(node.data?.isContainer));
+  const isPackage = ((node.type === 'package' || node.type === 'namespace' || node.category === 'container' || Boolean(node.data?.isContainer) || node.shape === 'package' || node.data?.shape === 'package') && !isFrame && !isFolder && !isRectangleContainer);
+
+  const isContainerNode = isPackage || isFrame || isFolder || isRectangleContainer || Boolean(node.data?.isContainer) || node.category === 'container' || node.type === 'package' || node.type === 'frame' || node.type === 'folder' || node.type === 'namespace' || node.type === 'c4-boundary' || node.type === 'rectangle';
+
+  const effectiveZIndex = propZIndex !== undefined
+    ? propZIndex
+    : (isContainerNode
+        ? (isSelected ? 4 : (isDropTarget ? 5 : 2))
+        : (isSelected ? 30 : 10));
 
   // Shapes
-  const isCylinder = node.type === 'database' || node.data?.shape === 'cylinder';
-  const isQueue = node.type === 'queue' || node.data?.shape === 'queue' || node.data?.shape === 'horiz-cylinder';
-  const isNode3d = node.type === 'node' || node.data?.shape === 'node3d';
-  const isComponentTab = (node.type === 'component' && !isC4) || node.data?.shape === 'component';
-  const isFileDoc = (node.type === 'file' || node.type === 'artifact') || node.data?.shape === 'file' || node.data?.shape === 'artifact';
-  const isHexagon = node.type === 'hexagon' || node.data?.shape === 'hexagon';
-  const isCloud = node.type.startsWith('cloud') || node.data?.shape === 'cloud';
-  const isActor = node.type === 'actor' || node.data?.shape === 'actor';
-  const isUseCase = node.type === 'usecase' || node.data?.shape === 'usecase';
-  const isCollections = node.type === 'collections' || node.data?.shape === 'collections';
+  const isCylinder = node.type === 'database' || node.type === 'seq-database' || node.shape === 'cylinder' || node.data?.shape === 'cylinder';
+  const isQueue = node.type === 'queue' || node.type === 'seq-queue' || node.type === 'storage' || node.shape === 'queue' || node.shape === 'horiz-cylinder' || node.data?.shape === 'queue' || node.data?.shape === 'horiz-cylinder';
+  const isStack = node.type === 'stack' || node.shape === 'stack' || node.data?.shape === 'stack';
+  const isCard = node.type === 'card' || node.shape === 'card' || node.data?.shape === 'card';
+  const isLollipop = node.type === 'interface-lollipop' || node.shape === 'lollipop' || node.data?.shape === 'lollipop';
+  const isAgent = node.type === 'agent' || node.shape === 'agent' || node.data?.shape === 'agent';
+  const isNode3d = node.type === 'node' || node.shape === 'node3d' || node.data?.shape === 'node3d';
+  const isComponentTab = (node.type === 'component' && !isC4) || node.shape === 'component' || node.data?.shape === 'component';
+  const isFileDoc = (node.type === 'file' || node.type === 'artifact') || node.shape === 'file' || node.shape === 'artifact' || node.data?.shape === 'file' || node.data?.shape === 'artifact';
+  const isHexagon = node.type === 'hexagon' || node.shape === 'hexagon' || node.data?.shape === 'hexagon';
+  const isCloud = node.type.startsWith('cloud') || node.shape === 'cloud' || node.data?.shape === 'cloud';
+  const isActor = node.type === 'actor' || node.type === 'seq-actor' || node.shape === 'actor' || node.data?.shape === 'actor';
+  const isUseCase = node.type === 'usecase' || node.shape === 'usecase' || node.data?.shape === 'usecase';
+  const isCollections = node.type === 'collections' || node.type === 'seq-collections' || node.shape === 'collections' || node.data?.shape === 'collections';
   const isParticipant = node.type === 'participant' || node.type === 'seq-participant' || (node.category === 'sequence' && !isFrame);
-  const isBoundary = node.type === 'boundary' || node.data?.shape === 'boundary';
-  const isControl = node.type === 'control' || node.data?.shape === 'control';
-  const isEntityCircle = node.type === 'entity-circle' || node.data?.shape === 'entity-circle';
-  const isActivityStart = node.type === 'activity-start' || node.type === 'start' || node.data?.shape === 'start';
-  const isActivityStop = node.type === 'activity-stop' || node.type === 'stop' || node.type === 'end' || node.data?.shape === 'stop';
-  const isActivityFlowFinal = node.type === 'activity-flow-final' || node.type === 'flow-final' || node.data?.shape === 'flow-final';
-  const isDecision = node.type === 'activity-decision' || node.type === 'condition' || node.data?.shape === 'diamond';
-  const isSyncBar = node.type === 'activity-fork' || node.type === 'activity-join' || node.type === 'fork' || node.type === 'join' || node.data?.shape === 'sync-bar';
-  const isStateHistory = node.type === 'state-history' || node.label === '[H]' || node.label === '[H*]' || node.data?.shape === 'history';
-  const isState = (node.type === 'state' || node.data?.shape === 'state') && !isStateHistory;
+  const isBoundary = node.type === 'boundary' || node.type === 'seq-boundary' || node.shape === 'boundary' || node.data?.shape === 'boundary';
+  const isControl = node.type === 'control' || node.type === 'seq-control' || node.shape === 'control' || node.data?.shape === 'control';
+  const isEntityCircle = node.type === 'entity-circle' || node.type === 'seq-entity' || node.shape === 'entity-circle' || node.data?.shape === 'entity-circle';
+  const isActivityStart = node.type === 'activity-start' || node.type === 'start' || node.shape === 'start' || node.data?.shape === 'start';
+  const isActivityStop = node.type === 'activity-stop' || node.type === 'stop' || node.type === 'end' || node.shape === 'stop' || node.data?.shape === 'stop';
+  const isActivityFlowFinal = node.type === 'activity-flow-final' || node.type === 'flow-final' || node.shape === 'flow-final' || node.data?.shape === 'flow-final';
+  const isDecision = node.type === 'activity-decision' || node.type === 'condition' || node.shape === 'diamond' || node.data?.shape === 'diamond';
+  const isSyncBar = node.type === 'activity-fork' || node.type === 'activity-join' || node.type === 'fork' || node.type === 'join' || node.shape === 'sync-bar' || node.data?.shape === 'sync-bar';
+  const isStateHistory = node.type === 'state-history' || node.label === '[H]' || node.label === '[H*]' || node.shape === 'history' || node.data?.shape === 'history';
+  const isState = (node.type === 'state' || node.shape === 'state' || node.data?.shape === 'state') && !isStateHistory;
   const isSalt = node.type === 'salt' || node.type === 'salt-mockup' || node.type === 'embedded-salt' || node.category === 'wireframe' || Boolean(node.data?.saltContent) || node.data?.embeddedType === 'salt';
   const isDitaa = node.type === 'embedded-ditaa' || node.type === 'ditaa' || node.data?.embeddedType === 'ditaa';
   const isMath = node.type === 'embedded-math' || node.type === 'math' || node.data?.embeddedType === 'math' || Boolean(node.data?.mathFormula);
@@ -484,13 +504,19 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       case 'interface':
         return { character: 'I', colorHex: '#B4A7E5' };
       case 'abstract-class':
-        return { character: 'A', colorHex: '#A9DCDF' };
+        return { character: 'A', colorHex: '#FFE082' };
       case 'enum':
         return { character: 'E', colorHex: '#EB937F' };
       case 'struct':
         return { character: 'S', colorHex: '#A9DCDF' };
       case 'protocol':
         return { character: 'P', colorHex: '#B4A7E5' };
+      case 'exception':
+        return { character: 'X', colorHex: '#FFB4B4' };
+      case 'annotation':
+        return { character: '@', colorHex: '#E6A8D7' };
+      case 'metaclass':
+        return { character: 'M', colorHex: '#ADD1B2' };
       case 'entity':
         return { character: 'E', colorHex: '#E3B680' };
       case 'class':
@@ -564,6 +590,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       return (
         <div
           id={node.id}
+      data-node-id={node.id}
           className={`absolute select-none border-2 border-dashed border-[#444444] rounded-lg p-3 bg-white/20 transition-all ${
             isSelected ? 'ring-2 ring-[#c2652a] shadow-lg' : ''
           } ${
@@ -575,7 +602,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             width: node.width,
             height: node.height,
             minHeight: node.height,
-            zIndex: isSelected ? 4 : (isDropTarget ? 5 : 2)
+            zIndex: effectiveZIndex
           }}
           onClick={onSelect}
           onMouseEnter={() => setIsHovered(true)}
@@ -615,6 +642,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-amber-400 ring-offset-2 shadow-xl' : 'hover:shadow-lg'
         }`}
@@ -625,7 +653,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -749,6 +777,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-[#c2652a] ring-offset-1 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -759,7 +788,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -846,6 +875,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-amber-500 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -856,7 +886,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -927,6 +957,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-sky-500 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -937,7 +968,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1005,6 +1036,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-blue-500 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -1015,7 +1047,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1083,6 +1115,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-indigo-500 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -1093,7 +1126,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1155,6 +1188,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-slate-500 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -1165,7 +1199,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1228,6 +1262,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-[#5C2D91] ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -1238,7 +1273,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1304,6 +1339,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-red-500 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -1314,7 +1350,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1377,6 +1413,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-teal-600 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -1387,7 +1424,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1451,6 +1488,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-blue-600 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -1461,7 +1499,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1525,6 +1563,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
       return (
         <div
           id={node.id}
+      data-node-id={node.id}
           className={`absolute select-none border-2 border-dashed border-[#555555] rounded-xl p-3 bg-amber-50/20 transition-all ${
             isSelected ? 'ring-2 ring-[#c2652a] shadow-lg' : ''
           } ${
@@ -1536,7 +1575,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
             width: node.width,
             height: node.height,
             minHeight: node.height,
-            zIndex: isSelected ? 4 : (isDropTarget ? 5 : 2)
+            zIndex: effectiveZIndex
           }}
           onClick={onSelect}
           onMouseEnter={() => setIsHovered(true)}
@@ -1591,6 +1630,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-amber-500 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -1601,7 +1641,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1671,6 +1711,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-emerald-500 ring-offset-2 shadow-lg' : 'hover:shadow-md'
         }`}
@@ -1681,7 +1722,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1747,6 +1788,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none flex items-center justify-center ${
           isSelected ? 'ring-2 ring-[#c2652a] ring-offset-2 rounded-full' : ''
         }`}
@@ -1755,7 +1797,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: startW,
           height: startH,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1784,6 +1826,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none flex items-center justify-center ${
           isSelected ? 'ring-2 ring-[#c2652a] ring-offset-2 rounded-full' : ''
         }`}
@@ -1792,7 +1835,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: stopW,
           height: stopH,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1821,13 +1864,14 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className="absolute cursor-move select-none"
         style={{
           left: node.x,
           top: node.y,
           width: syncW,
           height: syncH,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1858,13 +1902,14 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${isSelected ? 'ring-2 ring-[#A80036] ring-offset-2' : ''}`}
         style={{
           left: node.x,
           top: node.y,
           width: decW,
           height: decH,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1913,6 +1958,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none flex items-center justify-center ${
           isSelected ? 'ring-2 ring-[#c2652a] ring-offset-2 rounded-full' : ''
         }`}
@@ -1921,7 +1967,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: flowW,
           height: flowH,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1952,6 +1998,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none flex items-center justify-center ${
           isSelected ? 'ring-2 ring-[#A80036] ring-offset-2 rounded-full shadow-md' : ''
         }`}
@@ -1960,7 +2007,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           top: node.y,
           width: histW,
           height: histH,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -1993,6 +2040,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-blue-500 ring-offset-2 shadow-xl' : 'hover:shadow-md'
         }`}
@@ -2003,7 +2051,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -2036,6 +2084,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-amber-400 ring-offset-2 shadow-xl' : 'hover:shadow-md'
         }`}
@@ -2046,7 +2095,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -2079,6 +2128,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-[#A80036] ring-offset-2 shadow-xl' : 'hover:shadow-md'
         }`}
@@ -2089,7 +2139,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -2122,6 +2172,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-emerald-500 ring-offset-2 shadow-xl' : 'hover:shadow-md'
         }`}
@@ -2132,7 +2183,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -2169,6 +2220,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none flex flex-col items-center justify-center transition-shadow ${
           isSelected ? 'ring-2 ring-[#A80036] ring-offset-2 rounded-lg' : ''
         }`}
@@ -2179,7 +2231,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: 60,
           minHeight: 40,
-          zIndex: isSelected ? 30 : 10
+          zIndex: effectiveZIndex,
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -2223,17 +2275,78 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
   }
 
   // =========================================================================
+  // 3C2. LOLLIPOP INTERFACE CIRCLE (() or interface)
+  // =========================================================================
+  if (isLollipop) {
+    const strokeColor = colorConfig.borderHex || '#A80036';
+    const fillColor = colorConfig.bgHex || '#FEFECE';
+    return (
+      <div
+        id={node.id}
+        data-node-id={node.id}
+        className={`absolute cursor-move select-none flex flex-col items-center justify-center transition-shadow ${
+          isSelected ? 'ring-2 ring-[#A80036] ring-offset-2 rounded-full' : ''
+        }`}
+        style={{
+          left: node.x,
+          top: node.y,
+          width: effectiveWidth,
+          height: effectiveHeight,
+          minWidth: 40,
+          minHeight: 40,
+          zIndex: effectiveZIndex,
+        }}
+        onClick={onSelect}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="p-1 mb-1">
+          <LollipopInterfaceShape size={Math.min(effectiveWidth, effectiveHeight) - 24} fill={fillColor} stroke={strokeColor} />
+        </div>
+        {node.sublabel && (
+          <span className="text-[10px] text-gray-600 font-sans italic">{node.sublabel}</span>
+        )}
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            value={editLabel}
+            onChange={(e) => setEditLabel(e.target.value)}
+            onBlur={handleCommitEdit}
+            onKeyDown={handleKeyDown}
+            className="text-xs font-bold text-gray-900 bg-white border border-[#A80036] rounded px-1 py-0.5 outline-none text-center font-sans"
+          />
+        ) : (
+          <span
+            className="text-xs font-bold text-[#181818] font-sans text-center cursor-text px-1 truncate max-w-full"
+            onDoubleClick={() => setIsEditing(true)}
+          >
+            {node.label}
+          </span>
+        )}
+        {renderNodePorts()}
+        {isSelected && onStartResize && (
+          <div
+            className="absolute -bottom-1 -right-1 w-3 h-3 bg-white border-2 border-[#A80036] rounded-xs cursor-se-resize z-40 hover:scale-125 transition-transform"
+            title="Drag to resize element"
+            onMouseDown={(e) => onStartResize(node.id, 'se', e)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // =========================================================================
   // 4. PLANTUML SHAPES (Package, Database, Queue, 3D Node, Folder, Frame, Note, UseCase, Collections, State, etc.)
   // =========================================================================
-  if (isPackage || isCylinder || isQueue || isNode3d || isFolder || isFrame || isComponentTab || isFileDoc || isHexagon || isCloud || isActor || isNote || isUseCase || isCollections || isState || isParticipant) {
-    const strokeColor = colorConfig.borderHex || '#A80036';
-    const fillColor = colorConfig.bgHex || (isNote ? '#FEFFDD' : '#FEFECE');
+  if (isPackage || isCylinder || isQueue || isStack || isCard || isRectangleContainer || isNode3d || isFolder || isFrame || isComponentTab || isFileDoc || isHexagon || isCloud || isActor || isNote || isUseCase || isCollections || isState || isParticipant || isAgent) {
+    const strokeColor = colorConfig.borderHex || (isRectangleContainer ? '#78706A' : '#A80036');
+    const fillColor = colorConfig.bgHex || (isNote ? '#FEFFDD' : isRectangleContainer ? 'rgba(250,250,248,0.5)' : '#FEFECE');
 
-    const isContainerNode = isPackage || isFrame || isFolder || Boolean(node.data?.isContainer) || node.category === 'container' || node.type === 'package' || node.type === 'frame' || node.type === 'folder' || node.type === 'namespace';
 
     return (
       <div
         id={node.id}
+      data-node-id={node.id}
         className={`absolute cursor-move select-none transition-shadow ${
           isSelected ? 'ring-2 ring-[#A80036] ring-offset-2' : ''
         } ${
@@ -2246,9 +2359,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
           height: effectiveHeight,
           minWidth: isContainerNode ? 140 : 60,
           minHeight: isContainerNode ? 100 : 40,
-          zIndex: isContainerNode 
-            ? (isSelected ? 4 : (isDropTarget ? 5 : 2)) 
-            : (isSelected ? 30 : 10)
+          zIndex: effectiveZIndex
         }}
         onClick={onSelect}
         onMouseEnter={() => setIsHovered(true)}
@@ -2265,6 +2376,9 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         {isPackage && <PackageShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
         {isCylinder && <CylinderDatabaseShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
         {isQueue && <QueueShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isStack && <StackShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isCard && <CardShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
+        {isRectangleContainer && <RectangleContainerShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
         {isNode3d && <Node3dShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
         {isFolder && <FolderShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
         {isFrame && <FrameShape width={effectiveWidth} height={effectiveHeight} fill={fillColor} stroke={strokeColor} isSelected={isSelected} />}
@@ -2313,6 +2427,31 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
                 className="text-xs font-bold text-[#181818] font-sans truncate cursor-text"
                 onDoubleClick={() => setIsEditing(true)}
                 title="Double click to rename package"
+              >
+                {node.label}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* 4A3. Specific PlantUML Rectangle Container Tab Labeling */}
+        {isRectangleContainer && (
+          <div className="absolute top-0 left-2.5 h-[22px] max-w-[200px] flex items-center pr-2 z-20 overflow-hidden select-none">
+            <span className="text-[9px] font-mono text-[#78706A] font-semibold mr-1">rectangle</span>
+            {isEditing ? (
+              <input
+                ref={inputRef}
+                value={editLabel}
+                onChange={(e) => setEditLabel(e.target.value)}
+                onBlur={handleCommitEdit}
+                onKeyDown={handleKeyDown}
+                className="text-xs font-bold text-gray-900 bg-white border border-[#78706A] rounded px-1 py-0 outline-none w-full shadow-xs"
+              />
+            ) : (
+              <span
+                className="text-xs font-bold text-[#3a302a] font-sans truncate cursor-text"
+                onDoubleClick={() => setIsEditing(true)}
+                title="Double click to rename container"
               >
                 {node.label}
               </span>
@@ -2418,7 +2557,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         )}
 
         {/* 4C. Standard Content Container for All Other Shapes */}
-        {!isPackage && !isFrame && !isNote && (
+        {!isPackage && !isFrame && !isNote && !isRectangleContainer && (
           isState ? (
             <div className="relative z-10 w-full h-full flex flex-col items-center justify-between p-2.5 text-center overflow-hidden">
               <div className="w-full text-center">
@@ -2464,10 +2603,15 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
               )}
             </div>
           ) : (
-            <div className={`relative z-10 w-full h-full flex flex-col items-center justify-center p-3 text-center ${isActor ? 'pt-1' : ''}`}>
+            <div className={`relative z-10 w-full h-full flex flex-col items-center justify-center p-3 text-center ${isActor || isAgent ? 'pt-1' : ''}`}>
               {isActor && (
                 <div className="mb-1 flex justify-center">
                   <StickmanActorShape color={strokeColor} size={40} />
+                </div>
+              )}
+              {isAgent && (
+                <div className="mb-1 flex justify-center">
+                  <AgentAvatarShape color={strokeColor} size={32} />
                 </div>
               )}
 
@@ -2549,7 +2693,7 @@ export const DiagramNodeView: React.FC<DiagramNodeProps> = ({
         height: effectiveHeight,
         minWidth: isEmptyClassifier ? 48 : 60,
         minHeight: isEmptyClassifier ? 26 : 40,
-        zIndex: isSelected ? 30 : 10,
+        zIndex: effectiveZIndex,
         filter: 'drop-shadow(1px 1px 2px rgba(0,0,0,0.12))'
       }}
       onClick={onSelect}

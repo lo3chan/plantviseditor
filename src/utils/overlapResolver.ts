@@ -6,7 +6,7 @@ import { DiagramNode, DiagramEdge, PortPosition } from '../types';
 export function doNodesOverlap(
   a: { x: number; y: number; width: number; height: number },
   b: { x: number; y: number; width: number; height: number },
-  margin: number = 32
+  margin: number = 55
 ): boolean {
   return !(
     a.x + a.width + margin <= b.x ||
@@ -22,7 +22,7 @@ export function doNodesOverlap(
  */
 export function resolveOverlaps(
   nodes: DiagramNode[],
-  minMargin: number = 36
+  minMargin: number = 65
 ): DiagramNode[] {
   if (!nodes || nodes.length <= 1) return nodes ? [...nodes] : [];
 
@@ -64,19 +64,49 @@ export function resolveOverlaps(
     );
   };
 
-  // Group child nodes belonging to each container
+  // Group child nodes belonging to each container (including nested child containers)
+  const containerDepth = new Map<string, number>();
+  const getContainerDepth = (id: string, visited = new Set<string>()): number => {
+    if (containerDepth.has(id)) return containerDepth.get(id)!;
+    if (visited.has(id)) return 0;
+    visited.add(id);
+    const node = cloned.find(n => n.id === id);
+    const pId = node?.data?.parentId;
+    if (pId && containerIds.has(pId) && pId !== id) {
+      const d = 1 + getContainerDepth(pId, visited);
+      containerDepth.set(id, d);
+      return d;
+    }
+    containerDepth.set(id, 0);
+    return 0;
+  };
+  containerIds.forEach(id => getContainerDepth(id));
+
   const containerChildrenMap = new Map<string, DiagramNode[]>();
   cloned.forEach(c => {
     if (containerIds.has(c.id)) {
-      const children = cloned.filter(
-        n => n.id !== c.id && (n.data?.parentId === c.id || (!n.data?.parentId && isInsideContainer(n, c) && !containerIds.has(n.id)))
-      );
+      const children = cloned.filter(n => {
+        if (n.id === c.id) return false;
+        if (n.data?.parentId === c.id) return true;
+        if (!n.data?.parentId && isInsideContainer(n, c)) {
+          // Check if c is the smallest enclosing container for n
+          const enclosing = cloned.filter(otherC => otherC.id !== n.id && containerIds.has(otherC.id) && isInsideContainer(n, otherC));
+          enclosing.sort((a, b) => (a.width * a.height) - (b.width * b.height));
+          return enclosing[0]?.id === c.id;
+        }
+        return false;
+      });
       containerChildrenMap.set(c.id, children);
     }
   });
 
-  // 1. First resolve overlaps among children within each container
-  containerChildrenMap.forEach((children, cId) => {
+  // 1. First resolve overlaps bottom-up (deepest nested containers first)
+  const sortedContainerList = Array.from(containerIds).sort(
+    (a, b) => (containerDepth.get(b) || 0) - (containerDepth.get(a) || 0)
+  );
+
+  sortedContainerList.forEach(cId => {
+    const children = containerChildrenMap.get(cId) || [];
     if (children.length > 1) {
       relaxNodeGroup(children, minMargin);
     }
@@ -93,17 +123,17 @@ export function resolveOverlaps(
         maxX = Math.max(maxX, ch.x + ch.width);
         maxY = Math.max(maxY, ch.y + ch.height);
       });
-      const padX = 36;
-      const padTop = 50; // Extra room for package header
-      const padBottom = 36;
+      const padX = 70;
+      const padTop = 85; // Extra room for package header
+      const padBottom = 70;
       container.x = Math.max(20, minX - padX);
       container.y = Math.max(20, minY - padTop);
-      container.width = (maxX - minX) + padX * 2;
-      container.height = (maxY - minY) + padTop + padBottom;
+      container.width = Math.max(520, (maxX - minX) + padX * 2);
+      container.height = Math.max(360, (maxY - minY) + padTop + padBottom);
     }
   });
 
-  // 2. Resolve overlaps among top-level nodes (containers + loose nodes not inside any container)
+  // 2. Resolve overlaps among top-level nodes (root containers + loose nodes not inside any container)
   const isAnchorNode = (n: DiagramNode) =>
     (n.type === 'class' || n.category === 'code') &&
     (!n.data?.attributes || n.data.attributes.length === 0) &&
@@ -128,7 +158,19 @@ export function resolveOverlaps(
 
   relaxNodeGroup(topLevelNodes, minMargin);
 
-  // Synchronize children of containers that moved during relaxation
+  // Synchronize children of containers that moved during relaxation recursively
+  const syncDescendants = (parentId: string, dx: number, dy: number) => {
+    const children = containerChildrenMap.get(parentId);
+    if (!children) return;
+    children.forEach(ch => {
+      ch.x += dx;
+      ch.y += dy;
+      if (containerIds.has(ch.id)) {
+        syncDescendants(ch.id, dx, dy);
+      }
+    });
+  };
+
   topLevelNodes.forEach(n => {
     if (containerIds.has(n.id)) {
       const prev = prevContainerPositions.get(n.id);
@@ -136,13 +178,7 @@ export function resolveOverlaps(
         const dx = n.x - prev.x;
         const dy = n.y - prev.y;
         if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
-          const children = containerChildrenMap.get(n.id);
-          if (children) {
-            children.forEach(ch => {
-              ch.x += dx;
-              ch.y += dy;
-            });
-          }
+          syncDescendants(n.id, dx, dy);
         }
       }
     }
@@ -155,8 +191,8 @@ export function resolveOverlaps(
     minX = Math.min(minX, n.x);
     minY = Math.min(minY, n.y);
   });
-  const shiftX = minX < 140 ? 140 - minX : 0;
-  const shiftY = minY < 40 ? 40 - minY : 0;
+  const shiftX = minX < 160 ? 160 - minX : 0;
+  const shiftY = minY < 60 ? 60 - minY : 0;
   if (shiftX > 0 || shiftY > 0) {
     cloned.forEach(n => {
       n.x += shiftX;

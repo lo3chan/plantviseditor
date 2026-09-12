@@ -78,6 +78,13 @@ export function getOptimalNodeDimensions(node: DiagramNode): NodeDimensions {
 
     // Compact Spot Badge for Empty Classifiers (e.g. Kernel, N1..N5)
     if (attrs.length === 0 && methods.length === 0 && !data.generics) {
+      if (node.sublabel) {
+        const maxTextLen = Math.max((node.label || '').length, (node.sublabel || '').length);
+        return {
+          width: Math.max(90, Math.min(220, Math.round(maxTextLen * 8.5 + 36))),
+          height: 48
+        };
+      }
       const nameLen = (node.label || '').length;
       return {
         width: Math.max(52, Math.min(120, Math.round(nameLen * 8.5 + 32))),
@@ -184,13 +191,13 @@ export function getOptimalNodeDimensions(node: DiagramNode): NodeDimensions {
         const stripped = l.replace(/\*\*|\/\//g, '').trim();
         if (stripped.length > maxLineLen) maxLineLen = stripped.length;
       });
-      const optimalW = Math.max(250, Math.min(390, Math.round(maxLineLen * 7.4 + 44)));
+      const optimalW = Math.max(480, Math.min(650, Math.round(maxLineLen * 7.4 + 60)));
       let totalVisualLines = 0;
       textLines.forEach(l => {
         const stripped = l.replace(/\*\*|\/\//g, '').trim();
         totalVisualLines += Math.max(1, Math.ceil((stripped.length * 7.4) / (optimalW - 36)));
       });
-      const optimalH = Math.max(160, Math.round(52 + totalVisualLines * 19 + 24));
+      const optimalH = Math.max(340, Math.round(70 + totalVisualLines * 22 + 36));
       return {
         width: Math.max(optimalW, node.width || 0),
         height: Math.max(optimalH, node.height || 0)
@@ -198,8 +205,8 @@ export function getOptimalNodeDimensions(node: DiagramNode): NodeDimensions {
     }
 
     return {
-      width: Math.max(340, node.width || 340),
-      height: Math.max(240, node.height || 240)
+      width: Math.max(480, node.width || 480),
+      height: Math.max(340, node.height || 340)
     };
   }
 
@@ -244,7 +251,7 @@ export function ensureNodeDimensions(node: DiagramNode): DiagramNode {
   const isClassOrOO = [
     'class', 'interface', 'abstract-class', 'enum', 'struct', 'protocol', 'exception', 'annotation', 'metaclass'
   ].includes(node.type) || node.category === 'code';
-  const isEmptyClassifier = isClassOrOO && (!node.data?.attributes || node.data.attributes.length === 0) && (!node.data?.methods || node.data.methods.length === 0) && !node.data?.generics;
+  const isEmptyClassifier = isClassOrOO && (!node.data?.attributes || node.data.attributes.length === 0) && (!node.data?.methods || node.data.methods.length === 0) && !node.data?.generics && !node.sublabel;
 
   if (isSmallShape || isEmptyClassifier) {
     return {

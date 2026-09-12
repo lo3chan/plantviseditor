@@ -57,6 +57,19 @@ interface CanvasProps {
   onTogglePlainWhite?: () => void;
 }
 
+export const HARMONIC_EDGE_PALETTE = [
+  '#2563eb', // Royal Blue
+  '#059669', // Emerald Green
+  '#7c3aed', // Violet Purple
+  '#d97706', // Warm Amber
+  '#e11d48', // Crimson Rose
+  '#0891b2', // Ocean Cyan
+  '#475569', // Slate Gray
+  '#c026d3', // Fuchsia
+  '#b45309', // Russet
+  '#4338ca'  // Deep Indigo
+];
+
 function getFriendlyRelationLabel(arrowType?: DiagramEdge['arrowType'], style?: DiagramEdge['style']): string {
   switch (arrowType) {
     case 'inheritance':
@@ -514,6 +527,18 @@ export const Canvas: React.FC<CanvasProps> = ({
     initialOffsetY: number;
   } | null>(null);
 
+  // Connection Line (Edge Route & Curve Bend) Dragging State
+  const [draggingEdgeRoute, setDraggingEdgeRoute] = useState<{
+    edgeId: string;
+    startX: number;
+    startY: number;
+    initialOffset: { x: number; y: number };
+    currentOffset: { x: number; y: number };
+  } | null>(null);
+
+  // Hovered Edge State for visual halo highlight & connection tooltip
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+
   // Sequence Message Dragging State (Vertical Reordering & Horizontal Left/Right Shift)
   const [draggingMessage, setDraggingMessage] = useState<{
     id: string;
@@ -715,20 +740,34 @@ export const Canvas: React.FC<CanvasProps> = ({
       node.data?.containerType === 'frame' ||
       node.type.includes('boundary');
 
-    // If dragging a container, locate enclosed child nodes to move together
+    // If dragging a container, locate enclosed child nodes & nested frames recursively to move together
     let childOffsets: Array<{ id: string; initialX: number; initialY: number }> | undefined = undefined;
     if (isContainer) {
-      const isChild = (n: DiagramNode) => {
-        if (n.id === node.id) return false;
-        if (n.data?.parentId === node.id) return true;
-        return (
-          n.x >= node.x && 
-          n.x + n.width <= node.x + node.width && 
-          n.y >= node.y && 
-          n.y + n.height <= node.y + node.height
-        );
+      const getDescendants = (parentId: string, parentBox: DiagramNode): DiagramNode[] => {
+        const direct = diagram.nodes.filter(n => {
+          if (n.id === parentId) return false;
+          if (n.data?.parentId === parentId) return true;
+          return (
+            n.x >= parentBox.x && 
+            n.x + n.width <= parentBox.x + parentBox.width && 
+            n.y >= parentBox.y && 
+            n.y + n.height <= parentBox.y + parentBox.height
+          );
+        });
+        const result = [...direct];
+        direct.forEach(d => {
+          const isNestedContainer = ['package', 'frame', 'folder', 'namespace', 'rectangle', 'node', 'cloud', 'together', 'boundary'].includes(d.type) || Boolean(d.data?.isContainer);
+          if (isNestedContainer) {
+            const sub = getDescendants(d.id, d);
+            sub.forEach(s => {
+              if (!result.some(r => r.id === s.id)) result.push(s);
+            });
+          }
+        });
+        return result;
       };
-      const children = diagram.nodes.filter(isChild);
+
+      const children = getDescendants(node.id, node);
       if (children.length > 0) {
         childOffsets = children.map(c => ({ id: c.id, initialX: c.x, initialY: c.y }));
       }
@@ -808,9 +847,11 @@ export const Canvas: React.FC<CanvasProps> = ({
       const minY = Math.min(marquee.startY, pos.y);
       const maxY = Math.max(marquee.startY, pos.y);
 
-      // Find all nodes intersecting the rubberband box
+      // Draw.io standard: only elements COMPLETELY ENCLOSED within the selection rectangle are selected
       const enclosed = diagram.nodes.filter(n => {
-        return !(n.x + n.width < minX || n.x > maxX || n.y + n.height < minY || n.y > maxY);
+        const nodeW = n.width || 120;
+        const nodeH = n.height || 60;
+        return n.x >= minX && (n.x + nodeW) <= maxX && n.y >= minY && (n.y + nodeH) <= maxY;
       }).map(n => n.id);
 
       if (marquee.isAdditive) {
@@ -943,21 +984,26 @@ export const Canvas: React.FC<CanvasProps> = ({
       const effectiveDeltaY = newY - draggingNode.initialNodeY;
 
       // Detect hover over enclosing container for live magnetic drop-target feedback
-      const isTargetContainer = target && (
-        target.type === 'package' || 
-        target.type === 'frame' || 
-        target.type === 'folder' || 
-        target.type === 'namespace' ||
-        target.type === 'c4-boundary' ||
-        target.category === 'container' || 
-        Boolean(target.data?.isContainer)
-      );
+      if (target) {
+        const isDescendant = (candId: string, rootId: string): boolean => {
+          let curr = diagram.nodes.find(n => n.id === candId);
+          const seen = new Set<string>();
+          while (curr?.data?.parentId) {
+            if (curr.data.parentId === rootId) return true;
+            if (seen.has(curr.id)) break;
+            seen.add(curr.id);
+            curr = diagram.nodes.find(n => n.id === curr!.data!.parentId);
+          }
+          return false;
+        };
 
-      if (target && !isTargetContainer) {
-        const centerX = newX + target.width / 2;
-        const centerY = newY + target.height / 2;
+        const targetW = target.width || 120;
+        const targetH = target.height || 80;
+        const centerX = newX + targetW / 2;
+        const centerY = newY + targetH / 2;
         const enclosingContainers = diagram.nodes.filter(c => 
           c.id !== target.id &&
+          !isDescendant(c.id, target.id) &&
           (c.type === 'package' || c.type === 'frame' || c.type === 'folder' || c.type === 'namespace' || c.type === 'c4-boundary' || c.category === 'container' || c.data?.isContainer) &&
           centerX >= c.x && centerX <= c.x + c.width &&
           centerY >= c.y && centerY <= c.y + c.height
@@ -999,6 +1045,19 @@ export const Canvas: React.FC<CanvasProps> = ({
       return;
     }
 
+    if (draggingEdgeRoute) {
+      const deltaX = (e.clientX - draggingEdgeRoute.startX) / viewport.zoom;
+      const deltaY = (e.clientY - draggingEdgeRoute.startY) / viewport.zoom;
+      const newOffsetX = snap(draggingEdgeRoute.initialOffset.x + deltaX);
+      const newOffsetY = snap(draggingEdgeRoute.initialOffset.y + deltaY);
+
+      setDraggingEdgeRoute(prev => prev ? {
+        ...prev,
+        currentOffset: { x: newOffsetX, y: newOffsetY }
+      } : null);
+      return;
+    }
+
     if (draggingEdgeLabel) {
       const deltaX = (e.clientX - draggingEdgeLabel.startX) / viewport.zoom;
       const deltaY = (e.clientY - draggingEdgeLabel.startY) / viewport.zoom;
@@ -1025,12 +1084,15 @@ export const Canvas: React.FC<CanvasProps> = ({
     e.stopPropagation();
     setSelectedEdgeId(edge.id);
     setSelectedNodeId(null);
+    const computed = computedEdges.find(ce => ce.edge.id === edge.id);
+    const curOffsetX = edge.labelOffset?.x ?? (computed ? computed.labelPos.x - computed.midPoint.x : 0);
+    const curOffsetY = edge.labelOffset?.y ?? (computed ? computed.labelPos.y - computed.midPoint.y : 0);
     setDraggingEdgeLabel({
       edgeId: edge.id,
       startX: e.clientX,
       startY: e.clientY,
-      initialOffsetX: edge.labelOffset?.x || 0,
-      initialOffsetY: edge.labelOffset?.y || 0
+      initialOffsetX: curOffsetX,
+      initialOffsetY: curOffsetY
     });
   };
 
@@ -1049,7 +1111,13 @@ export const Canvas: React.FC<CanvasProps> = ({
       setIsPanning(false);
     }
 
-    rightMouseDownPos.current = null;
+    if (draggingEdgeRoute) {
+      const finalOffset = draggingEdgeRoute.currentOffset;
+      onUpdateEdges(diagram.edges.map(ed => 
+        ed.id === draggingEdgeRoute.edgeId ? { ...ed, routeOffset: finalOffset } : ed
+      ));
+      setDraggingEdgeRoute(null);
+    }
 
     if (draggingEdgeLabel) {
       setDraggingEdgeLabel(null);
@@ -1182,11 +1250,26 @@ export const Canvas: React.FC<CanvasProps> = ({
             };
           });
           moveActionName = `Moved ${draggingNode.multiOffsets.length} Elements`;
-        } else if (target && !isTargetContainer) {
-          const centerX = finalNewX + target.width / 2;
-          const centerY = finalNewY + target.height / 2;
+        } else if (target) {
+          const isDescendant = (candId: string, rootId: string): boolean => {
+            let curr = diagram.nodes.find(n => n.id === candId);
+            const seen = new Set<string>();
+            while (curr?.data?.parentId) {
+              if (curr.data.parentId === rootId) return true;
+              if (seen.has(curr.id)) break;
+              seen.add(curr.id);
+              curr = diagram.nodes.find(n => n.id === curr!.data!.parentId);
+            }
+            return false;
+          };
+
+          const targetW = target.width || 120;
+          const targetH = target.height || 80;
+          const centerX = finalNewX + targetW / 2;
+          const centerY = finalNewY + targetH / 2;
           const enclosingContainers = diagram.nodes.filter(c => 
             c.id !== target.id &&
+            !isDescendant(c.id, target.id) &&
             (c.type === 'package' || c.type === 'frame' || c.type === 'folder' || c.type === 'namespace' || c.type === 'c4-boundary' || c.category === 'container' || c.data?.isContainer) &&
             centerX >= c.x && centerX <= c.x + c.width &&
             centerY >= c.y && centerY <= c.y + c.height
@@ -1199,7 +1282,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
           if (enclosing) {
             const newParentId = enclosing.id;
-            moveActionName = `Snapped ${target.label || 'Element'} into ${enclosing.label || 'Container'}`;
+            moveActionName = `Snapped ${target.label || 'Frame'} into ${enclosing.label || 'Container'}`;
             // Magnetic tab clearance: ensure top doesn't collide with the frame/package title tab
             const headerPadding = enclosing.type === 'frame' ? 36 : (enclosing.type === 'folder' ? 32 : 30);
             let finalTargetX = finalNewX;
@@ -1213,8 +1296,11 @@ export const Canvas: React.FC<CanvasProps> = ({
             }
 
             // Auto-expand container if child exceeds right or bottom boundary
-            const requiredWidth = Math.max(enclosing.width, (finalTargetX + target.width + 24) - enclosing.x);
-            const requiredHeight = Math.max(enclosing.height, (finalTargetY + target.height + 24) - enclosing.y);
+            const requiredWidth = Math.max(enclosing.width, (finalTargetX + targetW + 24) - enclosing.x);
+            const requiredHeight = Math.max(enclosing.height, (finalTargetY + targetH + 24) - enclosing.y);
+
+            const shiftX = finalTargetX - finalNewX;
+            const shiftY = finalTargetY - finalNewY;
 
             updatedNodes = updatedNodes.map(n => {
               if (n.id === target.id) {
@@ -1225,11 +1311,19 @@ export const Canvas: React.FC<CanvasProps> = ({
                   data: { ...(n.data || {}), parentId: newParentId }
                 };
               }
-              if (n.id === enclosing.id) {
+              if (n.id === enclosing!.id) {
                 return {
                   ...n,
                   width: requiredWidth,
                   height: requiredHeight
+                };
+              }
+              const child = draggingNode.childOffsets?.find(c => c.id === n.id);
+              if (child) {
+                return {
+                  ...n,
+                  x: snap(child.initialX + effectiveDeltaX + shiftX),
+                  y: snap(child.initialY + effectiveDeltaY + shiftY)
                 };
               }
               return n;
@@ -1245,24 +1339,16 @@ export const Canvas: React.FC<CanvasProps> = ({
                   data: target.data?.parentId ? { ...(n.data || {}), parentId: undefined } : n.data
                 };
               }
+              const child = draggingNode.childOffsets?.find(c => c.id === n.id);
+              if (child) {
+                return { ...n, x: snap(child.initialX + effectiveDeltaX), y: snap(child.initialY + effectiveDeltaY) };
+              }
               return n;
             });
             if (target.data?.parentId) {
               moveActionName = `Unsnapped ${target.label || 'Element'} from Container`;
             }
           }
-        } else if (target && isTargetContainer) {
-          // Explicitly sync final positions for all enclosed children when container moved
-          updatedNodes = updatedNodes.map(n => {
-            if (n.id === target.id) {
-              return { ...n, x: finalNewX, y: finalNewY };
-            }
-            const child = draggingNode.childOffsets?.find(c => c.id === n.id);
-            if (child) {
-              return { ...n, x: snap(child.initialX + effectiveDeltaX), y: snap(child.initialY + effectiveDeltaY) };
-            }
-            return n;
-          });
         }
 
         onUpdateNodes(updatedNodes, { 
@@ -1385,7 +1471,7 @@ export const Canvas: React.FC<CanvasProps> = ({
 
   useEffect(() => {
     const isInteracting = Boolean(
-      draggingNode || resizingNode || isPanning || draggingBlock || draggingMessage || draggingEdgeLabel || connecting || marquee
+      draggingNode || resizingNode || isPanning || draggingBlock || draggingMessage || draggingEdgeLabel || draggingEdgeRoute || connecting || marquee
     );
     if (!isInteracting) return;
 
@@ -1403,7 +1489,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       window.removeEventListener('mousemove', onWindowMouseMove);
       window.removeEventListener('mouseup', onWindowMouseUp);
     };
-  }, [Boolean(draggingNode || resizingNode || isPanning || draggingBlock || draggingMessage || draggingEdgeLabel || connecting || marquee)]);
+  }, [Boolean(draggingNode || resizingNode || isPanning || draggingBlock || draggingMessage || draggingEdgeLabel || draggingEdgeRoute || connecting || marquee)]);
 
   // Zoom & Pan with Wheel (Draw.io Scheme - non-passive native event listener)
   const handleWheel = (e: WheelEvent | React.WheelEvent) => {
@@ -2033,33 +2119,77 @@ export const Canvas: React.FC<CanvasProps> = ({
     const tgtW = tgtNode.width ?? tgtOptimal.width;
     const tgtH = tgtNode.height ?? tgtOptimal.height;
 
-    const srcCenter = { x: srcNode.x + srcW / 2, y: srcNode.y + srcH / 2 };
-    const tgtCenter = { x: tgtNode.x + tgtW / 2, y: tgtNode.y + tgtH / 2 };
+    const srcLeft = srcNode.x;
+    const srcRight = srcNode.x + srcW;
+    const srcTop = srcNode.y;
+    const srcBottom = srcNode.y + srcH;
 
-    const dx = tgtCenter.x - srcCenter.x;
-    const dy = tgtCenter.y - srcCenter.y;
+    const tgtLeft = tgtNode.x;
+    const tgtRight = tgtNode.x + tgtW;
+    const tgtTop = tgtNode.y;
+    const tgtBottom = tgtNode.y + tgtH;
 
-    const wRatio = (srcW + tgtW) / 2 || 1;
-    const hRatio = (srcH + tgtH) / 2 || 1;
+    // Measure horizontal and vertical bounding box gaps
+    const gapLeft = tgtRight < srcLeft;
+    const gapRight = tgtLeft > srcRight;
+    const gapAbove = tgtBottom < srcTop;
+    const gapBelow = tgtTop > srcBottom;
+
+    const overlapX = !gapLeft && !gapRight;
+    const overlapY = !gapAbove && !gapBelow;
+
+    const gapXDist = gapLeft ? (srcLeft - tgtRight) : (gapRight ? (tgtLeft - srcRight) : 0);
+    const gapYDist = gapAbove ? (srcTop - tgtBottom) : (gapBelow ? (tgtTop - srcBottom) : 0);
 
     let computedSrcPort: PortPosition = 'right';
     let computedTgtPort: PortPosition = 'left';
 
-    if (Math.abs(dx) / wRatio >= Math.abs(dy) / hRatio) {
-      if (dx >= 0) {
+    if (overlapY && !overlapX) {
+      if (gapRight) {
         computedSrcPort = 'right';
         computedTgtPort = 'left';
       } else {
         computedSrcPort = 'left';
         computedTgtPort = 'right';
       }
-    } else {
-      if (dy >= 0) {
+    } else if (overlapX && !overlapY) {
+      if (gapBelow) {
         computedSrcPort = 'bottom';
         computedTgtPort = 'top';
       } else {
         computedSrcPort = 'top';
         computedTgtPort = 'bottom';
+      }
+    } else if (!overlapX && !overlapY) {
+      // Diagonally separated: compare gaps with a slight horizontal preference for readable UML diagrams
+      if (gapXDist * 1.15 >= gapYDist) {
+        if (gapRight) {
+          computedSrcPort = 'right';
+          computedTgtPort = 'left';
+        } else {
+          computedSrcPort = 'left';
+          computedTgtPort = 'right';
+        }
+      } else {
+        if (gapBelow) {
+          computedSrcPort = 'bottom';
+          computedTgtPort = 'top';
+        } else {
+          computedSrcPort = 'top';
+          computedTgtPort = 'bottom';
+        }
+      }
+    } else {
+      const srcCenter = { x: srcNode.x + srcW / 2, y: srcNode.y + srcH / 2 };
+      const tgtCenter = { x: tgtNode.x + tgtW / 2, y: tgtNode.y + tgtH / 2 };
+      const dx = tgtCenter.x - srcCenter.x;
+      const dy = tgtCenter.y - srcCenter.y;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        computedSrcPort = dx >= 0 ? 'right' : 'left';
+        computedTgtPort = dx >= 0 ? 'left' : 'right';
+      } else {
+        computedSrcPort = dy >= 0 ? 'bottom' : 'top';
+        computedTgtPort = dy >= 0 ? 'top' : 'bottom';
       }
     }
 
@@ -2179,9 +2309,30 @@ export const Canvas: React.FC<CanvasProps> = ({
       if (!node) return;
 
       if (conns.length === 1) {
-        const pt = getPortCoord(node, port);
-        connectionCoordMap.set(`${conns[0].edgeId}_${conns[0].isSource ? 'src' : 'tgt'}`, pt);
-        return;
+        const optimal = getOptimalNodeDimensions(node);
+        const nodeW = node.width ?? optimal.width;
+        const nodeH = node.height ?? optimal.height;
+        const otherNode = conns[0].otherNode;
+        const otherOpt = getOptimalNodeDimensions(otherNode);
+        const otherW = otherNode.width ?? otherOpt.width;
+        const otherH = otherNode.height ?? otherOpt.height;
+        const otherCenter = { x: otherNode.x + otherW / 2, y: otherNode.y + otherH / 2 };
+
+        if (port === 'top' || port === 'bottom') {
+          const margin = Math.min(22, nodeW * 0.18);
+          const naturalX = node.x + nodeW / 2 + (otherCenter.x - (node.x + nodeW / 2)) * 0.35;
+          const clampedX = Math.max(node.x + margin, Math.min(node.x + nodeW - margin, naturalX));
+          const y = port === 'top' ? node.y : node.y + nodeH;
+          connectionCoordMap.set(`${conns[0].edgeId}_${conns[0].isSource ? 'src' : 'tgt'}`, { x: clampedX, y });
+          return;
+        } else {
+          const margin = Math.min(20, nodeH * 0.18);
+          const naturalY = node.y + nodeH / 2 + (otherCenter.y - (node.y + nodeH / 2)) * 0.35;
+          const clampedY = Math.max(node.y + margin, Math.min(node.y + nodeH - margin, naturalY));
+          const x = port === 'left' ? node.x : node.x + nodeW;
+          connectionCoordMap.set(`${conns[0].edgeId}_${conns[0].isSource ? 'src' : 'tgt'}`, { x, y: clampedY });
+          return;
+        }
       }
 
       const optimal = getOptimalNodeDimensions(node);
@@ -2235,15 +2386,62 @@ export const Canvas: React.FC<CanvasProps> = ({
 
       const isOrtho = diagram.settings?.linetype === 'ortho';
 
+      // Sibling edges parallel offset & anti-overlap fanning
+      const siblingEdges = diagram.edges.filter(
+        e => (e.source === edge.source && e.target === edge.target) || (e.source === edge.target && e.target === edge.source)
+      );
+      const siblingIndex = siblingEdges.findIndex(e => e.id === edge.id);
+      const siblingCount = siblingEdges.length;
+
+      // Harmonic distinct edge color assignment
+      let effectiveColor = edge.color;
+      if (!effectiveColor) {
+        if (siblingCount > 1) {
+          effectiveColor = HARMONIC_EDGE_PALETTE[siblingIndex % HARMONIC_EDGE_PALETTE.length];
+        } else {
+          const edgeIdx = diagram.edges.findIndex(e => e.id === edge.id);
+          effectiveColor = HARMONIC_EDGE_PALETTE[(edgeIdx >= 0 ? edgeIdx : 0) % HARMONIC_EDGE_PALETTE.length];
+        }
+      }
+
+      const isDraggingThis = draggingEdgeRoute?.edgeId === edge.id;
+      const liveOffset = isDraggingThis ? draggingEdgeRoute.currentOffset : (edge.routeOffset || { x: 0, y: 0 });
+
+      // Calculate perpendicular normal for parallel arc fanning
+      const dx = tgt.x - src.x;
+      const dy = tgt.y - src.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const isCanonicalDir = edge.source <= edge.target;
+      const nx = (-dy / dist) * (isCanonicalDir ? 1 : -1);
+      const ny = (dx / dist) * (isCanonicalDir ? 1 : -1);
+
+      // Arc offset fanning: if 2 siblings: -45, +45. If 3 siblings: -60, 0, +60
+      let arcOffset = 0;
+      if (siblingCount > 1) {
+        const centeredIdx = siblingIndex - (siblingCount - 1) / 2;
+        arcOffset = centeredIdx * 52;
+      }
+
+      const totalDisplaceX = nx * arcOffset + liveOffset.x;
+      const totalDisplaceY = ny * arcOffset + liveOffset.y;
+
       let pathData = '';
+      let midPoint = { x: (src.x + tgt.x) / 2 + totalDisplaceX, y: (src.y + tgt.y) / 2 + totalDisplaceY };
+      let cleanPts: { x: number; y: number }[] = [];
+      let curveCp1 = { x: 0, y: 0 };
+      let curveCp2 = { x: 0, y: 0 };
+
       if (isSelfLoop) {
         // Aesthetic self-referencing loop curved outside the top-right corner
         const loopOffset = 50;
-        const cp1 = { x: src.x + loopOffset, y: src.y };
-        const cp2 = { x: tgt.x, y: tgt.y - loopOffset };
+        const cp1 = { x: src.x + loopOffset + liveOffset.x, y: src.y + liveOffset.y };
+        const cp2 = { x: tgt.x + liveOffset.x, y: tgt.y - loopOffset + liveOffset.y };
+        curveCp1 = cp1;
+        curveCp2 = cp2;
         pathData = `M ${src.x} ${src.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${tgt.x} ${tgt.y}`;
+        midPoint = { x: src.x + loopOffset * 0.7 + liveOffset.x, y: tgt.y - loopOffset * 0.7 + liveOffset.y };
       } else if (isOrtho) {
-        const stub = 22;
+        const stub = 22 + (siblingIndex > 0 ? siblingIndex * 12 : 0);
         const getStub = (pt: { x: number; y: number }, port: PortPosition, s: number) => {
           switch (port) {
             case 'top': return { x: pt.x, y: pt.y - s };
@@ -2261,30 +2459,56 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         const isSrcHoriz = srcPort === 'left' || srcPort === 'right';
         const isTgtHoriz = tgtPort === 'left' || tgtPort === 'right';
+        const corridorShift = (siblingCount > 1 ? (siblingIndex - (siblingCount - 1) / 2) * 28 : 0);
 
         if (isSrcHoriz && isTgtHoriz) {
-          const midX = (sExit.x + tEntry.x) / 2;
+          const midX = (sExit.x + tEntry.x) / 2 + liveOffset.x + corridorShift;
           pts.push({ x: midX, y: sExit.y }, { x: midX, y: tEntry.y });
+          midPoint = { x: midX, y: (sExit.y + tEntry.y) / 2 };
         } else if (!isSrcHoriz && !isTgtHoriz) {
-          const midY = (sExit.y + tEntry.y) / 2;
+          const midY = (sExit.y + tEntry.y) / 2 + liveOffset.y + corridorShift;
           pts.push({ x: sExit.x, y: midY }, { x: tEntry.x, y: midY });
+          midPoint = { x: (sExit.x + tEntry.x) / 2, y: midY };
         } else if (isSrcHoriz && !isTgtHoriz) {
-          pts.push({ x: tEntry.x, y: sExit.y });
+          pts.push({ x: tEntry.x + liveOffset.x + corridorShift, y: sExit.y + liveOffset.y });
+          midPoint = { x: tEntry.x + liveOffset.x + corridorShift, y: sExit.y + liveOffset.y };
         } else {
-          pts.push({ x: sExit.x, y: tEntry.y });
+          pts.push({ x: sExit.x + liveOffset.x, y: tEntry.y + liveOffset.y + corridorShift });
+          midPoint = { x: sExit.x + liveOffset.x, y: tEntry.y + liveOffset.y + corridorShift };
         }
 
         pts.push(tEntry, { x: tgt.x, y: tgt.y });
 
         // Clean consecutive duplicates
-        const cleanPts: { x: number; y: number }[] = [];
         for (let i = 0; i < pts.length; i++) {
           if (i > 0 && Math.abs(pts[i].x - pts[i - 1].x) < 0.1 && Math.abs(pts[i].y - pts[i - 1].y) < 0.1) continue;
           cleanPts.push(pts[i]);
         }
         pathData = cleanPts.map((p, idx) => (idx === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+
+        // Calculate true polyline midpoint along cleanPts
+        let totalPolyLen = 0;
+        const segLens: number[] = [];
+        for (let i = 0; i < cleanPts.length - 1; i++) {
+          const segD = Math.hypot(cleanPts[i + 1].x - cleanPts[i].x, cleanPts[i + 1].y - cleanPts[i].y);
+          segLens.push(segD);
+          totalPolyLen += segD;
+        }
+        if (totalPolyLen > 0) {
+          let targetDist = totalPolyLen * 0.5;
+          for (let i = 0; i < segLens.length; i++) {
+            if (targetDist <= segLens[i]) {
+              const frac = targetDist / (segLens[i] || 1);
+              midPoint = {
+                x: cleanPts[i].x + (cleanPts[i + 1].x - cleanPts[i].x) * frac,
+                y: cleanPts[i].y + (cleanPts[i + 1].y - cleanPts[i].y) * frac
+              };
+              break;
+            }
+            targetDist -= segLens[i];
+          }
+        }
       } else {
-        const dist = Math.hypot(tgt.x - src.x, tgt.y - src.y);
         const d = Math.max(32, Math.min(dist * 0.45, 150));
 
         const getControlPoint = (pt: { x: number; y: number }, port: PortPosition, delta: number) => {
@@ -2299,7 +2523,19 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         const cp1 = getControlPoint(src, srcPort, d);
         const cp2 = getControlPoint(tgt, tgtPort, d);
+
+        cp1.x += totalDisplaceX;
+        cp1.y += totalDisplaceY;
+        cp2.x += totalDisplaceX;
+        cp2.y += totalDisplaceY;
+        curveCp1 = cp1;
+        curveCp2 = cp2;
+
         pathData = `M ${src.x} ${src.y} C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${tgt.x} ${tgt.y}`;
+        midPoint = {
+          x: (src.x + tgt.x) / 2 + totalDisplaceX * 0.75,
+          y: (src.y + tgt.y) / 2 + totalDisplaceY * 0.75
+        };
       }
 
       // Helper function to test box overlap against all placed cardinality boxes
@@ -2395,13 +2631,6 @@ export const Canvas: React.FC<CanvasProps> = ({
         targetCardPos = { x: baseX, y: baseY };
       }
 
-      // Sibling edges parallel offset & staggered along-fractions
-      const siblingEdges = diagram.edges.filter(
-        e => (e.source === edge.source && e.target === edge.target) || (e.source === edge.target && e.target === edge.source)
-      );
-      const siblingIndex = siblingEdges.findIndex(e => e.id === edge.id);
-      const siblingCount = siblingEdges.length;
-
       let baseFrac = 0.5;
       if (siblingCount === 2) {
         baseFrac = siblingIndex === 0 ? 0.35 : 0.65;
@@ -2409,13 +2638,8 @@ export const Canvas: React.FC<CanvasProps> = ({
         baseFrac = 0.2 + (siblingIndex / (siblingCount - 1)) * 0.6;
       }
 
-      const dx = tgt.x - src.x;
-      const dy = tgt.y - src.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const nx = -dy / dist;
-      const ny = dx / dist;
-      const midX = (src.x + tgt.x) / 2;
-      const midY = (src.y + tgt.y) / 2;
+      const midX = midPoint.x;
+      const midY = midPoint.y;
 
       // Extract main description and technology badge (strictly explicit labels only)
       const rawLabel = edge.label ? edge.label.trim() : '';
@@ -2461,11 +2685,16 @@ export const Canvas: React.FC<CanvasProps> = ({
         }
       }
 
+      const hasExplicitLabel = Boolean((mainDesc && mainDesc.trim().length > 0) || (edge.label && edge.label.trim().length > 0));
+
       // Default label position: shifted along perpendicular normal to flank edge
       let labelX = Math.max(badgeW / 2 + 12, midX + nx * autoNormalShift);
       let labelY = Math.max(badgeH / 2 + 12, midY + ny * autoNormalShift + (isHorizontal ? -12 : 0));
 
-      if (isSelfLoop) {
+      if (!hasExplicitLabel) {
+        labelX = midX;
+        labelY = midY;
+      } else if (isSelfLoop) {
         labelX = src.x + 36;
         labelY = tgt.y - 18;
       } else if (edge.labelOffset) {
@@ -2543,11 +2772,59 @@ export const Canvas: React.FC<CanvasProps> = ({
         }
       }
 
-      placedLabelBoxes.push({ x: labelX, y: labelY, width: badgeW, height: badgeH });
+      if (hasExplicitLabel) {
+        placedLabelBoxes.push({ x: labelX, y: labelY, width: badgeW, height: badgeH });
+      }
 
-      const lineAnchor = { x: midX, y: midY };
-      const distFromAnchor = Math.hypot(labelX - midX, labelY - midY);
-      const needsLeaderLine = !isSelfLoop && distFromAnchor > 16;
+      // Compute the optimal anchor point on the edge path closest to the label position
+      let lineAnchor = { x: midX, y: midY };
+      if (isOrtho && cleanPts.length > 1) {
+        let bestPt = cleanPts[0];
+        let bestDist = Infinity;
+        for (let i = 0; i < cleanPts.length - 1; i++) {
+          const p1 = cleanPts[i];
+          const p2 = cleanPts[i + 1];
+          const segDx = p2.x - p1.x;
+          const segDy = p2.y - p1.y;
+          const segLenSq = segDx * segDx + segDy * segDy;
+          if (segLenSq > 0) {
+            let t = ((labelX - p1.x) * segDx + (labelY - p1.y) * segDy) / segLenSq;
+            t = Math.max(0.06, Math.min(0.94, t)); // Keep away from arrowheads
+            const cand = { x: p1.x + t * segDx, y: p1.y + t * segDy };
+            const d = Math.hypot(labelX - cand.x, labelY - cand.y);
+            if (d < bestDist) {
+              bestDist = d;
+              bestPt = cand;
+            }
+          }
+        }
+        lineAnchor = bestPt;
+      } else if (!isOrtho && !isSelfLoop) {
+        // Sample points along cubic bezier curve to find closest anchor point
+        let bestPt = { x: midX, y: midY };
+        let bestDist = Infinity;
+        for (let step = 1; step <= 9; step++) {
+          const t = step / 10;
+          const oneMinusT = 1 - t;
+          const bx = oneMinusT * oneMinusT * oneMinusT * src.x +
+                     3 * oneMinusT * oneMinusT * t * curveCp1.x +
+                     3 * oneMinusT * t * t * curveCp2.x +
+                     t * t * t * tgt.x;
+          const by = oneMinusT * oneMinusT * oneMinusT * src.y +
+                     3 * oneMinusT * oneMinusT * t * curveCp1.y +
+                     3 * oneMinusT * t * t * curveCp2.y +
+                     t * t * t * tgt.y;
+          const d = Math.hypot(labelX - bx, labelY - by);
+          if (d < bestDist) {
+            bestDist = d;
+            bestPt = { x: bx, y: by };
+          }
+        }
+        lineAnchor = bestPt;
+      }
+
+      const distFromAnchor = Math.hypot(labelX - lineAnchor.x, labelY - lineAnchor.y);
+      const needsLeaderLine = hasExplicitLabel && !isSelfLoop && distFromAnchor > 18;
 
       return {
         edge,
@@ -2566,10 +2843,57 @@ export const Canvas: React.FC<CanvasProps> = ({
         badgeW,
         badgeH,
         mainDesc,
-        techNote
+        techNote,
+        midPoint,
+        effectiveColor,
+        siblingIndex,
+        siblingCount
       };
     });
-  }, [diagram.edges, diagram.nodes, diagram.settings]);
+  }, [diagram.edges, diagram.nodes, diagram.settings, draggingEdgeRoute, hoveredEdgeId]);
+
+  // Memoize container depth and sorted rendering order so outer containers render first (DOM background), inner containers next, and leaf nodes last (DOM foreground)
+  const { sortedRenderNodes, nodeDepthMap } = useMemo(() => {
+    const isContainer = (n: DiagramNode) =>
+      Boolean(n.data?.isContainer) ||
+      n.category === 'container' ||
+      ['package', 'frame', 'folder', 'namespace', 'rectangle', 'node', 'cloud', 'together', 'boundary'].includes(n.type);
+
+    const containerMap = new Map<string, DiagramNode>();
+    nodes.forEach(n => {
+      if (isContainer(n)) containerMap.set(n.id, n);
+    });
+
+    const depthMap = new Map<string, number>();
+    const getDepth = (n: DiagramNode, visited = new Set<string>()): number => {
+      if (depthMap.has(n.id)) return depthMap.get(n.id)!;
+      if (visited.has(n.id)) return 0;
+      visited.add(n.id);
+      const pId = n.data?.parentId;
+      if (pId && containerMap.has(pId) && pId !== n.id) {
+        const d = 1 + getDepth(containerMap.get(pId)!, visited);
+        depthMap.set(n.id, d);
+        return d;
+      }
+      const d = isContainer(n) ? 0 : 10;
+      depthMap.set(n.id, d);
+      return d;
+    };
+
+    nodes.forEach(n => getDepth(n));
+
+    const sorted = [...nodes].sort((a, b) => {
+      const isContA = isContainer(a);
+      const isContB = isContainer(b);
+      if (isContA && !isContB) return -1;
+      if (!isContA && isContB) return 1;
+      const depthA = depthMap.get(a.id) || 0;
+      const depthB = depthMap.get(b.id) || 0;
+      return depthA - depthB;
+    });
+
+    return { sortedRenderNodes: sorted, nodeDepthMap: depthMap };
+  }, [nodes]);
 
   const isDark = Boolean(
     diagram.settings?.monochromeReverse ||
@@ -2629,8 +2953,8 @@ export const Canvas: React.FC<CanvasProps> = ({
       >
         {/* SVG Layer for Edges and Connectors */}
         <svg 
-          className="absolute top-0 left-0 w-[5000px] h-[5000px] overflow-visible pointer-events-none z-[8]"
-          style={{ zIndex: 8 }}
+          className="absolute top-0 left-0 w-[5000px] h-[5000px] overflow-visible pointer-events-none z-[15]"
+          style={{ zIndex: 15 }}
         >
           <defs>
             {/* Standard Arrow Marker (End) */}
@@ -3339,17 +3663,52 @@ export const Canvas: React.FC<CanvasProps> = ({
           })}
 
           {/* Render Connections */}
-          {computedEdges.map(({ edge, pathData }) => {
+          {computedEdges.map(({ edge, pathData, midPoint, effectiveColor, srcNode, tgtNode }) => {
             const isSelected = selectedEdgeId === edge.id;
+            const isHovered = hoveredEdgeId === edge.id;
+            const isDraggingThis = draggingEdgeRoute?.edgeId === edge.id;
+            const strokeColor = isSelected ? '#c2652a' : (edge.color || effectiveColor || defaultArrowColor);
+            const strokeWidth = isSelected ? 2.8 : (isHovered ? 2.4 : 1.8);
 
             return (
-              <g key={edge.id} className="pointer-events-auto cursor-pointer group">
-                {/* Thick invisible path for easy clicking */}
+              <g
+                key={edge.id}
+                className="pointer-events-auto group"
+                onMouseEnter={() => setHoveredEdgeId(edge.id)}
+                onMouseLeave={() => setHoveredEdgeId(null)}
+              >
+                {/* Outer Glow Halo on Hover or Selection */}
+                {(isSelected || isHovered) && (
+                  <path
+                    d={pathData}
+                    fill="none"
+                    stroke={strokeColor}
+                    strokeWidth={strokeWidth + 5}
+                    strokeOpacity={0.25}
+                    className="pointer-events-none"
+                  />
+                )}
+
+                {/* Thick invisible path for easy clicking & dragging */}
                 <path
                   d={pathData}
                   fill="none"
                   stroke="transparent"
-                  strokeWidth="16"
+                  strokeWidth="20"
+                  className="cursor-grab active:cursor-grabbing"
+                  data-drag-handle="true"
+                  title="Drag connection line to bend or reposition, double click to edit label"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    selectEdge(edge);
+                    setDraggingEdgeRoute({
+                      edgeId: edge.id,
+                      startX: e.clientX,
+                      startY: e.clientY,
+                      initialOffset: edge.routeOffset || { x: 0, y: 0 },
+                      currentOffset: edge.routeOffset || { x: 0, y: 0 }
+                    });
+                  }}
                   onClick={(e) => {
                     e.stopPropagation();
                     selectEdge(edge);
@@ -3366,8 +3725,8 @@ export const Canvas: React.FC<CanvasProps> = ({
                   <path
                     d={pathData}
                     fill="none"
-                    stroke={isSelected ? '#c2652a' : (edge.color || defaultArrowColor)}
-                    strokeWidth={isSelected ? 2.5 : 1.8}
+                    stroke={strokeColor}
+                    strokeWidth={strokeWidth}
                     strokeDasharray={edge.style === 'dashed' ? '6,4' : edge.style === 'dotted' ? '2,4' : undefined}
                     markerStart={getMarkerStart(edge.arrowType, isSelected, edge)}
                     markerEnd={getMarkerEnd(edge.arrowType, isSelected, edge)}
@@ -3382,6 +3741,54 @@ export const Canvas: React.FC<CanvasProps> = ({
                     strokeOpacity={0.4}
                   />
                 ) : null}
+
+                {/* Midpoint Bend Handle */}
+                {(isSelected || isHovered) && (
+                  <g
+                    transform={`translate(${midPoint.x}, ${midPoint.y})`}
+                    className="cursor-grab active:cursor-grabbing pointer-events-auto select-none"
+                    title="Drag to bend line, double-click to reset bend"
+                    data-drag-handle="true"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      selectEdge(edge);
+                      setDraggingEdgeRoute({
+                        edgeId: edge.id,
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        initialOffset: edge.routeOffset || { x: 0, y: 0 },
+                        currentOffset: edge.routeOffset || { x: 0, y: 0 }
+                      });
+                    }}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      onUpdateEdges(diagram.edges.map(ed => ed.id === edge.id ? { ...ed, routeOffset: undefined } : ed));
+                    }}
+                  >
+                    <circle r="7" fill="#ffffff" stroke={strokeColor} strokeWidth="2.4" className="shadow-xs" />
+                    <circle r="2.5" fill={strokeColor} />
+                  </g>
+                )}
+
+                {/* Hover Connection Tooltip Badge */}
+                {isHovered && !isDraggingThis && (
+                  <g transform={`translate(${midPoint.x}, ${midPoint.y - 18})`} className="pointer-events-none select-none">
+                    <rect
+                      x={-(Math.max(68, ((srcNode?.label?.length || 0) + (tgtNode?.label?.length || 0)) * 6.5 + 28) / 2)}
+                      y={-11}
+                      width={Math.max(68, ((srcNode?.label?.length || 0) + (tgtNode?.label?.length || 0)) * 6.5 + 28)}
+                      height={18}
+                      rx={9}
+                      fill="#18181b"
+                      fillOpacity={0.92}
+                      stroke={strokeColor}
+                      strokeWidth={1}
+                    />
+                    <text x={0} y={2} textAnchor="middle" fill="#ffffff" fontSize="9.5" fontWeight="600" className="font-sans">
+                      {srcNode?.label || edge.source} ➔ {tgtNode?.label || edge.target}
+                    </text>
+                  </g>
+                )}
               </g>
             );
           })}
@@ -3447,16 +3854,24 @@ export const Canvas: React.FC<CanvasProps> = ({
 
         {/* HTML Nodes Layer */}
         <div className="absolute top-0 left-0 pointer-events-auto">
-          {nodes.map(node => (
-            <div
-              key={node.id}
-              data-node-id={node.id}
-              onMouseDown={(e) => handleNodeMouseDown(node, e)}
-            >
-              <DiagramNodeView
-                node={node}
-                isSelected={selectedNodeId === node.id || selectedNodeIds.includes(node.id)}
-                isDropTarget={hoveredDropTargetId === node.id}
+          {sortedRenderNodes.map(node => {
+            const isContainer = Boolean(node.data?.isContainer) || node.category === 'container' || ['package', 'frame', 'folder', 'namespace', 'rectangle', 'node', 'cloud', 'together', 'boundary'].includes(node.type);
+            const depth = nodeDepthMap.get(node.id) || 0;
+            const isNodeSelected = selectedNodeId === node.id || selectedNodeIds.includes(node.id);
+            const computedZIndex = isNodeSelected
+              ? (isContainer ? 3 + Math.min(depth, 5) * 2 : 50)
+              : (isContainer ? 2 + Math.min(depth, 5) * 2 : 20 + Math.min(depth, 5));
+
+            return (
+              <div
+                key={node.id}
+                onMouseDown={(e) => handleNodeMouseDown(node, e)}
+              >
+                <DiagramNodeView
+                  node={node}
+                  isSelected={isNodeSelected}
+                  isDropTarget={hoveredDropTargetId === node.id}
+                  zIndex={computedZIndex}
                 onSelect={(e) => {
                   e.stopPropagation();
                   const isMulti = e.shiftKey || e.ctrlKey || e.metaKey;
@@ -3511,7 +3926,8 @@ export const Canvas: React.FC<CanvasProps> = ({
                 onStartResize={handleStartResize}
               />
             </div>
-          ))}
+            );
+          })}
 
           {/* Floating Quick Action Bar for selected node - hidden when multiple nodes are selected */}
           {selectedNode && selectedNodeIds.length <= 1 && (
@@ -3678,8 +4094,12 @@ export const Canvas: React.FC<CanvasProps> = ({
                 {/* Source Cardinality (e.g. "1", "0..*") */}
                 {edge.cardinalitySource && sourceCardPos && isMultiplicity(edge.cardinalitySource) && (
                   <div
-                    className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-20"
-                    style={{ left: `${sourceCardPos.x}px`, top: `${sourceCardPos.y}px` }}
+                    className="absolute pointer-events-none select-none z-20"
+                    style={{
+                      left: `${sourceCardPos.x}px`,
+                      top: `${sourceCardPos.y}px`,
+                      transform: 'translate(-50%, -50%)'
+                    }}
                   >
                     <span 
                       className="text-[10px] font-mono font-bold px-1 py-0.2 rounded shadow-2xs"
@@ -3697,8 +4117,12 @@ export const Canvas: React.FC<CanvasProps> = ({
                 {/* Target Cardinality (Strictly actual multiplicity e.g. "*", "1..*", "0..*") */}
                 {edge.cardinalityTarget && targetCardPos && isMultiplicity(edge.cardinalityTarget) && (
                   <div
-                    className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none z-20"
-                    style={{ left: `${targetCardPos.x}px`, top: `${targetCardPos.y}px` }}
+                    className="absolute pointer-events-none select-none z-20"
+                    style={{
+                      left: `${targetCardPos.x}px`,
+                      top: `${targetCardPos.y}px`,
+                      transform: 'translate(-50%, -50%)'
+                    }}
                   >
                     <span 
                       className="text-[10px] font-mono font-bold px-1 py-0.2 rounded shadow-2xs"
@@ -3716,8 +4140,12 @@ export const Canvas: React.FC<CanvasProps> = ({
                 {/* Edge Label Card - Only rendered when label is explicitly specified or currently editing */}
                 {((mainDesc && mainDesc.trim().length > 0) || isEditing) && (
                   <div
-                    className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto select-none z-20"
-                    style={{ left: `${labelPos.x}px`, top: `${labelPos.y}px` }}
+                    className="absolute pointer-events-auto select-none z-20"
+                    style={{
+                      left: `${labelPos.x}px`,
+                      top: `${labelPos.y}px`,
+                      transform: 'translate(-50%, -50%)'
+                    }}
                   >
                     {isEditing ? (
                       <input

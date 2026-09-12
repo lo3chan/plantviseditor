@@ -553,6 +553,178 @@ export const CloudShape: React.FC<{
 };
 
 // ============================================
+// 10B. STACK BUFFER (PlantUML stack)
+// ============================================
+export const StackShape: React.FC<{
+  width: number;
+  height: number;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  isSelected?: boolean;
+}> = ({
+  width,
+  height,
+  fill = '#FEFECE',
+  stroke = '#A80036',
+  strokeWidth = 1.5,
+  isSelected = false
+}) => {
+  const layerH = Math.max(10, Math.min(16, height * 0.16));
+  return (
+    <svg
+      width={width}
+      height={height}
+      className="absolute top-0 left-0 pointer-events-none overflow-visible"
+      style={{ filter: isSelected ? 'drop-shadow(0 0 6px rgba(194, 101, 42, 0.4))' : 'drop-shadow(2px 2px 2px rgba(0,0,0,0.15))' }}
+    >
+      <rect
+        x="0"
+        y="0"
+        width={width}
+        height={height}
+        rx="4"
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+      />
+      {/* Top stack layer dividers */}
+      <line x1="0" y1={layerH} x2={width} y2={layerH} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray="3 2" />
+      <line x1="0" y1={layerH * 2} x2={width} y2={layerH * 2} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray="3 2" />
+    </svg>
+  );
+};
+
+// ============================================
+// 10C. CARD CONTAINER (PlantUML card)
+// ============================================
+export const CardShape: React.FC<{
+  width: number;
+  height: number;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  isSelected?: boolean;
+}> = ({
+  width,
+  height,
+  fill = '#FEFECE',
+  stroke = '#A80036',
+  strokeWidth = 1.5,
+  isSelected = false
+}) => {
+  return (
+    <svg
+      width={width}
+      height={height}
+      className="absolute top-0 left-0 pointer-events-none overflow-visible"
+      style={{ filter: isSelected ? 'drop-shadow(0 0 6px rgba(194, 101, 42, 0.4))' : 'drop-shadow(2px 2px 2px rgba(0,0,0,0.15))' }}
+    >
+      <rect
+        x="0"
+        y="0"
+        width={width}
+        height={height}
+        rx="8"
+        ry="8"
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+      />
+    </svg>
+  );
+};
+
+// ============================================
+// 10D. LOLLIPOP INTERFACE CIRCLE (PlantUML ())
+// ============================================
+export const LollipopInterfaceShape: React.FC<{
+  size?: number;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+}> = ({
+  size = 28,
+  fill = '#FEFECE',
+  stroke = '#A80036',
+  strokeWidth = 2
+}) => {
+  const r = (size - 4) / 2;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        filter="drop-shadow(1px 2px 2px rgba(0,0,0,0.15))"
+      />
+    </svg>
+  );
+};
+
+// ============================================
+// 10E. AUTONOMOUS AGENT AVATAR (PlantUML agent)
+// ============================================
+export const AgentAvatarShape: React.FC<{
+  size?: number;
+  color?: string;
+}> = ({ size = 28, color = '#A80036' }) => {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="overflow-visible">
+      <rect x="3" y="11" width="18" height="10" rx="2" fill="#FEFECE" />
+      <circle cx="12" cy="5" r="2" fill="#FEFECE" />
+      <path d="M12 7v4" />
+      <circle cx="8.5" cy="15.5" r="1" fill={color} />
+      <circle cx="15.5" cy="15.5" r="1" fill={color} />
+      <path d="M9 19h6" />
+    </svg>
+  );
+};
+
+// ============================================
+// 10F. RECTANGLE CONTAINER (PlantUML rectangle)
+// ============================================
+export const RectangleContainerShape: React.FC<{
+  width: number;
+  height: number;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  isSelected?: boolean;
+}> = ({
+  width,
+  height,
+  fill = 'rgba(250,250,248,0.5)',
+  stroke = '#78706A',
+  strokeWidth = 1.5,
+  isSelected = false
+}) => {
+  return (
+    <svg
+      width={width}
+      height={height}
+      className="absolute top-0 left-0 pointer-events-none overflow-visible"
+      style={{ filter: isSelected ? 'drop-shadow(0 0 6px rgba(194, 101, 42, 0.4))' : undefined }}
+    >
+      <rect
+        x="0"
+        y="0"
+        width={width}
+        height={height}
+        rx="4"
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        strokeDasharray="4 2"
+      />
+    </svg>
+  );
+};
+
+// ============================================
 // 11. AUTHENTIC PLANTUML STICKMAN (Actor)
 // ============================================
 export const StickmanActorShape: React.FC<{

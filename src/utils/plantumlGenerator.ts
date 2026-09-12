@@ -1084,10 +1084,30 @@ export function generatePlantUML(diagram: DiagramData): string {
         lines.push(`() "${label}" as ${id}`);
         break;
       case 'participant':
+      case 'seq-participant':
         lines.push(`participant "${label}" as ${id}${stereotype}`);
         break;
       case 'actor':
+      case 'seq-actor':
         lines.push(`actor "${label}" as ${id}${stereotype}`);
+        break;
+      case 'seq-database':
+        lines.push(`database "${label}" as ${id}${stereotype}`);
+        break;
+      case 'seq-queue':
+        lines.push(`queue "${label}" as ${id}${stereotype}`);
+        break;
+      case 'seq-boundary':
+        lines.push(`boundary "${label}" as ${id}${stereotype}`);
+        break;
+      case 'seq-control':
+        lines.push(`control "${label}" as ${id}${stereotype}`);
+        break;
+      case 'seq-entity':
+        lines.push(`entity "${label}" as ${id}${stereotype}`);
+        break;
+      case 'seq-collections':
+        lines.push(`collections "${label}" as ${id}${stereotype}`);
         break;
       case 'agent':
         lines.push(`agent "${label}" as ${id}${stereotype}`);
@@ -2552,14 +2572,14 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
           resolvedType = 'frame';
           resolvedCategory = 'container';
           shape = 'frame';
-          width = 340;
-          height = 240;
+          width = 500;
+          height = 360;
         } else if (type === 'folder') {
           resolvedType = 'folder';
           resolvedCategory = 'container';
           shape = 'folder';
-          width = 320;
-          height = 220;
+          width = 480;
+          height = 340;
         } else if (type === 'state') {
           resolvedCategory = 'activity-state';
           if (label === '[H]' || label === '[H*]') {
@@ -2651,12 +2671,20 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
           }
         }
 
+        let cleanLabel = label.replace(/\\n<math>[\s\S]*?<\/math>/i, '').replace(/<math>[\s\S]*?<\/math>/i, '');
+        let extractedSublabel = stereotype ? `<<${stereotype}>>` : undefined;
+        if (!extractedSublabel && (cleanLabel.includes('\n') || cleanLabel.includes('\\n'))) {
+          const parts = cleanLabel.replace(/\\n/g, '\n').split('\n');
+          cleanLabel = parts[0].trim();
+          extractedSublabel = parts.slice(1).join(' ').replace(/^\/\/|\/\/$/g, '').trim();
+        }
+
         const node: DiagramNode = {
           id,
           type: resolvedType,
           category: resolvedCategory,
-          label: label.replace(/\\n<math>[\s\S]*?<\/math>/i, '').replace(/<math>[\s\S]*?<\/math>/i, ''),
-          sublabel: stereotype ? `<<${stereotype}>>` : undefined,
+          label: cleanLabel,
+          sublabel: extractedSublabel,
           x: 0,
           y: 0,
           width,
@@ -2942,17 +2970,17 @@ export function parsePlantUML(text: string): Partial<DiagramData> {
       const isCrowsFoot = /^[|0oO}{]+[-.=~]+[|0oO}{]+$/.test(cleanOp);
 
       if (isCrowsFoot) {
-        // Determine source marker
-        if (cleanOp.startsWith('||') || cleanOp.startsWith('|')) sourceMarker = 'crows-foot-one-start';
-        else if (cleanOp.startsWith('}|') || cleanOp.startsWith('|{')) sourceMarker = 'crows-foot-many-start';
+        // Determine source marker (check 2-character markers before single bar)
+        if (cleanOp.startsWith('|o') || cleanOp.startsWith('|0') || cleanOp.startsWith('o|') || cleanOp.startsWith('0|')) sourceMarker = 'crows-foot-zero-one-start';
         else if (cleanOp.startsWith('}o') || cleanOp.startsWith('}0') || cleanOp.startsWith('o{') || cleanOp.startsWith('0{')) sourceMarker = 'crows-foot-zero-many-start';
-        else if (cleanOp.startsWith('|o') || cleanOp.startsWith('|0') || cleanOp.startsWith('o|') || cleanOp.startsWith('0|')) sourceMarker = 'crows-foot-zero-one-start';
+        else if (cleanOp.startsWith('}|') || cleanOp.startsWith('|{') || cleanOp.startsWith('}{')) sourceMarker = 'crows-foot-many-start';
+        else if (cleanOp.startsWith('||') || cleanOp.startsWith('|')) sourceMarker = 'crows-foot-one-start';
 
-        // Determine target marker
-        if (cleanOp.endsWith('||') || cleanOp.endsWith('|')) targetMarker = 'crows-foot-one';
-        else if (cleanOp.endsWith('|{') || cleanOp.endsWith('}|')) targetMarker = 'crows-foot-many';
+        // Determine target marker (check 2-character markers before single bar)
+        if (cleanOp.endsWith('o|') || cleanOp.endsWith('0|') || cleanOp.endsWith('|o') || cleanOp.endsWith('|0')) targetMarker = 'crows-foot-zero-one';
         else if (cleanOp.endsWith('o{') || cleanOp.endsWith('0{') || cleanOp.endsWith('}o') || cleanOp.endsWith('}0')) targetMarker = 'crows-foot-zero-many';
-        else if (cleanOp.endsWith('o|') || cleanOp.endsWith('0|') || cleanOp.endsWith('|o') || cleanOp.endsWith('|0')) targetMarker = 'crows-foot-zero-one';
+        else if (cleanOp.endsWith('|{') || cleanOp.endsWith('}|') || cleanOp.endsWith('}{')) targetMarker = 'crows-foot-many';
+        else if (cleanOp.endsWith('||') || cleanOp.endsWith('|')) targetMarker = 'crows-foot-one';
 
         // Map to standard arrowType
         if (cleanOp.includes('||--||')) arrowType = 'crows-foot-one';
@@ -3324,12 +3352,20 @@ function finishBlock(
     }
   });
 
+  let cleanBlockLabel = label;
+  let extractedBlockSublabel = stereotype ? `<<${stereotype}>>` : undefined;
+  if (!extractedBlockSublabel && (cleanBlockLabel.includes('\n') || cleanBlockLabel.includes('\\n'))) {
+    const parts = cleanBlockLabel.replace(/\\n/g, '\n').split('\n');
+    cleanBlockLabel = parts[0].trim();
+    extractedBlockSublabel = parts.slice(1).join(' ').replace(/^\/\/|\/\/$/g, '').trim();
+  }
+
   const node: DiagramNode = {
     id,
     type,
     category: 'code',
-    label,
-    sublabel: stereotype ? `<<${stereotype}>>` : undefined,
+    label: cleanBlockLabel,
+    sublabel: extractedBlockSublabel,
     x: 0,
     y: 0,
     width: 220,
@@ -3551,10 +3587,34 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
     }
   });
 
+  // Compute container nesting depth for hierarchical multi-level frames
+  const containerDepth = new Map<string, number>();
+  const computeDepth = (id: string, visited = new Set<string>()): number => {
+    if (containerDepth.has(id)) return containerDepth.get(id)!;
+    if (visited.has(id)) return 0;
+    visited.add(id);
+    const node = containerMap.get(id);
+    const pId = node?.data?.parentId;
+    if (pId && containerMap.has(pId) && pId !== id) {
+      const d = 1 + computeDepth(pId, visited);
+      containerDepth.set(id, d);
+      return d;
+    }
+    containerDepth.set(id, 0);
+    return 0;
+  };
+  containerMap.forEach((_, id) => computeDepth(id));
+
   // If there are containers with children, use hierarchical cluster layout
   if (containerChildren.size > 0) {
-    // 1. Layout children inside each container using flow layout
-    containerChildren.forEach((children, cId) => {
+    // 1. Layout children inside each container bottom-up (deepest nested containers first)
+    const sortedContainerIds = Array.from(containerMap.keys()).sort(
+      (a, b) => (containerDepth.get(b) || 0) - (containerDepth.get(a) || 0)
+    );
+
+    sortedContainerIds.forEach(cId => {
+      const children = containerChildren.get(cId);
+      if (!children || children.length === 0) return;
       const container = containerMap.get(cId)!;
 
       // Order domain children logically if present (Marketing -> Accounting -> FieldOps -> Customer Care -> Land Dev -> Shared Kernel)
@@ -3568,10 +3628,10 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
         return getScore(a) - getScore(b);
       });
 
-      const START_X = 36;
-      const START_Y = 56;
-      const GAP_X = 28;
-      const GAP_Y = 28;
+      const START_X = 70;
+      const START_Y = 85;
+      const GAP_X = 120;
+      const GAP_Y = 100;
       const MAX_ROW_WIDTH = 2800;
 
       let rowX = START_X;
@@ -3597,17 +3657,17 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
         maxChildB = Math.max(maxChildB, ch.y + ch.height);
       });
 
-      container.width = Math.max(340, maxChildR + 36);
-      container.height = Math.max(240, maxChildB + 36);
+      container.width = Math.max(520, maxChildR + 70);
+      container.height = Math.max(360, maxChildB + 70);
     });
 
-    // 2. Identify effective entity mapping (child -> top-level container)
+    // 2. Identify effective entity mapping (child -> root top-level container)
     const getEntityId = (nodeId: string): string => {
-      const n = nodes.find(item => item.id === nodeId);
-      if (n?.data?.parentId && containerMap.has(n.data.parentId)) {
-        return n.data.parentId;
+      let curr = nodes.find(item => item.id === nodeId);
+      while (curr?.data?.parentId && containerMap.has(curr.data.parentId) && curr.data.parentId !== curr.id) {
+        curr = containerMap.get(curr.data.parentId);
       }
-      return nodeId;
+      return curr ? curr.id : nodeId;
     };
 
     // Separate anchor/marker nodes (e.g. N1..N5) from regular structural entities
@@ -3680,6 +3740,16 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
 
     const sortedRankKeys = Array.from(rankGroups.keys()).sort((a, b) => a - b);
 
+    // Find maximum width among all rank tiers to anchor and align the diagram comfortably
+    let maxRankTierW = 0;
+    sortedRankKeys.forEach(r => {
+      const g = rankGroups.get(r)!;
+      const w = g.reduce((sum, item) => sum + item.width, 0) + (g.length - 1) * 140;
+      if (w > maxRankTierW) maxRankTierW = w;
+    });
+
+    const BASE_LEFT_MARGIN = 140;
+
     // Position rank tiers from top to bottom
     let currentY = 100;
     sortedRankKeys.forEach(r => {
@@ -3698,28 +3768,33 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
         return getXScore(a) - getXScore(b);
       });
 
-      const groupTotalW = group.reduce((sum, item) => sum + item.width, 0) + (group.length - 1) * 60;
-      let startX = Math.max(60, Math.round((2200 - groupTotalW) / 2));
+      const groupTotalW = group.reduce((sum, item) => sum + item.width, 0) + (group.length - 1) * 140;
+      let startX = BASE_LEFT_MARGIN + Math.max(0, Math.round((maxRankTierW - groupTotalW) / 2));
       let rankMaxH = 0;
 
       group.forEach(n => {
         n.x = startX;
         n.y = currentY;
 
-        // Shift enclosed children to absolute canvas coordinates
-        const children = containerChildren.get(n.id);
-        if (children) {
+        // Shift enclosed children recursively to absolute canvas coordinates
+        const shiftDescendants = (parentId: string, deltaX: number, deltaY: number) => {
+          const children = containerChildren.get(parentId);
+          if (!children) return;
           children.forEach(ch => {
-            ch.x += n.x;
-            ch.y += n.y;
+            ch.x += deltaX;
+            ch.y += deltaY;
+            if (containerMap.has(ch.id)) {
+              shiftDescendants(ch.id, deltaX, deltaY);
+            }
           });
-        }
+        };
+        shiftDescendants(n.id, n.x, n.y);
 
-        startX += n.width + 60;
+        startX += n.width + 140;
         if (n.height > rankMaxH) rankMaxH = n.height;
       });
 
-      currentY += rankMaxH + 70;
+      currentY += rankMaxH + 160;
     });
 
     // Dock anchor nodes (N1..N5) near their connected partners
@@ -3752,7 +3827,7 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
     });
 
     // Final pass: resolve any remaining overlaps
-    const deoverlapped = resolveOverlaps(nodes, 40);
+    const deoverlapped = resolveOverlaps(nodes, 70);
     deoverlapped.forEach((cleanNode, idx) => {
       if (nodes[idx]) {
         nodes[idx].x = cleanNode.x;
@@ -3827,11 +3902,11 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
     rankGroups.set(lvl, group);
   });
 
-  const START_X = 60;
-  const START_Y = 50;
-  const GAP_X = 130;
-  const GAP_Y = 85;
-  const MAX_ROW_WIDTH = 1200;
+  const START_X = 80;
+  const START_Y = 60;
+  const GAP_X = 220;
+  const GAP_Y = 160;
+  const MAX_ROW_WIDTH = 2400;
 
   let currentY = START_Y;
   const sortedRanks = Array.from(rankGroups.keys()).sort((a, b) => a - b);
@@ -3860,7 +3935,7 @@ export function applyAutoLayout(nodes: DiagramNode[], edges: DiagramEdge[]) {
   });
 
   // Final pass: mathematically resolve and eliminate any remaining bounding-box overlaps
-  const deoverlapped = resolveOverlaps(nodes, 40);
+  const deoverlapped = resolveOverlaps(nodes, 70);
   deoverlapped.forEach((cleanNode, idx) => {
     if (nodes[idx]) {
       nodes[idx].x = cleanNode.x;

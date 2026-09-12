@@ -588,7 +588,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           id="btn-import-file"
           onClick={() => fileInputRef.current?.click()}
           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#605850] hover:text-[#3a302a] bg-white hover:bg-[#f6f0e8] border border-[#d8d0c8]/60 transition-colors cursor-pointer"
-          title="Open or import a PlantUML (.puml, .txt) or Project JSON file"
+          title="Open or restore a PlantUML script (.puml, .txt) or Studio Layout Backup (.json)"
         >
           <FolderOpen className="w-3.5 h-3.5 text-[#78706a]" />
           <span>Import</span>

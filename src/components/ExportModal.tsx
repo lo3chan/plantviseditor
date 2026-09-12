@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Download, 
@@ -13,7 +13,9 @@ import {
   ChevronDown,
   ChevronUp,
   RefreshCw,
-  Layers
+  Layers,
+  Upload,
+  FolderOpen
 } from 'lucide-react';
 import { DiagramData } from '../types';
 import { generatePlantUML } from '../utils/plantumlGenerator';
@@ -36,14 +38,17 @@ interface ExportModalProps {
   onClose: () => void;
   diagram: DiagramData;
   pumlCode?: string;
+  onImportFile?: (file: File) => void;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
   isOpen,
   onClose,
   diagram,
-  pumlCode: passedPumlCode
+  pumlCode: passedPumlCode,
+  onImportFile
 }) => {
+  const jsonFileInputRef = useRef<HTMLInputElement>(null);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedAscii, setCopiedAscii] = useState(false);
   const [copiedMarkdown, setCopiedMarkdown] = useState(false);
@@ -671,16 +676,43 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </div>
               <div>
                 <div className="text-xs font-semibold text-[#3a302a]">Studio Project Backup (JSON)</div>
-                <div className="text-[11px] text-[#78706a]">Save complete node coordinates, layouts, and editor state</div>
+                <div className="text-[11px] text-[#78706a]">Save and restore complete node coordinates, layouts, and editor state</div>
               </div>
             </div>
-            <button
-              onClick={handleExportJson}
-              className="px-3 py-1.5 rounded-lg bg-[#f2ece4] text-[#3a302a] hover:bg-white hover:text-[#c2652a] border border-[#d8d0c8] text-xs font-medium flex items-center gap-1 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Save JSON</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                ref={jsonFileInputRef}
+                accept=".json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file && onImportFile) {
+                    onImportFile(file);
+                    onClose();
+                  }
+                  e.target.value = '';
+                }}
+              />
+              {onImportFile && (
+                <button
+                  onClick={() => jsonFileInputRef.current?.click()}
+                  className="px-2.5 py-1.5 rounded-lg border border-[#d8d0c8] text-[#3a302a] hover:bg-[#f2ece4] hover:text-[#c2652a] text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Restore diagram from a previously exported JSON backup"
+                >
+                  <FolderOpen className="w-3.5 h-3.5" />
+                  <span>Import JSON</span>
+                </button>
+              )}
+              <button
+                onClick={handleExportJson}
+                className="px-3 py-1.5 rounded-lg bg-[#f2ece4] text-[#3a302a] hover:bg-white hover:text-[#c2652a] border border-[#d8d0c8] text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                title="Save complete layout and coordinates as a JSON file"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Save JSON</span>
+              </button>
+            </div>
           </div>
         </div>
 

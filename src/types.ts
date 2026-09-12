@@ -197,6 +197,8 @@ export interface DiagramEdge {
   directionHint?: 'up' | 'down' | 'left' | 'right';
   length?: 1 | 2 | 3 | 4; // short, normal, long, extra-long
   labelOffset?: { x: number; y: number }; // custom offset to prevent overlapping or obscuring
+  routeOffset?: { x: number; y: number }; // custom bend displacement from dragging the line
+  waypoints?: Array<{ x: number; y: number }>; // custom draggable route points / bends
   sourceMarker?: string; // explicit SVG marker ID for source end
   targetMarker?: string; // explicit SVG marker ID for target end
   isHidden?: boolean; // layout constraint link (-[hidden]->)
