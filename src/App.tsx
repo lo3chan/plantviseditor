@@ -52,6 +52,64 @@ export default function App() {
   const [copiedPlantUML, setCopiedPlantUML] = useState<boolean>(false);
   const [loadedPlantUMLCode, setLoadedPlantUMLCode] = useState<string>('');
 
+  // Split View Resizable Divider State
+  const [splitRatio, setSplitRatio] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('twoballoons_split_ratio');
+      if (saved) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed >= 15 && parsed <= 85) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return 42; // default 42%
+  });
+  const [isDraggingSplitter, setIsDraggingSplitter] = useState<boolean>(false);
+  const splitContainerRef = useRef<HTMLDivElement>(null);
+
+  // Splitter mouse drag handlers
+  useEffect(() => {
+    if (!isDraggingSplitter) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!splitContainerRef.current) return;
+      const rect = splitContainerRef.current.getBoundingClientRect();
+      const containerWidth = rect.width;
+      if (containerWidth <= 0) return;
+
+      const offsetX = e.clientX - rect.left;
+      const ratio = (offsetX / containerWidth) * 100;
+
+      // Minimum 280px for editor, minimum 320px for canvas
+      const minRatio = Math.max(15, (280 / containerWidth) * 100);
+      const maxRatio = Math.min(85, ((containerWidth - 320) / containerWidth) * 100);
+
+      const clamped = Math.min(Math.max(ratio, minRatio), maxRatio);
+      setSplitRatio(clamped);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingSplitter(false);
+      setSplitRatio((current) => {
+        try {
+          localStorage.setItem('twoballoons_split_ratio', current.toFixed(1));
+        } catch {
+          // ignore
+        }
+        return current;
+      });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingSplitter]);
+
   // Initialize in-memory runtime debug logger on mount
   useEffect(() => {
     debugLogger.init();
@@ -668,9 +726,12 @@ export default function App() {
       <main className="flex-1 relative flex overflow-hidden">
         {/* MODE 1: SPLIT VIEW (Code on Left, Canvas/SVG on Right) */}
         {viewMode === 'split' && (
-          <div className="w-full h-full flex overflow-hidden">
-            {/* Left 42%: Full PlantUML Code Editor */}
-            <div className="w-[42%] min-w-[360px] max-w-[650px] h-full">
+          <div ref={splitContainerRef} className="w-full h-full flex overflow-hidden relative">
+            {/* Left Resizable Section: Full PlantUML Code Editor */}
+            <div 
+              className="h-full relative shrink-0"
+              style={{ width: `${splitRatio}%` }}
+            >
               <CodePanel
                 code={activePlantUMLCode}
                 onApplyCode={handleApplyCode}
@@ -681,7 +742,36 @@ export default function App() {
               />
             </div>
 
-            {/* Right 58%: Unified Diagram Canvas or Official Server SVG */}
+            {/* Draggable Splitter Divider */}
+            <div
+              id="split-view-resizer"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsDraggingSplitter(true);
+              }}
+              className={`w-2 hover:w-2 -mx-1 relative z-30 cursor-col-resize flex items-center justify-center group select-none transition-colors ${
+                isDraggingSplitter ? 'bg-[#c2652a]' : 'hover:bg-[#c2652a]/50 bg-transparent'
+              }`}
+              title="Drag border to resize split view"
+            >
+              {/* Grabber indicator pill */}
+              <div className={`w-3.5 h-8 rounded-full flex flex-col items-center justify-center gap-0.5 shadow-sm transition-all border ${
+                isDraggingSplitter
+                  ? 'bg-[#c2652a] border-[#a95420] opacity-100 scale-105'
+                  : 'bg-[#2a241e] border-[#453c35] group-hover:border-[#c2652a] opacity-40 group-hover:opacity-100'
+              }`}>
+                <div className="w-0.5 h-1 bg-[#faf5ee] rounded-full" />
+                <div className="w-0.5 h-1 bg-[#faf5ee] rounded-full" />
+                <div className="w-0.5 h-1 bg-[#faf5ee] rounded-full" />
+              </div>
+            </div>
+
+            {/* Dragging shield to capture mouse events smoothly */}
+            {isDraggingSplitter && (
+              <div className="fixed inset-0 z-50 cursor-col-resize select-none" />
+            )}
+
+            {/* Right: Unified Diagram Canvas or Official Server SVG */}
             <div className="flex-1 h-full relative overflow-hidden">
               {renderEngine === 'interactive' ? (
                 <Canvas
