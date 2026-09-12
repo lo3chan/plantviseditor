@@ -3,7 +3,6 @@ import {
   Copy, 
   Check, 
   Download, 
-  Play, 
   Sparkles, 
   FileCode, 
   Terminal,
@@ -11,8 +10,6 @@ import {
   ChevronUp,
   ChevronDown,
   X,
-  AlignLeft,
-  WrapText,
   Type,
   AlertCircle,
   CheckCircle2,
@@ -22,7 +19,7 @@ import {
 } from 'lucide-react';
 import { fetchPlantUMLAscii } from '../utils/plantumlEncoder';
 import { tokenizePlantUMLLine, getTokenClass } from '../utils/plantumlHighlighter';
-import { autoFormatPlantUML, validatePlantUML } from '../utils/overlapResolver';
+import { validatePlantUML } from '../utils/overlapResolver';
 
 interface AutocompleteItem {
   label: string;
@@ -305,7 +302,7 @@ export const CodePanel: React.FC<CodePanelProps> = ({
   
   // Readability Settings
   const [fontSize, setFontSize] = useState<number>(12); // in px
-  const [wordWrap, setWordWrap] = useState<boolean>(false);
+  const [wordWrap] = useState<boolean>(true);
   const [showSearch, setShowSearch] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeSearchIndex, setActiveSearchIndex] = useState<number>(0);
@@ -575,14 +572,6 @@ export const CodePanel: React.FC<CodePanelProps> = ({
     updateCursorPosition();
   };
 
-  // Auto format indentation
-  const handleAutoFormat = () => {
-    const formatted = autoFormatPlantUML(editableCode);
-    setEditableCode(formatted);
-    onApplyCode(formatted);
-    setStatusMessage('Formatted');
-    setTimeout(() => setStatusMessage('Synced'), 1500);
-  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(editableCode);
@@ -668,15 +657,6 @@ export const CodePanel: React.FC<CodePanelProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-1.5">
-          <button
-            id="btn-compile-script"
-            onClick={handleManualApply}
-            className="flex items-center gap-1 px-2.5 py-1 bg-[#c2652a] text-white hover:bg-[#a95420] text-[11px] font-semibold rounded-md transition-colors shadow-2xs cursor-pointer"
-            title="Compile PlantUML to canvas immediately (Ctrl+Enter)"
-          >
-            <Play className="w-3 h-3" />
-            <span>Compile</span>
-          </button>
 
           <button
             id="btn-copy-script"
@@ -737,30 +717,6 @@ export const CodePanel: React.FC<CodePanelProps> = ({
           >
             <Search className="w-3 h-3" />
             <span>Find</span>
-          </button>
-
-          {/* Auto Format / Indent */}
-          <button
-            id="btn-editor-format"
-            onClick={handleAutoFormat}
-            className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#342a22] text-[#d8d0c8] hover:bg-[#43362c] text-[11px] font-medium transition-colors cursor-pointer"
-            title="Auto-indent and format PlantUML syntax"
-          >
-            <AlignLeft className="w-3 h-3 text-[#c2652a]" />
-            <span>Format</span>
-          </button>
-
-          {/* Word Wrap Toggle */}
-          <button
-            id="btn-editor-wrap-toggle"
-            onClick={() => setWordWrap(!wordWrap)}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-              wordWrap ? 'bg-[#c2652a]/30 text-[#e8a87c] border border-[#c2652a]/40' : 'bg-[#342a22] text-[#d8d0c8] hover:bg-[#43362c]'
-            }`}
-            title={wordWrap ? 'Word wrap active' : 'Click to enable word wrap'}
-          >
-            <WrapText className="w-3 h-3" />
-            <span>{wordWrap ? 'Wrap On' : 'Wrap Off'}</span>
           </button>
 
           {/* Font Size Selector */}
@@ -1331,8 +1287,6 @@ export const CodePanel: React.FC<CodePanelProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[#e0a96d] font-semibold">Tab: Complete</span>
-          <span className="text-[#554b42]">|</span>
-          <span className="text-[#786c60]">Ctrl+Enter: Compile</span>
           <span className="text-[#554b42]">|</span>
           <span className="text-[#786c60]">Ctrl+F: Find</span>
         </div>

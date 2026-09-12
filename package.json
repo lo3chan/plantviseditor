@@ -1,7 +1,8 @@
 {
-  "name": "plantuml-visual-studio",
+  "name": "twoballoons",
+  "version": "1.0.0-alpha.1",
+  "description": "twoballoons alpha build",
   "private": true,
-  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

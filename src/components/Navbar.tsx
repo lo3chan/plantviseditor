@@ -150,14 +150,14 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Brand & Diagram Title */}
       <div className="flex items-center gap-3 min-w-[280px]">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-[#c2652a] text-white flex items-center justify-center font-bold text-sm shadow-sm">
-            PU
+          <div className="flex items-center justify-center text-xl select-none leading-none" title="twoballoons">
+            🎈🎈
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-bold tracking-wider text-[#c2652a] uppercase">PlantUML Studio</span>
+              <span className="text-xs font-bold tracking-wide text-[#c2652a] lowercase">twoballoons</span>
               <span className="text-[9px] bg-[#c2652a]/10 text-[#c2652a] font-mono px-1.5 py-0.2 rounded font-semibold">
-                1:1 Engine
+                alpha 1.0
               </span>
             </div>
             {isEditingTitle ? (
